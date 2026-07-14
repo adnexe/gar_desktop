@@ -340,9 +340,18 @@ function messageErreurInconnue(erreur: unknown, defaut: string) {
         .replace(/^Error invoking remote method "[^"]+": Error: /, '');
 }
 
-async function imprimer(): Promise<ResultatImpression> {
-    await nextTick();
-    return await window.api.impression.imprimerTicket();
+// Ticket et talon partent en deux jobs séparés : l'imprimante coupe entre
+// les deux, le talon de contrôle n'est plus collé au ticket du client.
+const partieImpression = ref<'tout' | 'ticket' | 'talon'>('tout');
+
+async function imprimer(partie: 'ticket' | 'talon'): Promise<ResultatImpression> {
+    partieImpression.value = partie;
+    try {
+        await nextTick();
+        return await window.api.impression.imprimerTicket();
+    } finally {
+        partieImpression.value = 'tout';
+    }
 }
 
 /**
@@ -383,7 +392,7 @@ async function vendre() {
 
         let impression: ResultatImpression;
         try {
-            impression = await imprimer();
+            impression = await imprimer('ticket');
         } catch (e) {
             impression = {
                 ok: false,
@@ -404,6 +413,17 @@ async function vendre() {
 
             await chargerVoyagesConservantSelection(idVoyageCourant);
             return;
+        }
+
+        // Le ticket client est sorti : le talon part en second job (coupe entre
+        // les deux). Son échec n'annule pas la vente, on avertit simplement.
+        try {
+            const talon = await imprimer('talon');
+            if (!talon.ok) {
+                erreur.value = `Le ticket est imprimé, mais le talon de contrôle n'est pas sorti : ${talon.erreur ?? 'erreur inconnue'}.`;
+            }
+        } catch (e) {
+            erreur.value = `Le ticket est imprimé, mais le talon de contrôle n'est pas sorti : ${messageErreurInconnue(e, 'erreur inconnue')}.`;
         }
 
         const confirmationImpression = await window.api.vente.confirmerImpression(reponse.ticket.uuid);
@@ -813,6 +833,6 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 
     <!-- Zone d'impression : invisible à l'écran, seule visible à l'impression. -->
     <div class="zone-impression hidden print:block">
-        <TicketRecu v-for="(r, index) in recus" :key="index" :recu="r" />
+        <TicketRecu v-for="(r, index) in recus" :key="index" :recu="r" :partie="partieImpression" />
     </div>
 </template>

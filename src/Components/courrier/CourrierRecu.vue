@@ -31,13 +31,16 @@ defineProps<{
         created_at: string;
         compagnie?: CompagnieRecu | null;
     };
+    // Impression en deux passages séparés (reçu puis étiquette) : l'imprimante
+    // coupe le papier entre les deux jobs, l'étiquette n'est plus collée.
+    partie?: 'tout' | 'recu' | 'etiquette';
 }>();
 
 const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + ' FCFA';
 </script>
 
 <template>
-    <div class="ticket-recu recu-courrier">
+    <div v-if="(partie ?? 'tout') !== 'etiquette'" class="ticket-recu recu-courrier">
         <div class="text-center">
             <img
                 v-if="recu.compagnie?.logo_data_uri || recu.compagnie?.logo_url"
@@ -112,7 +115,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         <p v-if="recu.compagnie?.pied_ticket" class="pied">{{ recu.compagnie.pied_ticket }}</p>
     </div>
 
-    <div class="ticket-recu etiquette-courrier">
+    <div v-if="(partie ?? 'tout') !== 'recu'" class="ticket-recu etiquette-courrier">
         <div class="text-center">
             <p class="compagnie">{{ recu.compagnie?.nom || recu.agence_depart }}</p>
             <p class="contact">Étiquette courrier à coller</p>

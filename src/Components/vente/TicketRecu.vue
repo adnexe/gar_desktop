@@ -31,9 +31,12 @@ export type Recu = {
     compagnie?: CompagnieRecu | null;
 };
 
-defineProps<{
+// `partie` permet d'imprimer le ticket et son talon en deux passages séparés :
+// l'imprimante coupe le papier entre les deux jobs, le talon n'est plus collé.
+withDefaults(defineProps<{
     recu: Recu | null;
-}>();
+    partie?: 'tout' | 'ticket' | 'talon';
+}>(), { partie: 'tout' });
 
 const typeLabel: Record<string, string> = {
     aller: 'Aller simple',
@@ -45,7 +48,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 
 <template>
     <template v-if="recu">
-    <div class="ticket-recu ticket-principal">
+    <div v-if="partie !== 'talon'" class="ticket-recu ticket-principal">
         <div class="text-center">
             <img
                 v-if="recu.compagnie?.logo_data_uri || recu.compagnie?.logo_url"
@@ -141,7 +144,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
         <p class="text-center pied">{{ recu.compagnie?.pied_ticket || 'Merci et bon voyage !' }}</p>
     </div>
 
-    <div class="ticket-recu talon-controle">
+    <div v-if="partie !== 'ticket'" class="ticket-recu talon-controle">
         <div class="text-center">
             <p class="nom-agence talon-compagnie">{{ recu.compagnie?.nom || recu.agence }}</p>
             <p class="sous-titre">Talon contrôle</p>

@@ -260,9 +260,18 @@ function messageErreurInconnue(e: unknown, defaut: string) {
         .replace(/^Error invoking remote method "[^"]+": Error: /, '');
 }
 
-async function imprimer(): Promise<ResultatImpression> {
-    await nextTick();
-    return await window.api.impression.imprimerRecu();
+// Reçu et étiquette colis partent en deux jobs séparés : l'imprimante coupe
+// entre les deux, l'étiquette n'est plus collée au reçu du client.
+const partieImpression = ref<'tout' | 'recu' | 'etiquette'>('tout');
+
+async function imprimer(partie: 'recu' | 'etiquette'): Promise<ResultatImpression> {
+    partieImpression.value = partie;
+    try {
+        await nextTick();
+        return await window.api.impression.imprimerRecu();
+    } finally {
+        partieImpression.value = 'tout';
+    }
 }
 
 async function envoyer() {
@@ -341,7 +350,7 @@ async function envoyer() {
 
         let impression: ResultatImpression;
         try {
-            impression = await imprimer();
+            impression = await imprimer('recu');
         } catch (e) {
             impression = {
                 ok: false,
@@ -361,6 +370,17 @@ async function envoyer() {
             }
 
             return;
+        }
+
+        // Le reçu client est sorti : l'étiquette colis part en second job.
+        // Son échec n'annule pas l'envoi, on avertit simplement.
+        try {
+            const etiquette = await imprimer('etiquette');
+            if (!etiquette.ok) {
+                erreur.value = `Le reçu est imprimé, mais l'étiquette colis n'est pas sortie : ${etiquette.erreur ?? 'erreur inconnue'}.`;
+            }
+        } catch (e) {
+            erreur.value = `Le reçu est imprimé, mais l'étiquette colis n'est pas sortie : ${messageErreurInconnue(e, 'erreur inconnue')}.`;
         }
 
         const confirmation = await window.api.courrier.confirmerImpression(reponse.courrier.uuid);
@@ -633,6 +653,6 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     </div>
 
     <div class="zone-impression hidden print:block">
-        <CourrierRecu v-if="recu" :recu="recu" />
+        <CourrierRecu v-if="recu" :recu="recu" :partie="partieImpression" />
     </div>
 </template>
