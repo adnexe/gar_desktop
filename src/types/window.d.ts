@@ -104,6 +104,14 @@ declare global {
             impression: {
                 imprimerTicket: () => Promise<{ ok: boolean; erreur?: string }>;
                 imprimerRecu: () => Promise<{ ok: boolean; erreur?: string }>;
+                listerImprimantes: () => Promise<{
+                    name: string;
+                    displayName: string;
+                    description: string;
+                    isDefault: boolean;
+                    status: number | null;
+                }[]>;
+                tester: () => Promise<{ ok: boolean; erreur?: string; imprimante?: string }>;
             };
             bagage: {
                 rechercherTicket: (code: string) => Promise<unknown>;

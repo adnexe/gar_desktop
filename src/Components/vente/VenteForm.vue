@@ -174,6 +174,9 @@ async function chargerVoyages() {
         if (voyagesNonPasses.length === 0) {
             messageAucunVoyage.value = data.message ?? "Aucun voyage programmé à partir d'aujourd'hui pour cette destination.";
         }
+    } catch (e) {
+        erreur.value = messageErreurInconnue(e, 'Impossible de récupérer les voyages de la caisse serveur.');
+        messageAucunVoyage.value = 'Connexion à la caisse serveur indisponible.';
     } finally {
         chargementVoyages.value = false;
     }

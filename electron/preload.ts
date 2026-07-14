@@ -34,6 +34,8 @@ const api = {
     impression: {
         imprimerTicket: () => ipcRenderer.invoke('impression:ticket'),
         imprimerRecu: () => ipcRenderer.invoke('impression:recu'),
+        listerImprimantes: () => ipcRenderer.invoke('impression:listerImprimantes'),
+        tester: () => ipcRenderer.invoke('impression:tester'),
     },
     bagage: {
         rechercherTicket: (code: string) => ipcRenderer.invoke('bagage:rechercherTicket', code),

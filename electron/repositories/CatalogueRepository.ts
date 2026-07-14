@@ -1,5 +1,5 @@
 import { getDb } from '../database/connection';
-import type { BootstrapResponse } from '../types/bootstrap';
+import type { BootstrapResponse, UserApi } from '../types/bootstrap';
 
 // Les tables de catalogue reprennent l'id auto-incrémenté du serveur tel
 // quel (INSERT OR REPLACE sur la PK) : ce sont des données synchronisées en
@@ -126,7 +126,7 @@ export class CatalogueRepository {
                 `INSERT OR REPLACE INTO users (id, uuid, agent_id, name, email, number, password, role, actif, created_at, updated_at)
                  VALUES (@id, @uuid, @agent_id, @name, @email, @number, @password, @role, @actif, @created_at, @updated_at)`,
             );
-            const userPayload = (u: { number: string | null; email: string | null; actif: boolean }) => ({
+            const userPayload = (u: UserApi) => ({
                 ...u,
                 // SQLite local garde number NOT NULL pour préserver les FK et
                 // anciennes bases. Un super_admin email-only utilise son email

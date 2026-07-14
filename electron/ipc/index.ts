@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron';
+import { BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import { ConfigController } from '../controllers/ConfigController';
 import { AuthController } from '../controllers/AuthController';
 import { ReferentielController } from '../controllers/ReferentielController';
@@ -10,16 +10,178 @@ import { HistoriqueController } from '../controllers/HistoriqueController';
 import { logger } from '../logger';
 import { localNetworkService } from '../services/LocalNetworkService';
 
+type ImprimanteRuntime = Electron.PrinterInfo & {
+    isDefault?: boolean;
+    status?: number;
+};
+
+type ImprimanteExposee = {
+    name: string;
+    displayName: string;
+    description: string;
+    isDefault: boolean;
+    status: number | null;
+};
+
+type ResultatImpression = { ok: true; imprimante: string } | { ok: false; erreur: string };
+
+function nomImprimante(imprimante: ImprimanteRuntime): string {
+    return imprimante.displayName || imprimante.name || 'Imprimante sans nom';
+}
+
+function optionBooleenne(imprimante: ImprimanteRuntime, cle: string): boolean {
+    const options = imprimante.options as Record<string, unknown> | undefined;
+    const valeur = options?.[cle];
+
+    return valeur === true || valeur === 'true' || valeur === '1' || valeur === 1;
+}
+
+function estImprimanteParDefaut(imprimante: ImprimanteRuntime): boolean {
+    return imprimante.isDefault === true
+        || optionBooleenne(imprimante, 'is-default')
+        || optionBooleenne(imprimante, 'printer-is-default');
+}
+
+function exposerImprimante(imprimante: ImprimanteRuntime): ImprimanteExposee {
+    return {
+        name: imprimante.name,
+        displayName: imprimante.displayName,
+        description: imprimante.description,
+        isDefault: estImprimanteParDefaut(imprimante),
+        status: typeof imprimante.status === 'number' ? imprimante.status : null,
+    };
+}
+
+async function listerImprimantes(sender: WebContents): Promise<ImprimanteRuntime[]> {
+    try {
+        return await sender.getPrintersAsync() as ImprimanteRuntime[];
+    } catch (erreur) {
+        logger.warn('Liste des imprimantes indisponible.', erreur);
+        return [];
+    }
+}
+
+function imprimerWebContents(sender: WebContents, options: Electron.WebContentsPrintOptions, libelle: string): Promise<ResultatImpression> {
+    if (sender.isDestroyed()) {
+        return Promise.resolve({ ok: false, erreur: 'Fenêtre d’impression introuvable.' });
+    }
+
+    return new Promise((resolve) => {
+        sender.print(options, (succes, raison) => {
+            if (succes) {
+                resolve({ ok: true, imprimante: libelle });
+                return;
+            }
+
+            resolve({
+                ok: false,
+                erreur: raison === 'cancelled'
+                    ? "Impression annulée par l'utilisateur."
+                    : raison || `Impression refusée par le système (${libelle}).`,
+            });
+        });
+    });
+}
+
+function ordonnerImprimantes(imprimantes: ImprimanteRuntime[]): ImprimanteRuntime[] {
+    return [...imprimantes].sort((a, b) => Number(estImprimanteParDefaut(b)) - Number(estImprimanteParDefaut(a)));
+}
+
+async function imprimerDirect(sender: WebContents): Promise<ResultatImpression> {
+    const imprimantes = await listerImprimantes(sender);
+    const base: Electron.WebContentsPrintOptions = {
+        silent: true,
+        printBackground: true,
+        margins: { marginType: 'none' },
+    };
+    const tentatives: string[] = [];
+
+    const defaut = await imprimerWebContents(sender, base, 'imprimante par défaut');
+    if (defaut.ok) return defaut;
+    tentatives.push(`Défaut : ${defaut.erreur}`);
+
+    for (const imprimante of ordonnerImprimantes(imprimantes)) {
+        if (!imprimante.name) continue;
+
+        const resultat = await imprimerWebContents(
+            sender,
+            { ...base, deviceName: imprimante.name },
+            nomImprimante(imprimante),
+        );
+
+        if (resultat.ok) return resultat;
+        tentatives.push(`${nomImprimante(imprimante)} : ${resultat.erreur}`);
+    }
+
+    const detail = tentatives.filter(Boolean).join(' | ');
+    const imprimantesDetectees = imprimantes.map(nomImprimante).join(', ');
+    const prefixe = imprimantes.length === 0
+        ? "Aucune imprimante n'a été détectée par l'application."
+        : `Imprimantes détectées : ${imprimantesDetectees}.`;
+
+    logger.warn('Impression refusée par le système.', { detail, imprimantes: imprimantes.map(exposerImprimante) });
+
+    return {
+        ok: false,
+        erreur: `${prefixe} ${detail || 'Vérifiez que l’imprimante est installée, allumée et définie par défaut.'}`.trim(),
+    };
+}
+
+async function imprimerTicketTest(): Promise<ResultatImpression> {
+    const fenetre = new BrowserWindow({
+        show: false,
+        width: 320,
+        height: 500,
+        webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+        },
+    });
+
+    const date = new Date().toLocaleString('fr-FR');
+    const html = `
+        <!doctype html>
+        <html>
+        <head>
+            <meta charset="utf-8" />
+            <style>
+                @page { size: 80mm auto; margin: 2mm; }
+                body { width: 72mm; margin: 0; font-family: Arial, sans-serif; color: #000; }
+                .ticket { border: 1px solid #000; padding: 8px; font-size: 13px; }
+                h1 { margin: 0 0 8px; text-align: center; font-size: 18px; }
+                p { margin: 5px 0; }
+                .ligne { display: flex; justify-content: space-between; border-top: 1px dashed #000; padding-top: 6px; margin-top: 8px; }
+            </style>
+        </head>
+        <body>
+            <div class="ticket">
+                <h1>TEST IMPRESSION</h1>
+                <p>Adnexe Transport</p>
+                <p>Si ce ticket sort, l'imprimante est disponible pour l'application.</p>
+                <div class="ligne"><span>Date</span><strong>${date}</strong></div>
+            </div>
+        </body>
+        </html>`;
+
+    try {
+        await fenetre.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+        return await imprimerDirect(fenetre.webContents);
+    } finally {
+        if (!fenetre.isDestroyed()) fenetre.destroy();
+    }
+}
+
 // Chaque canal IPC adapte 1:1 une méthode de contrôleur. Le renderer les
 // appelle via window.api.* (voir preload.ts) — jamais directement ipcRenderer.
 export function enregistrerIpc(): void {
     const gerer = (canal: string, fn: (...args: never[]) => unknown) => {
-        ipcMain.handle(canal, async (_event, ...args: never[]) => {
+        ipcMain.handle(canal, async (_event, ...args: unknown[]) => {
             try {
                 const proxy = await localNetworkService.proxySiClient(canal, args);
                 if (proxy.proxied) return proxy.resultat;
 
-                return await fn(...args);
+                return await fn(...(args as never[]));
             } catch (erreur) {
                 logger.error(`IPC ${canal} a échoué`, erreur);
                 throw erreur;
@@ -63,43 +225,13 @@ export function enregistrerIpc(): void {
         // dialogue d'impression système de webContents.print() est défaillant
         // sur Windows (n'apparaît pas, échec silencieux) et une caisse ne doit
         // de toute façon pas confirmer chaque ticket à la main.
-        const imprimantes = await event.sender.getPrintersAsync();
-        if (imprimantes.length === 0) {
-            return {
-                ok: false as const,
-                erreur: 'Aucune imprimante détectée. Branchez une imprimante et réessayez.',
-            };
-        }
-
-        const parDefaut = imprimantes.find((imprimante) => imprimante.isDefault) ?? imprimantes[0];
-
-        return await new Promise<{ ok: true } | { ok: false; erreur: string }>((resolve) => {
-            event.sender.print(
-                {
-                    silent: true,
-                    deviceName: parDefaut.name,
-                    printBackground: true,
-                    margins: { marginType: 'none' },
-                },
-                (succes, raison) => {
-                    if (succes) {
-                        resolve({ ok: true });
-                        return;
-                    }
-
-                    resolve({
-                        ok: false,
-                        erreur: raison === 'cancelled'
-                            ? "Impression annulée par l'utilisateur."
-                            : raison || `Impression refusée par le système (imprimante « ${parDefaut.name} »).`,
-                    });
-                },
-            );
-        });
+        return await imprimerDirect(event.sender);
     };
 
     ipcMain.handle('impression:ticket', imprimerDepuisRenderer);
     ipcMain.handle('impression:recu', imprimerDepuisRenderer);
+    ipcMain.handle('impression:listerImprimantes', async (event) => (await listerImprimantes(event.sender)).map(exposerImprimante));
+    ipcMain.handle('impression:tester', async () => imprimerTicketTest());
 
     gerer('bagage:rechercherTicket', BagageController.rechercherTicket);
     gerer('bagage:enregistrer', BagageController.enregistrer);

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { CalendarDays, Monitor, Power, RefreshCw, Server, Wifi } from '@lucide/vue';
+import { CalendarDays, Monitor, Power, Printer, RefreshCw, Server, Wifi } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
@@ -18,16 +18,28 @@ type ReseauLocal = {
     adresses: string[];
     agence: string | null;
 };
+type ImprimanteLocale = {
+    name: string;
+    displayName: string;
+    description: string;
+    isDefault: boolean;
+    status: number | null;
+};
 
 const config = useConfigStore();
 const reseau = ref<ReseauLocal | null>(null);
+const imprimantes = ref<ImprimanteLocale[]>([]);
 const portServeur = ref(3750);
 const serveurUrl = ref('');
 const secretReseau = ref('');
 const enCours = ref(false);
 const actualisation = ref(false);
+const chargementImprimantes = ref(false);
+const testImpression = ref(false);
 const message = ref('');
 const erreur = ref('');
+const messageImpression = ref('');
+const erreurImpression = ref('');
 const statutConnexion = ref<StatutConnexion>('deconnecte');
 
 const libelleMode = computed(() => {
@@ -174,7 +186,7 @@ onMounted(() => {
 });
 
 async function initialiser() {
-    await Promise.all([chargerReseau(), config.charger()]);
+    await Promise.all([chargerReseau(), chargerImprimantes(), config.charger()]);
 }
 
 async function chargerReseau() {
@@ -278,6 +290,43 @@ async function desactiverReseauLocal() {
             : 'Mode autonome activé.';
     });
 }
+
+async function chargerImprimantes() {
+    chargementImprimantes.value = true;
+    erreurImpression.value = '';
+
+    try {
+        imprimantes.value = await window.api.impression.listerImprimantes();
+    } catch (e) {
+        imprimantes.value = [];
+        erreurImpression.value = messageErreur(e, 'Impossible de lister les imprimantes.');
+    } finally {
+        chargementImprimantes.value = false;
+    }
+}
+
+async function testerImpression() {
+    testImpression.value = true;
+    messageImpression.value = '';
+    erreurImpression.value = '';
+
+    try {
+        const resultat = await window.api.impression.tester();
+        if (!resultat.ok) {
+            erreurImpression.value = resultat.erreur ?? "L'impression test n'a pas été confirmée.";
+            return;
+        }
+
+        messageImpression.value = resultat.imprimante
+            ? `Ticket test envoyé sur ${resultat.imprimante}.`
+            : 'Ticket test envoyé.';
+        await chargerImprimantes();
+    } catch (e) {
+        erreurImpression.value = messageErreur(e, "Impossible de lancer l'impression test.");
+    } finally {
+        testImpression.value = false;
+    }
+}
 </script>
 
 <template>
@@ -342,6 +391,66 @@ async function desactiverReseauLocal() {
                         </div>
                     </div>
                 </div>
+            </section>
+
+            <section class="rounded-lg border bg-card p-5 shadow-sm">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="flex min-w-0 items-start gap-3">
+                        <div class="rounded-md bg-muted p-2">
+                            <Printer class="size-5 text-muted-foreground" />
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-base font-semibold">Impression</h2>
+                                <span :class="badgeEtat(imprimantes.length > 0)">
+                                    {{ imprimantes.length > 0 ? 'Imprimante détectée' : 'Aucune imprimante détectée' }}
+                                </span>
+                            </div>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                Une vente est validée seulement quand l’impression est confirmée par le système.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" :disabled="chargementImprimantes || testImpression" @click="chargerImprimantes">
+                            <RefreshCw :class="['size-4', chargementImprimantes ? 'icone-tourne text-primary' : '']" />
+                            {{ chargementImprimantes ? 'Recherche...' : 'Actualiser imprimantes' }}
+                        </Button>
+                        <Button type="button" :disabled="testImpression" @click="testerImpression">
+                            <Printer class="size-4" />
+                            {{ testImpression ? 'Test en cours...' : 'Tester impression' }}
+                        </Button>
+                    </div>
+                </div>
+
+                <div class="mt-4 overflow-hidden rounded-md border">
+                    <table v-if="imprimantes.length > 0" class="w-full text-sm">
+                        <thead class="bg-muted/40 text-left text-muted-foreground">
+                            <tr>
+                                <th class="px-3 py-2 font-medium">Nom</th>
+                                <th class="px-3 py-2 font-medium">Système</th>
+                                <th class="px-3 py-2 font-medium">État</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="imprimante in imprimantes" :key="imprimante.name" class="border-t">
+                                <td class="px-3 py-2 font-medium">
+                                    {{ imprimante.displayName || imprimante.name }}
+                                    <span v-if="imprimante.isDefault" class="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Défaut</span>
+                                </td>
+                                <td class="px-3 py-2 text-muted-foreground">{{ imprimante.name }}</td>
+                                <td class="px-3 py-2 text-muted-foreground">{{ imprimante.status ?? '—' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p v-else class="bg-muted/30 px-4 py-5 text-sm text-muted-foreground">
+                        L’application ne voit pas encore d’imprimante. Vérifiez l’installation système, allumez l’imprimante, puis actualisez.
+                    </p>
+                </div>
+
+                <p v-if="messageImpression" class="mt-3 rounded-md bg-muted/50 px-4 py-3 text-sm text-muted-foreground">{{ messageImpression }}</p>
+                <p v-if="erreurImpression" class="mt-3 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{{ erreurImpression }}</p>
             </section>
 
             <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">

@@ -148,6 +148,7 @@ export class LocalNetworkService {
                 throw new Error("Adresse de la caisse serveur et code réseau obligatoires.");
             }
 
+            this.refuserConnexionSurCePoste(serveurUrl);
             const statut = await this.recupererStatutServeur(serveurUrl, secret);
             if (!statut.ok || !statut.agenceDetails) {
                 throw new Error("La caisse serveur n'est pas configurée pour une agence.");
@@ -183,6 +184,7 @@ export class LocalNetworkService {
 
     async testerClient(serveurUrl: string, secret: string): Promise<{ ok: boolean; message: string; agence?: string | null }> {
         try {
+            this.refuserConnexionSurCePoste(serveurUrl);
             const data = await this.recupererStatutServeur(serveurUrl, secret);
 
             return {
@@ -457,6 +459,34 @@ export class LocalNetworkService {
 
     private genererSecret(): string {
         return randomBytes(4).toString('hex').toUpperCase();
+    }
+
+    private refuserConnexionSurCePoste(url: string): void {
+        if (!this.urlPointeSurCePoste(url)) return;
+
+        throw new Error(
+            "Cette adresse pointe vers ce même poste. Pour éviter d'utiliser la même base comme serveur et client, utilisez un autre ordinateur du réseau. Pour un test sur une seule machine, lancez une installation/profil séparé avec une base différente.",
+        );
+    }
+
+    private urlPointeSurCePoste(url: string): boolean {
+        try {
+            const parsed = new URL(this.normaliserUrl(url));
+            const hote = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+            const locaux = new Set(['localhost', '127.0.0.1', '::1']);
+
+            for (const valeurs of Object.values(networkInterfaces())) {
+                for (const valeur of valeurs ?? []) {
+                    if (valeur.family === 'IPv4' || valeur.family === 'IPv6') {
+                        locaux.add(valeur.address.toLowerCase());
+                    }
+                }
+            }
+
+            return locaux.has(hote);
+        } catch {
+            return false;
+        }
     }
 
     private async recupererStatutServeur(serveurUrl: string, secret: string): Promise<StatutServeurLocal> {
