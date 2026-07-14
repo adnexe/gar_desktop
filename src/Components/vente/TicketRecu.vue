@@ -188,8 +188,8 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 <style scoped>
 .ticket-recu {
     width: 72mm;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
+    font-family: Arial, 'Helvetica Neue', sans-serif;
+    font-size: 13px;
     line-height: 1.4;
     color: #000;
 }
@@ -214,7 +214,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 
 .slogan,
 .contact {
-    font-size: 9px;
+    font-size: 11px;
 }
 
 .sous-titre {
@@ -256,7 +256,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 }
 
 .section-titre {
-    background: #e9e9e9;
+    background: #fff;
     border-bottom: 1px solid #000;
     font-weight: 700;
     margin: -3px -3px 3px;
@@ -278,7 +278,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 }
 
 .pied {
-    font-size: 10px;
+    font-size: 12px;
     margin-top: 4px;
 }
 
@@ -323,7 +323,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 }
 
 .talon-label {
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
 }
 

@@ -23,6 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/Components/ui/select';
+import { hauteurZoneImpressionMm } from '@/lib/impression';
 import { useSessionStore } from '@/Stores/session';
 import type { VenteDuJour } from '@/types/vente';
 
@@ -348,7 +349,7 @@ async function imprimer(partie: 'ticket' | 'talon'): Promise<ResultatImpression>
     partieImpression.value = partie;
     try {
         await nextTick();
-        return await window.api.impression.imprimerTicket();
+        return await window.api.impression.imprimerTicket(hauteurZoneImpressionMm());
     } finally {
         partieImpression.value = 'tout';
     }

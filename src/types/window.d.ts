@@ -102,8 +102,8 @@ declare global {
                 finDeCaisse: (agenceId: number, date?: string) => Promise<unknown>;
             };
             impression: {
-                imprimerTicket: () => Promise<{ ok: boolean; erreur?: string }>;
-                imprimerRecu: () => Promise<{ ok: boolean; erreur?: string }>;
+                imprimerTicket: (hauteurMm?: number) => Promise<{ ok: boolean; erreur?: string }>;
+                imprimerRecu: (hauteurMm?: number) => Promise<{ ok: boolean; erreur?: string }>;
                 listerImprimantes: () => Promise<{
                     name: string;
                     displayName: string;

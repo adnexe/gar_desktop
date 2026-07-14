@@ -32,8 +32,8 @@ const api = {
         finDeCaisse: (agenceId: number, date?: string) => ipcRenderer.invoke('vente:finDeCaisse', agenceId, date),
     },
     impression: {
-        imprimerTicket: () => ipcRenderer.invoke('impression:ticket'),
-        imprimerRecu: () => ipcRenderer.invoke('impression:recu'),
+        imprimerTicket: (hauteurMm?: number) => ipcRenderer.invoke('impression:ticket', hauteurMm),
+        imprimerRecu: (hauteurMm?: number) => ipcRenderer.invoke('impression:recu', hauteurMm),
         listerImprimantes: () => ipcRenderer.invoke('impression:listerImprimantes'),
         tester: () => ipcRenderer.invoke('impression:tester'),
     },

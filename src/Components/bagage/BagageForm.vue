@@ -21,6 +21,7 @@ import {
 } from '@/Components/ui/select';
 import BagageRecu from '@/Components/bagage/BagageRecu.vue';
 import { useConfigStore, type CompagnieLocale } from '@/Stores/config';
+import { hauteurZoneImpressionMm } from '@/lib/impression';
 import { useSessionStore } from '@/Stores/session';
 import type { BagageDuJour } from '@/types/bagage';
 
@@ -203,7 +204,7 @@ function messageErreurInconnue(e: unknown, defaut: string) {
 
 async function lancerImpression(): Promise<ResultatImpression> {
     await nextTick();
-    return await window.api.impression.imprimerRecu();
+    return await window.api.impression.imprimerRecu(hauteurZoneImpressionMm());
 }
 
 async function imprimerRecu(): Promise<ResultatImpression> {

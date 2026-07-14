@@ -14,6 +14,7 @@ import {
 } from '@/Components/ui/select';
 import CourrierRecu from '@/Components/courrier/CourrierRecu.vue';
 import { useConfigStore, type CompagnieLocale } from '@/Stores/config';
+import { hauteurZoneImpressionMm } from '@/lib/impression';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierDuJour } from '@/types/courrier';
 
@@ -268,7 +269,7 @@ async function imprimer(partie: 'recu' | 'etiquette'): Promise<ResultatImpressio
     partieImpression.value = partie;
     try {
         await nextTick();
-        return await window.api.impression.imprimerRecu();
+        return await window.api.impression.imprimerRecu(hauteurZoneImpressionMm());
     } finally {
         partieImpression.value = 'tout';
     }

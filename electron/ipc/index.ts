@@ -106,13 +106,20 @@ function estImprimanteVirtuelle(imprimante: ImprimanteRuntime): boolean {
  * donc on rend le reçu en PDF (fiable) puis on l'envoie à l'imprimante via
  * SumatraPDF embarqué (paquet pdf-to-printer).
  */
-async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntime[], tentatives: string[]): Promise<ResultatImpression> {
+async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntime[], tentatives: string[], hauteurMm?: number): Promise<ResultatImpression> {
+    // La hauteur de page suit la hauteur réelle du reçu (mesurée par le
+    // renderer) : l'imprimante ne déroule plus une page A4 quasi vide, ce qui
+    // accélère nettement la sortie et économise le papier.
+    const hauteurPouces = hauteurMm
+        ? Math.min(Math.max(hauteurMm / 25.4 + 0.2, 1.5), 40)
+        : 11.7;
+
     const pdf = await sender.printToPDF({
         printBackground: true,
         preferCSSPageSize: true,
         margins: { top: 0, bottom: 0, left: 0, right: 0 },
         // 80 mm de large (3,15 po) ; le @page du CSS prime s'il est défini.
-        pageSize: { width: 3.15, height: 11.7 },
+        pageSize: { width: 3.15, height: hauteurPouces },
     });
 
     const fichier = join(app.getPath('temp'), `adnexe-ticket-${randomUUID()}.pdf`);
@@ -178,14 +185,14 @@ const FORMES_IMPRESSION: { libelle: string; options: Electron.WebContentsPrintOp
     },
 ];
 
-async function imprimerDirect(sender: WebContents): Promise<ResultatImpression> {
+async function imprimerDirect(sender: WebContents, hauteurMm?: number): Promise<ResultatImpression> {
     const imprimantes = await listerImprimantes(sender);
     const tentatives: string[] = [];
 
     // Sous Windows, la voie PDF + SumatraPDF est la seule fiable.
     if (process.platform === 'win32') {
         try {
-            const viaPdf = await imprimerViaPdf(sender, imprimantes, tentatives);
+            const viaPdf = await imprimerViaPdf(sender, imprimantes, tentatives, hauteurMm);
             if (viaPdf.ok) return viaPdf;
         } catch (erreur) {
             const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
@@ -324,7 +331,7 @@ export function enregistrerIpc(): void {
     gerer('vente:ventesDuJour', VenteController.ventesDuJour);
     gerer('vente:finDeCaisse', VenteController.finDeCaisse);
 
-    const imprimerDepuisRenderer = async (event: IpcMainInvokeEvent) => {
+    const imprimerDepuisRenderer = async (event: IpcMainInvokeEvent, hauteurMm?: number) => {
         const fenetre = BrowserWindow.fromWebContents(event.sender);
         if (!fenetre || event.sender.isDestroyed()) {
             return { ok: false as const, erreur: 'Fenêtre d’impression introuvable.' };
@@ -334,7 +341,7 @@ export function enregistrerIpc(): void {
         // dialogue d'impression système de webContents.print() est défaillant
         // sur Windows (n'apparaît pas, échec silencieux) et une caisse ne doit
         // de toute façon pas confirmer chaque ticket à la main.
-        return await imprimerDirect(event.sender);
+        return await imprimerDirect(event.sender, hauteurMm);
     };
 
     ipcMain.handle('impression:ticket', imprimerDepuisRenderer);

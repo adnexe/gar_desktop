@@ -143,8 +143,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .ticket-recu {
     width: 72mm;
     color: #000;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
+    font-family: Arial, 'Helvetica Neue', sans-serif;
+    font-size: 13px;
     line-height: 1.35;
     padding: 1mm;
 }
@@ -165,7 +165,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .contact,
 .petit,
 .pied {
-    font-size: 9px;
+    font-size: 11px;
 }
 
 .numero-recu,
