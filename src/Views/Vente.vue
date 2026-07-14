@@ -36,6 +36,17 @@ const aujourdhui = () => new Date().toISOString().slice(0, 10);
 const dateFiltre = ref(aujourdhui());
 
 const ventesDuJour = ref<VenteDuJour[]>([]);
+const recherche = ref('');
+// Filtre local : numéro de ticket, nom/prénoms ou téléphone du client.
+const ventesAffichees = computed(() => {
+    const t = recherche.value.trim().toLowerCase();
+    if (!t) return ventesDuJour.value;
+    return ventesDuJour.value.filter((v) =>
+        (v.numero_ticket ?? '').toLowerCase().includes(t) ||
+        (v.client ?? '').toLowerCase().includes(t) ||
+        (v.client_telephone ?? '').toLowerCase().includes(t),
+    );
+});
 const totalDuJour = computed(() => ventesDuJour.value.reduce((total, vente) => total + vente.total, 0));
 
 async function chargerVentes() {
@@ -109,8 +120,10 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     </span>
                 </div>
 
-                <p v-if="ventesDuJour.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">
-                    Aucune vente enregistrée pour cette date.
+                <Input v-model="recherche" placeholder="Rechercher : n° ticket, client, téléphone…" class="mb-3 h-10 max-w-md text-base" />
+
+                <p v-if="ventesAffichees.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">
+                    {{ recherche ? 'Aucun résultat pour cette recherche.' : 'Aucune vente enregistrée pour cette date.' }}
                 </p>
 
                 <table v-else class="w-full text-[0.95rem]">
@@ -127,7 +140,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="vente in ventesDuJour" :key="vente.uuid" class="border-b last:border-0 hover:bg-muted/30">
+                        <tr v-for="vente in ventesAffichees" :key="vente.uuid" class="border-b last:border-0 hover:bg-muted/30">
                             <td class="px-3 py-3">{{ vente.heure }}</td>
                             <td class="px-3 py-3 font-mono">{{ vente.numero_ticket }}</td>
                             <td class="px-3 py-3">{{ vente.trajet }}</td>

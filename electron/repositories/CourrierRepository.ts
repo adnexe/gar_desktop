@@ -38,10 +38,12 @@ export class CourrierRepository {
         return getDb()
             .prepare(
                 `SELECT c.uuid, c.numero_courrier, time(c.created_at) AS heure, v.nom AS destination,
-                        (cl.prenoms || ' ' || cl.nom) AS destinataire, c.montant_total
+                        (cl.prenoms || ' ' || cl.nom) AS destinataire, cl.telephone AS destinataire_telephone,
+                        (ex.prenoms || ' ' || ex.nom) AS expediteur, ex.telephone AS expediteur_telephone, c.montant_total
                  FROM courriers c
                  JOIN villes v ON v.id = c.ville_arrivee_id
                  JOIN clients cl ON cl.id = c.destinataire_id
+                 JOIN clients ex ON ex.id = c.expediteur_id
                  WHERE c.agence_depart_id = ? AND date(c.created_at) = date(?)
                   AND c.statut = 'enregistre'
                  ORDER BY c.created_at DESC`,

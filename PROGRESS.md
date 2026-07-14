@@ -28,7 +28,7 @@ desktop/
     controllers/          adaptateurs fins IPC → services
     services/             logique métier (Bootstrap, Auth, Vente, Bagage, Courrier, Voyage, Historique)
     repositories/         accès SQLite (1 par table/domaine)
-    sync/                 SyncEngine/QueueManager/EventBus — SQUELETTE seulement (voir plus bas)
+    sync/                 SyncEngine/QueueManager/EventBus — push implémenté (voir « Synchronisation »)
     database/             connexion better-sqlite3, migrations (schéma en TS), génération uuid/numeroCourt
     apiClient/             appel HTTP vers l'API Laravel (bootstrap uniquement)
   src/                 Renderer Vue (MVVM)
@@ -50,7 +50,7 @@ desktop/
 
 Schéma mirroir des migrations Laravel (`electron/database/migrations/index.ts`) : `villes, itineraires, trajets, itineraire_trajet, agences, chauffeurs, vehicules, agents, users, tarifs, voyages, clients, tickets, bagages, courriers, colis`, plus deux tables propres au Desktop :
 - `config` (clé/valeur : référence agence, token API, date de configuration) ;
-- `sync_queue` (journal de toute écriture locale — ticket, bagage, courrier, voyage — en attente d'envoi ; **non consommée pour l'instant**, voir « Explicitement pas fait »).
+- `sync_queue` (journal de toute écriture locale — ticket, bagage, courrier, voyage — consommée par le `SyncEngine`, voir « Synchronisation »).
 
 Les tables de catalogue reprennent l'`id` auto-incrémenté du serveur tel quel (pas de remapping) puisqu'elles sont en lecture seule côté Desktop. Les tables opérationnelles (tickets, bagages, courriers, voyages, clients) génèrent leur `uuid` **côté client** (uuid v7), condition posée par l'utilisateur pour que la synchronisation future n'ait jamais à réattribuer d'identifiant.
 
@@ -86,3 +86,17 @@ Les tables de catalogue reprennent l'`id` auto-incrémenté du serveur tel quel 
 - Implémenter le vrai `SyncEngine.runCycle()` (push de `sync_queue`, pull incrémental des mises à jour de catalogue).
 - Rendre l'URL de l'API configurable (variable d'environnement ou écran de configuration).
 - Packaging (`electron-builder`) pour distribuer l'app aux agences.
+
+## Branding Adenexe Transport (14/07/2026)
+
+- Logo bus « Adenexe Transport » (même design que l'admin) : `src/Components/AppLogoIcon.vue` (copié depuis l'admin), sidebar (`AppLogo.vue`), écrans Connexion et Configuration initiale.
+- Icônes d'application dans `build/` : `icon.png` (fenêtre/barre des tâches Win/Linux, réglée dans `main.ts`), `icon.ico` (Windows) et `icon.icns` (macOS) — electron-builder les détecte automatiquement au packaging, remplaçant l'icône Electron par défaut. En dev sur macOS, le Dock est réglé via `app.dock.setIcon()`.
+- Titre de fenêtre et de page : « Adenexe Transport — Caisse ». `productName` volontairement non modifié pour ne pas déplacer le dossier de données (`gar-desktop`).
+
+
+## Synchronisation (14/07/2026) — implémentée
+
+- **Push** : `SyncEngine` consomme `sync_queue` par lots de 50 vers `POST /api/desktop/sync` (token Sanctum de l'agence). Déclenché 300 ms après chaque écriture locale + cycle toutes les 30 s ; hors-ligne détecté (`net.isOnline`) ; erreurs classées temporaire (retry 15 s) / définitive (marquée, non bloquante) / stop (ex. token invalide). Arrêt propre à la fermeture.
+- **Pull** : catalogue rafraîchi au démarrage via `BootstrapService.actualiser()`.
+- **Serveur** : `DesktopSyncController` (admin), idempotent par uuid ; migrations `merge_duplicate_clients_and_unique_phone` + `add_source_to_clients` (clients séparés par source ticket/courrier). 5 tests Feature dédiés.
+- ⚠️ Les migrations doivent être exécutées sur chaque environnement (`php artisan migrate`) — leur oubli sur la base dev bloquait vente et courrier (corrigé le 14/07).

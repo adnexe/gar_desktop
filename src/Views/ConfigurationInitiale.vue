@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Building2, RefreshCw } from '@lucide/vue';
+import { RefreshCw } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
+import AppLogoIcon from '@/Components/AppLogoIcon.vue';
 import { Label } from '@/Components/ui/label';
 import { useConfigStore } from '@/Stores/config';
 
@@ -49,8 +50,11 @@ async function valider() {
     <div class="flex min-h-screen items-center justify-center overflow-y-auto bg-muted/30 p-4">
         <form class="w-full max-w-md space-y-5 rounded-xl border bg-background p-8 shadow-sm" @submit.prevent="valider">
             <div class="flex flex-col items-center gap-2 text-center">
-                <Building2 class="size-8 text-muted-foreground" />
+                <div class="flex aspect-square size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                    <AppLogoIcon class="size-8" />
+                </div>
                 <h1 class="text-lg font-semibold">Configuration de l'agence</h1>
+                <p class="text-sm font-medium text-muted-foreground">Adenexe Transport</p>
                 <p class="text-sm text-muted-foreground">
                     Saisissez la référence de votre agence (ex : AG-7K2M9Q). Une connexion internet est nécessaire
                     uniquement pour cette première étape.

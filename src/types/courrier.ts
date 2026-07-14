@@ -4,5 +4,8 @@ export interface CourrierDuJour {
     heure: string;
     destination: string;
     destinataire: string;
+    destinataire_telephone?: string | null;
+    expediteur?: string | null;
+    expediteur_telephone?: string | null;
     montant_total: number;
 }

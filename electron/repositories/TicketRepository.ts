@@ -399,7 +399,8 @@ export class TicketRepository {
         return getDb()
             .prepare(
                 `SELECT t.uuid, t.numero_ticket, time(t.created_at) AS heure, tr.nom AS trajet, t.numero_place,
-                        (c.prenoms || ' ' || c.nom) AS client, t.montant, t.timbre, (t.montant + t.timbre) AS total
+                        (c.prenoms || ' ' || c.nom) AS client, c.telephone AS client_telephone,
+                        t.montant, t.timbre, (t.montant + t.timbre) AS total
                  FROM tickets t
                  JOIN voyages v ON v.id = t.voyage_id
                  JOIN trajets tr ON tr.id = t.trajet_id

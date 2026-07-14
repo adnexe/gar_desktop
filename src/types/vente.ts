@@ -9,4 +9,5 @@ export interface VenteDuJour {
     timbre: number;
     total: number;
     client: string | null;
+    client_telephone?: string | null;
 }

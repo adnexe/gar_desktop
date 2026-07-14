@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { LogIn, RefreshCw } from '@lucide/vue';
+import { RefreshCw } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
+import AppLogoIcon from '@/Components/AppLogoIcon.vue';
 import { Label } from '@/Components/ui/label';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
@@ -93,8 +94,11 @@ function messageErreur(e: unknown, defaut: string) {
     <div class="flex min-h-screen items-center justify-center overflow-y-auto bg-muted/30 p-4">
         <form class="w-full max-w-md space-y-4 rounded-xl border bg-background p-8 shadow-sm" @submit.prevent="connecter">
             <div class="flex flex-col items-center gap-2 text-center">
-                <LogIn class="size-8 text-muted-foreground" />
+                <div class="flex aspect-square size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                    <AppLogoIcon class="size-8" />
+                </div>
                 <h1 class="text-lg font-semibold">Connexion</h1>
+                <p class="text-sm font-medium text-muted-foreground">Adenexe Transport</p>
                 <p v-if="config.agence" class="text-sm text-muted-foreground">{{ config.agence.nom }} — {{ config.agence.ville_nom }}</p>
             </div>
 

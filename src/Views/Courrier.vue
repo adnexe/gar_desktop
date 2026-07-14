@@ -24,6 +24,19 @@ const aujourdhui = () => new Date().toISOString().slice(0, 10);
 const dateFiltre = ref(aujourdhui());
 
 const courriers = ref<CourrierDuJour[]>([]);
+const recherche = ref('');
+// Filtre local : n° courrier, destinataire ou expéditeur (nom/prénoms/téléphone).
+const courriersAffiches = computed(() => {
+    const t = recherche.value.trim().toLowerCase();
+    if (!t) return courriers.value;
+    return courriers.value.filter((c) =>
+        (c.numero_courrier ?? '').toLowerCase().includes(t) ||
+        (c.destinataire ?? '').toLowerCase().includes(t) ||
+        (c.destinataire_telephone ?? '').toLowerCase().includes(t) ||
+        (c.expediteur ?? '').toLowerCase().includes(t) ||
+        (c.expediteur_telephone ?? '').toLowerCase().includes(t),
+    );
+});
 const totalDuJour = computed(() => courriers.value.reduce((s, c) => s + c.montant_total, 0));
 
 const dialogOuvert = ref(false);
@@ -100,7 +113,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                     <span class="text-lg font-semibold">Total : {{ formatMontant(totalDuJour) }}</span>
                 </div>
 
-                <p v-if="courriers.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">Aucun courrier pour cette date.</p>
+                <Input v-model="recherche" placeholder="Rechercher : n° courrier, destinataire, expéditeur, téléphone…" class="mb-3 h-10 max-w-md text-base" />
+
+                <p v-if="courriersAffiches.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">{{ recherche ? 'Aucun résultat pour cette recherche.' : 'Aucun courrier pour cette date.' }}</p>
 
                 <table v-else class="w-full text-[0.95rem]">
                     <thead class="bg-muted/40">
@@ -113,7 +128,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="c in courriers" :key="c.uuid" class="border-b last:border-0 hover:bg-muted/30">
+                        <tr v-for="c in courriersAffiches" :key="c.uuid" class="border-b last:border-0 hover:bg-muted/30">
                             <td class="px-3 py-3">{{ c.heure }}</td>
                             <td class="px-3 py-3 font-mono">{{ c.numero_courrier }}</td>
                             <td class="px-3 py-3">{{ c.destination }}</td>

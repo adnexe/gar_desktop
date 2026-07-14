@@ -7,4 +7,6 @@ export interface BagageDuJour {
     description: string | null;
     valeur: number | null;
     montant: number;
+    client?: string | null;
+    client_telephone?: string | null;
 }

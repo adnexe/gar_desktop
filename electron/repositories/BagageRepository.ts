@@ -34,9 +34,11 @@ export class BagageRepository {
         return getDb()
             .prepare(
                 `SELECT b.uuid, b.numero_bagage, time(b.created_at) AS heure, COALESCE(t.numero_ticket, b.ticket_numero) AS numero_ticket,
-                        va.nom AS destination, b.description, b.valeur, b.montant
+                        va.nom AS destination, b.description, b.valeur, b.montant,
+                        (cl.prenoms || ' ' || cl.nom) AS client, cl.telephone AS client_telephone
                  FROM bagages b
                  LEFT JOIN tickets t ON t.id = b.ticket_id
+                 LEFT JOIN clients cl ON cl.id = t.client_id
                  LEFT JOIN villes va ON va.id = b.ville_arrivee_id
                  WHERE b.agence_id = ? AND date(b.created_at) = date(?)
                   AND b.statut_paiement = 'paye'

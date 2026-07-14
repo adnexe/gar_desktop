@@ -8,13 +8,19 @@ import { syncEngine } from './sync/SyncEngine';
 const estDev = !app.isPackaged;
 let fermetureEnCours = false;
 
+// Icône Adenexe Transport : fenêtre/barre des tâches sur Windows et Linux.
+// Une fois l'app packagée, electron-builder détecte automatiquement
+// build/icon.ico (Windows) et build/icon.icns (macOS) pour l'installateur.
+const cheminIcone = join(app.getAppPath(), 'build/icon.png');
+
 function creerFenetre(): void {
     const fenetre = new BrowserWindow({
         width: 1280,
         height: 800,
         minWidth: 1024,
         minHeight: 700,
-        title: 'GAR — Caisse',
+        title: 'Adenexe Transport — Caisse',
+        icon: cheminIcone,
         webPreferences: {
             preload: join(__dirname, '../preload/index.mjs'),
             contextIsolation: true,
@@ -43,6 +49,12 @@ function creerFenetre(): void {
 }
 
 app.whenReady().then(() => {
+    // En dev sur macOS, le Dock affiche l'icône Electron par défaut ;
+    // packagée, l'app utilise build/icon.icns.
+    if (estDev && process.platform === 'darwin') {
+        app.dock?.setIcon(cheminIcone);
+    }
+
     enregistrerIpc();
     void localNetworkService.demarrerDepuisConfig().catch((erreur) => {
         logger.warn('Serveur local non démarré.', erreur);
