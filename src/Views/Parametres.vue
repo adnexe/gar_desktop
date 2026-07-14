@@ -1,0 +1,462 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
+import { CalendarDays, Monitor, Power, RefreshCw, Server, Wifi } from '@lucide/vue';
+import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
+import { Button } from '@/Components/ui/button';
+import { Input } from '@/Components/ui/input';
+import { Label } from '@/Components/ui/label';
+import { useConfigStore } from '@/Stores/config';
+
+type ModeReseau = 'autonome' | 'serveur' | 'client';
+type StatutConnexion = 'connecte' | 'deconnecte' | 'verification';
+type ReseauLocal = {
+    mode: ModeReseau;
+    serveurUrl: string | null;
+    port: number;
+    secret: string | null;
+    actif: boolean;
+    adresses: string[];
+    agence: string | null;
+};
+
+const config = useConfigStore();
+const reseau = ref<ReseauLocal | null>(null);
+const portServeur = ref(3750);
+const serveurUrl = ref('');
+const secretReseau = ref('');
+const enCours = ref(false);
+const actualisation = ref(false);
+const message = ref('');
+const erreur = ref('');
+const statutConnexion = ref<StatutConnexion>('deconnecte');
+
+const libelleMode = computed(() => {
+    if (reseau.value?.mode === 'serveur') return 'Caisse serveur';
+    if (reseau.value?.mode === 'client') return 'Poste client';
+
+    return 'Autonome';
+});
+const serveurOn = computed(() => reseau.value?.mode === 'serveur' && reseau.value.actif);
+const clientOn = computed(() => reseau.value?.mode === 'client');
+const serveurConnecte = computed(() => serveurOn.value);
+const clientConnecte = computed(() => clientOn.value && statutConnexion.value === 'connecte');
+const reseauConnecte = computed(() => serveurConnecte.value || clientConnecte.value);
+const autonomeOn = computed(() => !serveurOn.value && !clientOn.value);
+const reseauLocalOn = computed(() => serveurOn.value || clientOn.value);
+const libelleConnexion = computed(() => {
+    if (statutConnexion.value === 'verification') return 'Vérification...';
+    return reseauConnecte.value ? 'Connecté' : 'Non connecté';
+});
+const libelleClient = computed(() => {
+    if (clientOn.value && statutConnexion.value === 'verification') return 'Vérification...';
+    if (clientConnecte.value) return 'Connecté';
+    if (clientOn.value) return 'Connexion perdue';
+
+    return 'Non connecté';
+});
+const joursAbonnementRestants = computed(() => {
+    if (!config.licence?.date_expiration) return null;
+
+    return differenceEnJours(dateDuJourIso(), config.licence.date_expiration);
+});
+const etatAbonnement = computed(() => {
+    if (!config.licence) return 'aucune';
+    if (!config.licence.actif || config.licence.statut === 'desactivee') return 'desactive';
+    if (config.licence.statut === 'expiree' || (joursAbonnementRestants.value ?? -1) < 0) return 'expire';
+    if ((joursAbonnementRestants.value ?? 99) <= 7) return 'bientot';
+
+    return 'actif';
+});
+const libelleAbonnement = computed(() => {
+    if (etatAbonnement.value === 'aucune') return 'Aucune licence';
+    if (etatAbonnement.value === 'desactive') return 'Désactivé';
+    if (etatAbonnement.value === 'expire') return 'Expiré';
+    if (etatAbonnement.value === 'bientot') return joursAbonnementRestants.value === 0 ? "Expire aujourd'hui" : 'Expire bientôt';
+
+    return 'Actif';
+});
+const detailAbonnement = computed(() => {
+    if (!config.licence) return "Aucune licence locale n'est enregistrée sur ce poste.";
+    if (etatAbonnement.value === 'desactive') return "Cette licence est désactivée côté admin.";
+
+    const jours = joursAbonnementRestants.value;
+    if (jours === null || Number.isNaN(jours)) return 'Période de licence non définie.';
+    if (jours < 0) return `Abonnement expiré depuis ${Math.abs(jours)} jour${Math.abs(jours) > 1 ? 's' : ''}.`;
+    if (jours === 0) return "L'abonnement prend fin aujourd'hui.";
+    if (jours === 1) return "L'abonnement prend fin demain.";
+
+    return `L'abonnement prend fin dans ${jours.toLocaleString('fr-FR')} jours.`;
+});
+const resumeAbonnement = computed(() => {
+    if (!config.licence) return 'Non défini';
+
+    const jours = joursAbonnementRestants.value;
+    if (jours === null || Number.isNaN(jours)) return 'Non défini';
+    if (jours < 0) return `-${Math.abs(jours).toLocaleString('fr-FR')} j`;
+    if (jours === 0) return "Aujourd'hui";
+
+    return `${jours.toLocaleString('fr-FR')} j`;
+});
+
+function badgeEtat(on: boolean) {
+    return [
+        'rounded-md px-2.5 py-1 text-xs font-semibold',
+        on ? 'bg-sky-100 text-sky-700' : 'bg-muted text-muted-foreground',
+    ];
+}
+
+function badgeAbonnement() {
+    return [
+        'rounded-md px-2.5 py-1 text-xs font-semibold',
+        etatAbonnement.value === 'actif'
+            ? 'bg-emerald-100 text-emerald-700'
+            : etatAbonnement.value === 'bientot'
+                ? 'bg-amber-100 text-amber-700'
+                : etatAbonnement.value === 'expire'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-muted text-muted-foreground',
+    ];
+}
+
+function dateDuJourIso() {
+    const maintenant = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    return `${maintenant.getFullYear()}-${pad(maintenant.getMonth() + 1)}-${pad(maintenant.getDate())}`;
+}
+
+function dateVersUtc(date: string) {
+    const [annee, mois, jour] = date.slice(0, 10).split('-').map(Number);
+
+    return Date.UTC(annee, mois - 1, jour);
+}
+
+function differenceEnJours(debut: string, fin: string) {
+    return Math.floor((dateVersUtc(fin) - dateVersUtc(debut)) / 86_400_000);
+}
+
+function formatDate(date: string | null | undefined) {
+    if (!date) return 'Non définie';
+
+    const [annee, mois, jour] = date.slice(0, 10).split('-').map(Number);
+    if (!annee || !mois || !jour) return date;
+
+    return new Intl.DateTimeFormat('fr-FR').format(new Date(annee, mois - 1, jour));
+}
+
+function messageErreur(e: unknown, defaut: string) {
+    if (!(e instanceof Error)) return defaut;
+
+    return e.message
+        .replace(/^Error invoking remote method '[^']+': Error: /, '')
+        .replace(/^Error invoking remote method "[^"]+": Error: /, '');
+}
+
+function badgeConnexion(etat: StatutConnexion, connecte: boolean) {
+    return [
+        'rounded-md px-2.5 py-1 text-xs font-semibold',
+        etat === 'verification'
+            ? 'bg-amber-100 text-amber-700'
+            : connecte
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-red-100 text-red-700',
+    ];
+}
+
+function attendre(ms: number) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
+onMounted(() => {
+    void initialiser();
+});
+
+async function initialiser() {
+    await Promise.all([chargerReseau(), config.charger()]);
+}
+
+async function chargerReseau() {
+    actualisation.value = true;
+    erreur.value = '';
+    const debut = Date.now();
+
+    try {
+        reseau.value = await window.api.config.reseauLocal();
+        portServeur.value = reseau.value.port;
+        serveurUrl.value = reseau.value.serveurUrl ?? '';
+        secretReseau.value = reseau.value.secret ?? '';
+        await verifierConnexionLocale();
+    } catch (e) {
+        statutConnexion.value = 'deconnecte';
+        erreur.value = messageErreur(e, "Impossible d'actualiser l'état réseau.");
+    } finally {
+        const restant = 700 - (Date.now() - debut);
+        if (restant > 0) {
+            await attendre(restant);
+        }
+        actualisation.value = false;
+    }
+}
+
+async function verifierConnexionLocale() {
+    if (serveurOn.value) {
+        statutConnexion.value = 'connecte';
+        return;
+    }
+
+    if (!clientOn.value || !serveurUrl.value || !secretReseau.value) {
+        statutConnexion.value = 'deconnecte';
+        return;
+    }
+
+    statutConnexion.value = 'verification';
+    const resultat = await window.api.config.testerReseauLocal(serveurUrl.value, secretReseau.value);
+    statutConnexion.value = resultat.ok ? 'connecte' : 'deconnecte';
+}
+
+async function executer(action: () => Promise<void>) {
+    enCours.value = true;
+    erreur.value = '';
+    message.value = '';
+
+    try {
+        await action();
+    } catch (e) {
+        erreur.value = messageErreur(e, 'Action réseau impossible.');
+    } finally {
+        enCours.value = false;
+    }
+}
+
+async function activerServeurLocal() {
+    await executer(async () => {
+        reseau.value = await window.api.config.configurerReseauLocal({ mode: 'serveur', port: portServeur.value });
+        secretReseau.value = reseau.value.secret ?? '';
+        statutConnexion.value = 'connecte';
+        message.value = 'Cette machine est maintenant la caisse serveur locale.';
+    });
+}
+
+async function activerClientLocal() {
+    await executer(async () => {
+        reseau.value = await window.api.config.configurerReseauLocal({
+            mode: 'client',
+            serveurUrl: serveurUrl.value,
+            secret: secretReseau.value,
+        });
+        await verifierConnexionLocale();
+        message.value = 'Ce poste utilise maintenant la caisse serveur locale.';
+    });
+}
+
+async function testerClientLocal() {
+    await executer(async () => {
+        const resultat = await window.api.config.testerReseauLocal(serveurUrl.value, secretReseau.value);
+        if (!resultat.ok) {
+            statutConnexion.value = 'deconnecte';
+            throw new Error(resultat.message);
+        }
+
+        statutConnexion.value = 'connecte';
+        message.value = resultat.agence
+            ? `${resultat.message} Agence : ${resultat.agence}.`
+            : resultat.message;
+    });
+}
+
+async function desactiverReseauLocal() {
+    await executer(async () => {
+        const etaitClient = clientOn.value;
+        reseau.value = await window.api.config.configurerReseauLocal({ mode: 'autonome' });
+        serveurUrl.value = reseau.value.serveurUrl ?? '';
+        secretReseau.value = reseau.value.secret ?? '';
+        statutConnexion.value = 'deconnecte';
+        message.value = etaitClient
+            ? 'Ce poste est déconnecté de la caisse serveur locale.'
+            : 'Mode autonome activé.';
+    });
+}
+</script>
+
+<template>
+    <AppSidebarLayout titre="Paramètres">
+        <div class="mx-auto max-w-5xl space-y-5">
+            <section class="rounded-lg border bg-card p-5 shadow-sm">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <p class="text-sm text-muted-foreground">Réseau local gare</p>
+                        <h1 class="mt-1 text-xl font-semibold">{{ libelleMode }}</h1>
+                        <p v-if="reseau?.agence" class="mt-1 text-sm text-muted-foreground">{{ reseau.agence }}</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span :class="badgeConnexion(statutConnexion, reseauConnecte)">
+                            {{ libelleConnexion }}
+                        </span>
+                        <span :class="badgeEtat(reseauLocalOn)">
+                            Réseau local {{ reseauLocalOn ? 'ON' : 'OFF' }}
+                        </span>
+                        <span class="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+                            Mode : {{ libelleMode }}
+                        </span>
+                        <Button type="button" variant="outline" :disabled="actualisation || enCours" @click="chargerReseau">
+                            <RefreshCw :class="['size-4', actualisation ? 'icone-tourne text-primary' : '']" />
+                            {{ actualisation ? 'Vérification...' : 'Actualiser' }}
+                        </Button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="rounded-lg border bg-card p-5 shadow-sm">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="flex min-w-0 items-start gap-3">
+                        <div class="rounded-md bg-muted p-2">
+                            <CalendarDays class="size-5 text-muted-foreground" />
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-base font-semibold">Abonnement</h2>
+                                <span :class="badgeAbonnement()">{{ libelleAbonnement }}</span>
+                            </div>
+                            <p class="mt-1 text-sm text-muted-foreground">{{ detailAbonnement }}</p>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-3 text-sm sm:grid-cols-3 lg:min-w-[30rem]">
+                        <div class="rounded-md border bg-muted/20 p-3">
+                            <p class="text-xs font-medium uppercase text-muted-foreground">Début</p>
+                            <p class="mt-1 font-semibold">{{ formatDate(config.licence?.date_debut) }}</p>
+                        </div>
+                        <div class="rounded-md border bg-muted/20 p-3">
+                            <p class="text-xs font-medium uppercase text-muted-foreground">Fin</p>
+                            <p class="mt-1 font-semibold">{{ formatDate(config.licence?.date_expiration) }}</p>
+                        </div>
+                        <div class="rounded-md border bg-muted/20 p-3">
+                            <p class="text-xs font-medium uppercase text-muted-foreground">Reste</p>
+                            <p class="mt-1 font-semibold">{{ resumeAbonnement }}</p>
+                            <p v-if="config.licence?.code" class="mt-1 truncate text-xs text-muted-foreground">
+                                {{ config.licence.code }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                <section class="space-y-4 rounded-lg border bg-card p-5 shadow-sm">
+                    <div class="flex items-start gap-3">
+                        <div class="rounded-md bg-muted p-2">
+                            <Server class="size-5 text-muted-foreground" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center justify-between gap-3">
+                                <h2 class="text-base font-semibold">Caisse serveur</h2>
+                                <span :class="badgeConnexion(serveurOn ? 'connecte' : 'deconnecte', serveurConnecte)">
+                                    {{ serveurConnecte ? 'Connecté' : 'Non connecté' }}
+                                </span>
+                            </div>
+                            <p class="text-sm text-muted-foreground">ON : les autres postes peuvent utiliser cette base pour les ventes et voyages.</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <Label for="port-serveur">Port</Label>
+                        <Input id="port-serveur" v-model.number="portServeur" type="number" min="1" class="h-10" />
+                    </div>
+
+                    <Button type="button" class="w-full" :disabled="enCours" @click="activerServeurLocal">
+                        <Power class="size-4" />
+                        Activer comme serveur
+                    </Button>
+
+                    <div v-if="reseau?.mode === 'serveur'" class="space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-muted-foreground">Code réseau</span>
+                            <span class="font-mono font-semibold">{{ reseau.secret }}</span>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-muted-foreground">Adresses</p>
+                            <p v-for="adresse in reseau.adresses" :key="adresse" class="break-all font-mono text-[0.85rem]">
+                                {{ adresse }}
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="space-y-4 rounded-lg border bg-card p-5 shadow-sm">
+                    <div class="flex items-start gap-3">
+                        <div class="rounded-md bg-muted p-2">
+                            <Wifi class="size-5 text-muted-foreground" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center justify-between gap-3">
+                                <h2 class="text-base font-semibold">Poste client</h2>
+                                <span :class="badgeConnexion(clientOn ? statutConnexion : 'deconnecte', clientConnecte)">
+                                    {{ libelleClient }}
+                                </span>
+                            </div>
+                            <p class="text-sm text-muted-foreground">ON : ce poste lit les tickets et voyages de la caisse serveur. Ses bagages/courriers restent locaux et se synchronisent vers admin.</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <Label for="serveur-url">Adresse caisse serveur</Label>
+                        <Input id="serveur-url" v-model="serveurUrl" placeholder="http://192.168.1.20:3750" class="h-10" />
+                    </div>
+                    <div class="space-y-1.5">
+                        <Label for="secret-reseau">Code réseau</Label>
+                        <Input id="secret-reseau" v-model="secretReseau" placeholder="Code affiché sur la caisse" class="h-10" />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <Button type="button" variant="outline" :disabled="enCours || !serveurUrl || !secretReseau" @click="testerClientLocal">
+                            Tester
+                        </Button>
+                        <Button type="button" :disabled="enCours || !serveurUrl || !secretReseau" @click="activerClientLocal">
+                            Utiliser
+                        </Button>
+                    </div>
+                </section>
+            </div>
+
+            <section class="flex flex-col gap-3 rounded-lg border bg-card p-5 shadow-sm md:flex-row md:items-center md:justify-between">
+                <div class="flex items-start gap-3">
+                    <div class="rounded-md bg-muted p-2">
+                        <Monitor class="size-5 text-muted-foreground" />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-base font-semibold">Mode autonome</h2>
+                            <span :class="badgeEtat(autonomeOn)">{{ autonomeOn ? 'ON' : 'OFF' }}</span>
+                        </div>
+                        <p class="text-sm text-muted-foreground">Ce poste ne se connecte pas à une caisse serveur locale. Il utilise seulement ses propres données locales.</p>
+                    </div>
+                </div>
+                <Button type="button" variant="outline" :disabled="enCours" @click="desactiverReseauLocal">
+                    {{ clientOn ? 'Déconnecter de la caisse serveur' : 'Activer le mode autonome' }}
+                </Button>
+            </section>
+
+            <p v-if="message" class="rounded-md bg-muted/50 px-4 py-3 text-sm text-muted-foreground">{{ message }}</p>
+            <p v-if="erreur" class="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{{ erreur }}</p>
+        </div>
+    </AppSidebarLayout>
+</template>
+
+<style scoped>
+.icone-tourne {
+    animation: rotation-continue 0.75s linear infinite;
+}
+
+@keyframes rotation-continue {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+</style>

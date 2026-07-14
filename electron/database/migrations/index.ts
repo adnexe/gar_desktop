@@ -1,0 +1,357 @@
+// Schéma SQLite local, mirroir des migrations Laravel (voir admin/database/migrations).
+// Défini en TS (et non en fichiers .sql chargés à l'exécution) pour que le
+// bundling electron-vite reste simple et fiable une fois l'app packagée.
+export const migrations: { nom: string; sql: string }[] = [
+    {
+        nom: '0001_catalogue',
+        sql: `
+            CREATE TABLE IF NOT EXISTS villes (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                nom TEXT NOT NULL,
+                actif INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS itineraires (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                ville_depart_id INTEGER NOT NULL REFERENCES villes(id),
+                ville_arrivee_id INTEGER NOT NULL REFERENCES villes(id),
+                nom TEXT,
+                actif INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS trajets (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                ville_depart_id INTEGER NOT NULL REFERENCES villes(id),
+                ville_arrivee_id INTEGER NOT NULL REFERENCES villes(id),
+                nom TEXT,
+                actif INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT,
+                updated_at TEXT,
+                UNIQUE (ville_depart_id, ville_arrivee_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS itineraire_trajet (
+                id INTEGER PRIMARY KEY,
+                itineraire_id INTEGER NOT NULL REFERENCES itineraires(id) ON DELETE CASCADE,
+                trajet_id INTEGER NOT NULL REFERENCES trajets(id) ON DELETE CASCADE,
+                ordre_depart INTEGER NOT NULL,
+                ordre_arrivee INTEGER NOT NULL,
+                created_at TEXT,
+                updated_at TEXT,
+                UNIQUE (itineraire_id, trajet_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS agences (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                reference TEXT NOT NULL UNIQUE,
+                ville_id INTEGER NOT NULL REFERENCES villes(id),
+                nom TEXT NOT NULL,
+                adresse TEXT,
+                telephone TEXT,
+                actif INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS chauffeurs (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                agence_id INTEGER REFERENCES agences(id),
+                nom TEXT NOT NULL,
+                telephone TEXT,
+                numero_permis TEXT UNIQUE,
+                statut TEXT NOT NULL DEFAULT 'disponible',
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS vehicules (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                agence_id INTEGER REFERENCES agences(id),
+                immatriculation TEXT NOT NULL UNIQUE,
+                marque TEXT,
+                modele TEXT,
+                nombre_places INTEGER NOT NULL,
+                statut TEXT NOT NULL DEFAULT 'disponible',
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS agents (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                agence_id INTEGER NOT NULL REFERENCES agences(id),
+                nom TEXT NOT NULL,
+                telephone TEXT,
+                role TEXT NOT NULL DEFAULT 'caissiere',
+                type_agent TEXT NOT NULL DEFAULT 'ticket',
+                actif INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                agent_id INTEGER REFERENCES agents(id),
+                name TEXT,
+                email TEXT,
+                number TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'agent',
+                actif INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS tarifs (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                agence_id INTEGER REFERENCES agences(id),
+                trajet_id INTEGER REFERENCES trajets(id),
+                type_billet TEXT NOT NULL,
+                tarification TEXT NOT NULL DEFAULT 'ordinaire',
+                montant REAL NOT NULL,
+                actif INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT,
+                updated_at TEXT,
+                UNIQUE (agence_id, trajet_id, type_billet, tarification)
+            );
+        `,
+    },
+    {
+        nom: '0002_operations',
+        sql: `
+            CREATE TABLE IF NOT EXISTS voyages (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                agence_depart_id INTEGER NOT NULL REFERENCES agences(id),
+                itineraire_id INTEGER NOT NULL REFERENCES itineraires(id),
+                vehicule_id INTEGER NOT NULL REFERENCES vehicules(id),
+                chauffeur_id INTEGER REFERENCES chauffeurs(id),
+                date_depart TEXT NOT NULL,
+                heure_depart TEXT NOT NULL,
+                numero_depart INTEGER NOT NULL DEFAULT 1,
+                statut TEXT NOT NULL DEFAULT 'programme',
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS clients (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                nom TEXT,
+                prenoms TEXT,
+                telephone TEXT,
+                cni TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_clients_telephone ON clients(telephone);
+
+            CREATE TABLE IF NOT EXISTS tickets (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                voyage_id INTEGER NOT NULL REFERENCES voyages(id),
+                agent_id INTEGER REFERENCES agents(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                client_id INTEGER REFERENCES clients(id),
+                trajet_id INTEGER NOT NULL REFERENCES trajets(id),
+                type_billet TEXT NOT NULL,
+                numero_place INTEGER NOT NULL,
+                montant REAL NOT NULL,
+                timbre REAL NOT NULL DEFAULT 0,
+                tarification TEXT NOT NULL DEFAULT 'ordinaire',
+                statut_paiement TEXT NOT NULL DEFAULT 'paye',
+                statut_ticket TEXT NOT NULL DEFAULT 'valide',
+                created_at TEXT,
+                updated_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_tickets_voyage_place ON tickets(voyage_id, numero_place);
+
+            CREATE TABLE IF NOT EXISTS bagages (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                ticket_id INTEGER NOT NULL REFERENCES tickets(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                description TEXT,
+                montant REAL NOT NULL,
+                statut_paiement TEXT NOT NULL DEFAULT 'paye',
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS courriers (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                agence_depart_id INTEGER NOT NULL REFERENCES agences(id),
+                ville_arrivee_id INTEGER NOT NULL REFERENCES villes(id),
+                expediteur_id INTEGER NOT NULL REFERENCES clients(id),
+                destinataire_id INTEGER NOT NULL REFERENCES clients(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                prix_expedition REAL NOT NULL DEFAULT 0,
+                montant_colis REAL NOT NULL DEFAULT 0,
+                montant_total REAL NOT NULL DEFAULT 0,
+                statut TEXT NOT NULL DEFAULT 'enregistre',
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS colis (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                courrier_id INTEGER NOT NULL REFERENCES courriers(id) ON DELETE CASCADE,
+                nom TEXT NOT NULL,
+                type TEXT NOT NULL,
+                quantite INTEGER NOT NULL DEFAULT 1,
+                prix REAL NOT NULL,
+                montant REAL NOT NULL,
+                created_at TEXT,
+                updated_at TEXT
+            );
+        `,
+    },
+    {
+        nom: '0003_local',
+        sql: `
+            CREATE TABLE IF NOT EXISTS config (
+                cle TEXT PRIMARY KEY,
+                valeur TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS sync_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entite TEXT NOT NULL,
+                entite_uuid TEXT NOT NULL,
+                operation TEXT NOT NULL DEFAULT 'create',
+                payload TEXT NOT NULL,
+                statut TEXT NOT NULL DEFAULT 'en_attente',
+                tentatives INTEGER NOT NULL DEFAULT 0,
+                derniere_erreur TEXT,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                synced_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_sync_queue_statut ON sync_queue(statut);
+        `,
+    },
+    {
+        nom: '0004_numeros_et_destinations',
+        sql: `
+            ALTER TABLE tickets ADD COLUMN numero_ticket TEXT;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets_numero_unique ON tickets(numero_ticket);
+
+            ALTER TABLE courriers ADD COLUMN numero_courrier TEXT;
+            ALTER TABLE courriers ADD COLUMN agence_arrivee_id INTEGER REFERENCES agences(id);
+            ALTER TABLE courriers ADD COLUMN voyage_id INTEGER REFERENCES voyages(id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_courriers_numero_unique ON courriers(numero_courrier);
+
+            -- ticket_id devient facultatif (un bagage peut être enregistré sans
+            -- ticket, juste avec une destination/agence/voyage) : SQLite ne
+            -- permet pas d'assouplir une contrainte NOT NULL par ALTER, on
+            -- recrée donc la table.
+            ALTER TABLE bagages RENAME TO bagages_old;
+            CREATE TABLE bagages (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                numero_bagage TEXT,
+                agence_id INTEGER REFERENCES agences(id),
+                ticket_id INTEGER REFERENCES tickets(id),
+                ville_arrivee_id INTEGER REFERENCES villes(id),
+                agence_arrivee_id INTEGER REFERENCES agences(id),
+                voyage_id INTEGER REFERENCES voyages(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                description TEXT,
+                montant REAL NOT NULL,
+                statut_paiement TEXT NOT NULL DEFAULT 'paye',
+                created_at TEXT,
+                updated_at TEXT
+            );
+            INSERT INTO bagages (id, uuid, agence_id, ticket_id, user_id, description, montant, statut_paiement, created_at, updated_at)
+                SELECT b.id, b.uuid,
+                       (SELECT v.agence_depart_id FROM tickets t JOIN voyages v ON v.id = t.voyage_id WHERE t.id = b.ticket_id),
+                       b.ticket_id, b.user_id, b.description, b.montant, b.statut_paiement, b.created_at, b.updated_at
+                FROM bagages_old b;
+            DROP TABLE bagages_old;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_bagages_numero_unique ON bagages(numero_bagage);
+        `,
+    },
+    {
+        nom: '0005_agent_sur_bagages_courriers',
+        sql: `
+            -- Chaque vente porte l'agent qui l'a réalisée (les tickets
+            -- l'avaient déjà) : alignement bagages/courriers avec l'admin.
+            ALTER TABLE bagages ADD COLUMN agent_id INTEGER REFERENCES agents(id);
+            ALTER TABLE courriers ADD COLUMN agent_id INTEGER REFERENCES agents(id);
+        `,
+    },
+    {
+        nom: '0006_valeur_sur_bagages',
+        sql: `
+            -- Valeur déclarée du bagage (référence / assurance), distincte du
+            -- montant à payer. Alignement avec l'admin.
+            ALTER TABLE bagages ADD COLUMN valeur REAL;
+        `,
+    },
+    {
+        nom: '0007_trace_impression_tickets',
+        sql: `
+            -- Une vente ticket ne devient comptable qu'après acceptation de
+            -- l'impression par le système. Les échecs sont conservés en audit.
+            ALTER TABLE tickets ADD COLUMN impression_confirmee_at TEXT;
+            ALTER TABLE tickets ADD COLUMN annule_at TEXT;
+            ALTER TABLE tickets ADD COLUMN motif_annulation TEXT;
+        `,
+    },
+    {
+        nom: '0008_trace_impression_bagages_courriers',
+        sql: `
+            -- Même règle que les tickets : bagages et courriers ne deviennent
+            -- comptables qu'après acceptation de l'impression par le système.
+            ALTER TABLE bagages ADD COLUMN impression_confirmee_at TEXT;
+            ALTER TABLE bagages ADD COLUMN annule_at TEXT;
+            ALTER TABLE bagages ADD COLUMN motif_annulation TEXT;
+
+            ALTER TABLE courriers ADD COLUMN impression_confirmee_at TEXT;
+            ALTER TABLE courriers ADD COLUMN annule_at TEXT;
+            ALTER TABLE courriers ADD COLUMN motif_annulation TEXT;
+        `,
+    },
+    {
+        nom: '0009_references_distantes_bagages_courriers',
+        sql: `
+            -- En mode poste client, les voyages/tickets peuvent venir de la
+            -- caisse serveur. On garde leurs UUID pour la synchronisation admin
+            -- sans utiliser leurs IDs numériques dans la base locale.
+            ALTER TABLE bagages ADD COLUMN ticket_uuid TEXT;
+            ALTER TABLE bagages ADD COLUMN ticket_numero TEXT;
+            ALTER TABLE bagages ADD COLUMN voyage_uuid TEXT;
+            ALTER TABLE courriers ADD COLUMN voyage_uuid TEXT;
+        `,
+    },
+    {
+        nom: '0010_source_clients',
+        sql: `
+            ALTER TABLE clients ADD COLUMN source TEXT NOT NULL DEFAULT 'ticket';
+            UPDATE clients
+               SET source = 'courrier'
+             WHERE id IN (
+                SELECT expediteur_id FROM courriers
+                UNION
+                SELECT destinataire_id FROM courriers
+             )
+               AND id NOT IN (
+                SELECT client_id FROM tickets WHERE client_id IS NOT NULL
+             );
+            CREATE INDEX IF NOT EXISTS idx_clients_telephone_source ON clients(telephone, source);
+        `,
+    },
+];

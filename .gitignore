@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+dist-electron/
+release/
+out/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Electron
+*.tsbuildinfo
+
+# SQLite (si la base est générée localement)
+*.sqlite
+*.sqlite3
+*.db
+
+# Cache
+.cache/
+.eslintcache
+
+# Package managers
+.pnpm-store/
+.npm/
+
+# Coverage
+coverage/
+
+# Temporary files
+tmp/
+temp/
+
+# Mac
+.AppleDouble
+.LSOverride
+
+# Windows
+Desktop.ini
+
+# Generated binaries
+*.exe
+*.dmg
+*.app
+*.AppImage
+*.deb
+*.rpmß
