@@ -87,43 +87,80 @@ function ordonnerImprimantes(imprimantes: ImprimanteRuntime[]): ImprimanteRuntim
     return [...imprimantes].sort((a, b) => Number(estImprimanteParDefaut(b)) - Number(estImprimanteParDefaut(a)));
 }
 
+// Chromium (Windows) rejette l'impression silencieuse avec « Invalid printer
+// settings » quand les réglages sont incomplets : il faut fournir explicitement
+// dpi + pageSize. On essaie donc plusieurs formats connus, du plus adapté
+// (thermique 80 mm) au plus générique, avant de retomber sur le dialogue système.
+const FORMES_IMPRESSION: { libelle: string; options: Electron.WebContentsPrintOptions }[] = [
+    {
+        libelle: '80mm',
+        options: {
+            silent: true,
+            printBackground: true,
+            margins: { marginType: 'none' },
+            dpi: { horizontal: 203, vertical: 203 },
+            pageSize: { width: 80_000, height: 297_000 },
+        },
+    },
+    {
+        libelle: 'A4',
+        options: {
+            silent: true,
+            printBackground: true,
+            dpi: { horizontal: 600, vertical: 600 },
+            pageSize: 'A4',
+        },
+    },
+    {
+        libelle: 'pilote',
+        options: { silent: true, printBackground: true },
+    },
+];
+
 async function imprimerDirect(sender: WebContents): Promise<ResultatImpression> {
     const imprimantes = await listerImprimantes(sender);
-    const base: Electron.WebContentsPrintOptions = {
-        silent: true,
-        printBackground: true,
-        usePrinterDefaultPageSize: true,
-    };
     const tentatives: string[] = [];
 
-    const defaut = await imprimerWebContents(sender, base, 'imprimante par défaut');
-    if (defaut.ok) return defaut;
-    tentatives.push(`Défaut : ${defaut.erreur}`);
+    // Cibles dans l'ordre : imprimante par défaut (deviceName absent), puis
+    // chaque imprimante nommée (défaut en tête).
+    const cibles: { deviceName?: string; libelle: string }[] = [
+        { libelle: 'imprimante par défaut' },
+        ...ordonnerImprimantes(imprimantes)
+            .filter((imprimante) => imprimante.name)
+            .map((imprimante) => ({ deviceName: imprimante.name, libelle: nomImprimante(imprimante) })),
+    ];
 
-    for (const imprimante of ordonnerImprimantes(imprimantes)) {
-        if (!imprimante.name) continue;
+    for (const cible of cibles) {
+        for (const forme of FORMES_IMPRESSION) {
+            const options = cible.deviceName
+                ? { ...forme.options, deviceName: cible.deviceName }
+                : forme.options;
+            const libelle = `${cible.libelle} [${forme.libelle}]`;
 
-        const resultat = await imprimerWebContents(
-            sender,
-            { ...base, deviceName: imprimante.name },
-            nomImprimante(imprimante),
-        );
+            const resultat = await imprimerWebContents(sender, options, libelle);
+            if (resultat.ok) return resultat;
 
-        if (resultat.ok) return resultat;
-        tentatives.push(`${nomImprimante(imprimante)} : ${resultat.erreur}`);
+            tentatives.push(`${libelle} : ${resultat.erreur}`);
+        }
     }
 
-    const detail = tentatives.filter(Boolean).join(' | ');
+    // Dernier recours : dialogue d'impression système (l'utilisateur confirme).
+    const dialogue = await imprimerWebContents(sender, { printBackground: true }, 'dialogue système');
+    if (dialogue.ok) return dialogue;
+    tentatives.push(`dialogue système : ${dialogue.erreur}`);
+
+    logger.warn('Impression refusée par le système.', { tentatives, imprimantes: imprimantes.map(exposerImprimante) });
+
     const imprimantesDetectees = imprimantes.map(nomImprimante).join(', ');
     const prefixe = imprimantes.length === 0
         ? "Aucune imprimante n'a été détectée par l'application."
         : `Imprimantes détectées : ${imprimantesDetectees}.`;
-
-    logger.warn('Impression refusée par le système.', { detail, imprimantes: imprimantes.map(exposerImprimante) });
+    const detail = tentatives.slice(0, 3).join(' | ');
+    const reste = tentatives.length > 3 ? ` (+${tentatives.length - 3} autres tentatives, voir le journal)` : '';
 
     return {
         ok: false,
-        erreur: `${prefixe} ${detail || 'Vérifiez que l’imprimante est installée, allumée et définie par défaut.'}`.trim(),
+        erreur: `${prefixe} ${detail}${reste}`.trim() || 'Vérifiez que l’imprimante est installée, allumée et définie par défaut.',
     };
 }
 

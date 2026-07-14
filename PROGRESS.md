@@ -109,4 +109,7 @@ Les tables de catalogue reprennent l'`id` auto-incrémenté du serveur tel quel 
 
 ## Impression directe (14/07/2026)
 
-- `webContents.print()` sans `silent` ouvrait le dialogue d'impression système — défaillant sur Windows (rien ne s'affiche, échec silencieux). Corrigé dans `electron/ipc/index.ts` : détection des imprimantes (`getPrintersAsync`), erreur claire « Aucune imprimante détectée » si la liste est vide, sinon **impression silencieuse directe** sur l'imprimante par défaut (`silent: true`, `deviceName`, marges nulles). Concerne tickets, bagages et courriers (même handler IPC).
+- Windows rejetait l'impression silencieuse avec « Invalid printer settings » sur TOUTES les imprimantes (même Print to PDF) : bug Chromium/Electron connu — en mode silencieux il faut fournir explicitement `dpi` **et** `pageSize`.
+- `imprimerDirect()` (`electron/ipc/index.ts`) essaie désormais une échelle de formats par cible (imprimante par défaut puis chaque imprimante) : ① thermique 80 mm (203 dpi, 80 000×297 000 µm, marges nulles) ② A4 600 dpi ③ réglages du pilote — puis, en dernier recours, le dialogue d'impression système. Première réussite = ticket imprimé ; sinon message d'erreur avec les 3 premières tentatives (détail complet dans le journal).
+- Concerne tickets, bagages, courriers + le bouton « ticket de test » (fenêtre cachée `imprimerTicketTest`).
+
