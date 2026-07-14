@@ -194,7 +194,7 @@
         page-break-after: auto;
     }
     @page {
-        size: 80mm auto;
-        margin: 2mm;
+        size: auto;
+        margin: 0;
     }
 }

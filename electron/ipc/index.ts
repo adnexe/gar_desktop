@@ -92,7 +92,7 @@ async function imprimerDirect(sender: WebContents): Promise<ResultatImpression> 
     const base: Electron.WebContentsPrintOptions = {
         silent: true,
         printBackground: true,
-        margins: { marginType: 'none' },
+        usePrinterDefaultPageSize: true,
     };
     const tentatives: string[] = [];
 
@@ -146,7 +146,7 @@ async function imprimerTicketTest(): Promise<ResultatImpression> {
         <head>
             <meta charset="utf-8" />
             <style>
-                @page { size: 80mm auto; margin: 2mm; }
+                @page { size: auto; margin: 0; }
                 body { width: 72mm; margin: 0; font-family: Arial, sans-serif; color: #000; }
                 .ticket { border: 1px solid #000; padding: 8px; font-size: 13px; }
                 h1 { margin: 0 0 8px; text-align: center; font-size: 18px; }

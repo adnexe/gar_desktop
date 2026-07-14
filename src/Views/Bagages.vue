@@ -65,6 +65,7 @@ onMounted(charger);
 
 const finDeCaisseOuvert = ref(false);
 const rapportFinDeCaisse = ref<{ date: string; nombre_bagages: number; montant_total: number } | null>(null);
+const erreurImpression = ref('');
 
 async function ouvrirFinDeCaisse() {
     if (!session.agenceId) return;
@@ -77,8 +78,12 @@ async function ouvrirFinDeCaisse() {
 }
 
 async function imprimerFinDeCaisse() {
+    erreurImpression.value = '';
     await nextTick();
-    window.print();
+    const impression = await window.api.impression.imprimerRecu();
+    if (!impression.ok) {
+        erreurImpression.value = impression.erreur ?? "L'impression n'a pas pu être lancée.";
+    }
 }
 
 const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + ' FCFA';
@@ -165,6 +170,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                     <Button variant="outline" @click="finDeCaisseOuvert = false">Fermer</Button>
                     <Button @click="imprimerFinDeCaisse"><Printer /> Imprimer</Button>
                 </DialogFooter>
+                <p v-if="erreurImpression" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {{ erreurImpression }}
+                </p>
             </DialogContent>
         </Dialog>
 
