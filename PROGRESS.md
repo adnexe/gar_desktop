@@ -106,3 +106,7 @@ Les tables de catalogue reprennent l'`id` auto-incrémenté du serveur tel quel 
 - `productName: "Adnexe Transport"` dans `package.json` : nom affiché une fois packagée (menu macOS, exe/installateur Windows) et nouveau dossier de données `~/Library/Application Support/Adnexe Transport/` (idem `%APPDATA%` sur Windows).
 - Migration automatique au premier lancement : la base `gar-desktop.sqlite3` (+ wal/shm) est copiée depuis l'ancien dossier `gar-desktop/` si présente (`migrerDonneesAncienNom()` dans `main.ts`) — vérifié en réel : config d'agence et données conservées.
 - En dev (`npm run dev`), le processus s'affiche toujours « Electron » dans le Dock/menu : c'est normal, le vrai nom n'apparaît qu'après packaging electron-builder.
+
+## Impression directe (14/07/2026)
+
+- `webContents.print()` sans `silent` ouvrait le dialogue d'impression système — défaillant sur Windows (rien ne s'affiche, échec silencieux). Corrigé dans `electron/ipc/index.ts` : détection des imprimantes (`getPrintersAsync`), erreur claire « Aucune imprimante détectée » si la liste est vide, sinon **impression silencieuse directe** sur l'imprimante par défaut (`silent: true`, `deviceName`, marges nulles). Concerne tickets, bagages et courriers (même handler IPC).

@@ -59,20 +59,42 @@ export function enregistrerIpc(): void {
             return { ok: false as const, erreur: 'Fenêtre d’impression introuvable.' };
         }
 
-        return await new Promise<{ ok: true } | { ok: false; erreur: string }>((resolve) => {
-            event.sender.print({ printBackground: true }, (succes, raison) => {
-                if (succes) {
-                    resolve({ ok: true });
-                    return;
-                }
+        // Impression directe (silencieuse) sur l'imprimante par défaut : le
+        // dialogue d'impression système de webContents.print() est défaillant
+        // sur Windows (n'apparaît pas, échec silencieux) et une caisse ne doit
+        // de toute façon pas confirmer chaque ticket à la main.
+        const imprimantes = await event.sender.getPrintersAsync();
+        if (imprimantes.length === 0) {
+            return {
+                ok: false as const,
+                erreur: 'Aucune imprimante détectée. Branchez une imprimante et réessayez.',
+            };
+        }
 
-                resolve({
-                    ok: false,
-                    erreur: raison === 'cancelled'
-                        ? "Impression annulée par l'utilisateur."
-                        : raison || 'Impression annulée ou refusée par le système.',
-                });
-            });
+        const parDefaut = imprimantes.find((imprimante) => imprimante.isDefault) ?? imprimantes[0];
+
+        return await new Promise<{ ok: true } | { ok: false; erreur: string }>((resolve) => {
+            event.sender.print(
+                {
+                    silent: true,
+                    deviceName: parDefaut.name,
+                    printBackground: true,
+                    margins: { marginType: 'none' },
+                },
+                (succes, raison) => {
+                    if (succes) {
+                        resolve({ ok: true });
+                        return;
+                    }
+
+                    resolve({
+                        ok: false,
+                        erreur: raison === 'cancelled'
+                            ? "Impression annulée par l'utilisateur."
+                            : raison || `Impression refusée par le système (imprimante « ${parDefaut.name} »).`,
+                    });
+                },
+            );
         });
     };
 
