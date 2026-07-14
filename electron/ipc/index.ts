@@ -1,4 +1,11 @@
-import { BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import { randomUUID } from 'node:crypto';
+import { unlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+// pdf-to-printer est en CommonJS : import par défaut obligatoire (main en ESM).
+import pdfToPrinter from 'pdf-to-printer';
+
+const { print: imprimerFichierPdf } = pdfToPrinter;
 import { ConfigController } from '../controllers/ConfigController';
 import { AuthController } from '../controllers/AuthController';
 import { ReferentielController } from '../controllers/ReferentielController';
@@ -87,6 +94,60 @@ function ordonnerImprimantes(imprimantes: ImprimanteRuntime[]): ImprimanteRuntim
     return [...imprimantes].sort((a, b) => Number(estImprimanteParDefaut(b)) - Number(estImprimanteParDefaut(a)));
 }
 
+// Imprimantes virtuelles (OneNote, PDF, Fax...) : jamais utilisées comme
+// repli automatique — un ticket qui « s'imprime » dans OneNote est perdu.
+function estImprimanteVirtuelle(imprimante: ImprimanteRuntime): boolean {
+    return /onenote|fax|xps|print to pdf|pdf24|microsoft/i.test(`${imprimante.name} ${imprimante.displayName}`);
+}
+
+/**
+ * Voie principale sous Windows : le module d'impression de Chromium y est
+ * défaillant (« Invalid printer settings » quelles que soient les options),
+ * donc on rend le reçu en PDF (fiable) puis on l'envoie à l'imprimante via
+ * SumatraPDF embarqué (paquet pdf-to-printer).
+ */
+async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntime[], tentatives: string[]): Promise<ResultatImpression> {
+    const pdf = await sender.printToPDF({
+        printBackground: true,
+        preferCSSPageSize: true,
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+        // 80 mm de large (3,15 po) ; le @page du CSS prime s'il est défini.
+        pageSize: { width: 3.15, height: 11.7 },
+    });
+
+    const fichier = join(app.getPath('temp'), `adnexe-ticket-${randomUUID()}.pdf`);
+    await writeFile(fichier, pdf);
+
+    try {
+        // Imprimante par défaut d'abord (sans nom), puis les imprimantes
+        // physiques (défaut en tête) — jamais les virtuelles en repli.
+        const cibles: { printer?: string; libelle: string }[] = [
+            { libelle: 'imprimante par défaut' },
+            ...ordonnerImprimantes(imprimantes)
+                .filter((imprimante) => imprimante.name && !estImprimanteVirtuelle(imprimante))
+                .map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
+        ];
+
+        for (const cible of cibles) {
+            try {
+                await imprimerFichierPdf(fichier, {
+                    ...(cible.printer ? { printer: cible.printer } : {}),
+                    scale: 'noscale',
+                });
+
+                return { ok: true, imprimante: `${cible.libelle} (PDF)` };
+            } catch (erreur) {
+                const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
+                tentatives.push(`${cible.libelle} [PDF] : ${message}`);
+            }
+        }
+
+        return { ok: false, erreur: tentatives.join(' | ') };
+    } finally {
+        void unlink(fichier).catch(() => undefined);
+    }
+}
+
 // Chromium (Windows) rejette l'impression silencieuse avec « Invalid printer
 // settings » quand les réglages sont incomplets : il faut fournir explicitement
 // dpi + pageSize. On essaie donc plusieurs formats connus, du plus adapté
@@ -121,12 +182,23 @@ async function imprimerDirect(sender: WebContents): Promise<ResultatImpression> 
     const imprimantes = await listerImprimantes(sender);
     const tentatives: string[] = [];
 
+    // Sous Windows, la voie PDF + SumatraPDF est la seule fiable.
+    if (process.platform === 'win32') {
+        try {
+            const viaPdf = await imprimerViaPdf(sender, imprimantes, tentatives);
+            if (viaPdf.ok) return viaPdf;
+        } catch (erreur) {
+            const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
+            tentatives.push(`génération PDF : ${message}`);
+        }
+    }
+
     // Cibles dans l'ordre : imprimante par défaut (deviceName absent), puis
-    // chaque imprimante nommée (défaut en tête).
+    // chaque imprimante physique nommée (défaut en tête).
     const cibles: { deviceName?: string; libelle: string }[] = [
         { libelle: 'imprimante par défaut' },
         ...ordonnerImprimantes(imprimantes)
-            .filter((imprimante) => imprimante.name)
+            .filter((imprimante) => imprimante.name && !estImprimanteVirtuelle(imprimante))
             .map((imprimante) => ({ deviceName: imprimante.name, libelle: nomImprimante(imprimante) })),
     ];
 

@@ -6,32 +6,15 @@
     "type": "module",
     "main": "./out/main/index.js",
     "build": {
-        "appId": "com.adnexetransport.desktop",
-        "productName": "Adnexe Transport",
-        "directories": {
-            "output": "release" 
-        },
-        "files": [
-            "out/**/*",
-            "package.json"
+        "appId": "com.adnexe.caisse",
+        "asarUnpack": [
+            "**/node_modules/pdf-to-printer/**"
         ],
-        "mac": {
-            "target": [
-            "dmg",
-            "zip"
-            ]
-        },
         "win": {
-            "target": [
-            "nsis"
-            ]
-        },
-        "linux": {
-            "target": [
-            "AppImage"
-            ]
+            "target": "nsis"
         }
-        },    "scripts": {
+    },
+    "scripts": {
         "dev": "electron-vite dev",
         "build": "vue-tsc --noEmit && electron-vite build",
         "preview": "electron-vite preview",
@@ -48,6 +31,7 @@
         "better-sqlite3": "^12.11.1",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "pdf-to-printer": "^5.8.0",
         "pinia": "^3.0.4",
         "reka-ui": "^2.9.8",
         "tailwind-merge": "^3.2.0",

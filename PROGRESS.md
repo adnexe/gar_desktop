@@ -107,9 +107,11 @@ Les tables de catalogue reprennent l'`id` auto-incrémenté du serveur tel quel 
 - Migration automatique au premier lancement : la base `gar-desktop.sqlite3` (+ wal/shm) est copiée depuis l'ancien dossier `gar-desktop/` si présente (`migrerDonneesAncienNom()` dans `main.ts`) — vérifié en réel : config d'agence et données conservées.
 - En dev (`npm run dev`), le processus s'affiche toujours « Electron » dans le Dock/menu : c'est normal, le vrai nom n'apparaît qu'après packaging electron-builder.
 
-## Impression directe (14/07/2026)
+## Impression (14/07/2026) — voie PDF sous Windows
 
-- Windows rejetait l'impression silencieuse avec « Invalid printer settings » sur TOUTES les imprimantes (même Print to PDF) : bug Chromium/Electron connu — en mode silencieux il faut fournir explicitement `dpi` **et** `pageSize`.
-- `imprimerDirect()` (`electron/ipc/index.ts`) essaie désormais une échelle de formats par cible (imprimante par défaut puis chaque imprimante) : ① thermique 80 mm (203 dpi, 80 000×297 000 µm, marges nulles) ② A4 600 dpi ③ réglages du pilote — puis, en dernier recours, le dialogue d'impression système. Première réussite = ticket imprimé ; sinon message d'erreur avec les 3 premières tentatives (détail complet dans le journal).
-- Concerne tickets, bagages, courriers + le bouton « ticket de test » (fenêtre cachée `imprimerTicketTest`).
+- Le module d'impression Chromium/Electron est cassé sous Windows : « Invalid printer settings » sur TOUTES les imprimantes (même Print to PDF), quelles que soient les options (dpi/pageSize explicites testés sans succès sur le poste réel).
+- **Solution** (`electron/ipc/index.ts`) : sous Windows, le reçu est rendu en PDF (`webContents.printToPDF`, 80 mm de large, marges nulles, `preferCSSPageSize`) puis imprimé silencieusement via **SumatraPDF embarqué** (paquet `pdf-to-printer`, CommonJS → import par défaut). Cibles : imprimante par défaut puis chaque imprimante physique ; les imprimantes virtuelles (OneNote, Fax, XPS, Print to PDF...) sont exclues du repli automatique.
+- Ancienne échelle `webContents.print()` conservée en repli (et voie principale sur macOS/Linux), dialogue système en ultime recours.
+- Packaging : `build` dans `package.json` (`appId com.adnexe.caisse`, `asarUnpack` pour que SumatraPDF.exe soit exécutable hors asar). `pdf-to-printer` est en `dependencies`.
+- Concerne tickets, bagages, courriers + le ticket de test.
 
