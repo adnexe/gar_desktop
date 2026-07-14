@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron';
+import { copyFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { enregistrerIpc } from './ipc';
 import { logger } from './logger';
@@ -8,7 +9,29 @@ import { syncEngine } from './sync/SyncEngine';
 const estDev = !app.isPackaged;
 let fermetureEnCours = false;
 
-// Icône Adenexe Transport : fenêtre/barre des tâches sur Windows et Linux.
+// L'app s'appelait « gar-desktop » avant d'être renommée « Adnexe Transport » :
+// le dossier de données a changé avec le nom. Au premier lancement sous le
+// nouveau nom, on rapatrie la base SQLite existante pour ne rien perdre
+// (configuration de l'agence, ventes non synchronisées...).
+function migrerDonneesAncienNom(): void {
+    const ancienDossier = join(app.getPath('appData'), 'gar-desktop');
+    const nouveauDossier = app.getPath('userData');
+    const dbNouvelle = join(nouveauDossier, 'gar-desktop.sqlite3');
+
+    if (ancienDossier === nouveauDossier || existsSync(dbNouvelle) || !existsSync(ancienDossier)) {
+        return;
+    }
+
+    for (const fichier of readdirSync(ancienDossier)) {
+        if (fichier.startsWith('gar-desktop.sqlite3')) {
+            copyFileSync(join(ancienDossier, fichier), join(nouveauDossier, fichier));
+        }
+    }
+
+    logger.info(`Base locale migrée depuis ${ancienDossier}.`);
+}
+
+// Icône Adnexe Transport : fenêtre/barre des tâches sur Windows et Linux.
 // Une fois l'app packagée, electron-builder détecte automatiquement
 // build/icon.ico (Windows) et build/icon.icns (macOS) pour l'installateur.
 const cheminIcone = join(app.getAppPath(), 'build/icon.png');
@@ -19,7 +42,7 @@ function creerFenetre(): void {
         height: 800,
         minWidth: 1024,
         minHeight: 700,
-        title: 'Adenexe Transport — Caisse',
+        title: 'Adnexe Transport — Caisse',
         icon: cheminIcone,
         webPreferences: {
             preload: join(__dirname, '../preload/index.mjs'),
@@ -49,6 +72,8 @@ function creerFenetre(): void {
 }
 
 app.whenReady().then(() => {
+    migrerDonneesAncienNom();
+
     // En dev sur macOS, le Dock affiche l'icône Electron par défaut ;
     // packagée, l'app utilise build/icon.icns.
     if (estDev && process.platform === 'darwin') {

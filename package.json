@@ -1,15 +1,44 @@
 {
     "name": "gar-desktop",
+    "productName": "Adnexe Transport",
     "private": true,
     "version": "0.1.0",
     "type": "module",
     "main": "./out/main/index.js",
-    "scripts": {
+    "build": {
+        "appId": "com.adnexetransport.desktop",
+        "productName": "Adnexe Transport",
+        "directories": {
+            "output": "release" 
+        },
+        "files": [
+            "out/**/*",
+            "package.json"
+        ],
+        "mac": {
+            "target": [
+            "dmg",
+            "zip"
+            ]
+        },
+        "win": {
+            "target": [
+            "nsis"
+            ]
+        },
+        "linux": {
+            "target": [
+            "AppImage"
+            ]
+        }
+        },    "scripts": {
         "dev": "electron-vite dev",
         "build": "vue-tsc --noEmit && electron-vite build",
         "preview": "electron-vite preview",
         "typecheck": "vue-tsc --noEmit",
-        "postinstall": "electron-rebuild -f -w better-sqlite3"
+        "postinstall": "electron-rebuild -f -w better-sqlite3",
+        "pack": "npm run build && electron-builder --dir",
+        "dist": "npm run build && electron-builder"
     },
     "dependencies": {
         "@lucide/vue": "^1.17.0",

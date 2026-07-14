@@ -5,6 +5,7 @@ import type { BootstrapResponse } from '../types/bootstrap';
 // cette URL doit pointer vers le serveur central — à rendre configurable
 // (variable d'environnement / écran de config) avant le packaging final.
 const BASE_URL = (process.env.GAR_API_URL ?? 'http://127.0.0.1:8000').replace(/\/+$/, '');
+// const BASE_URL = (process.env.GAR_API_URL ?? 'http://127.0.0.1:8000').replace(/\/+$/, '');
 
 const http = axios.create({ baseURL: BASE_URL, timeout: 15000 });
 

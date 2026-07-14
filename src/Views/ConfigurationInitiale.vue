@@ -54,7 +54,7 @@ async function valider() {
                     <AppLogoIcon class="size-8" />
                 </div>
                 <h1 class="text-lg font-semibold">Configuration de l'agence</h1>
-                <p class="text-sm font-medium text-muted-foreground">Adenexe Transport</p>
+                <p class="text-sm font-medium text-muted-foreground">Adnexe Transport</p>
                 <p class="text-sm text-muted-foreground">
                     Saisissez la référence de votre agence (ex : AG-7K2M9Q). Une connexion internet est nécessaire
                     uniquement pour cette première étape.

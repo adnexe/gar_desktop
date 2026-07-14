@@ -13,7 +13,7 @@ defineProps<Props>();
 </script>
 
 <template>
-    <!-- Logo Adenexe Transport : bus stylisé (monochrome, suit currentColor) -->
+    <!-- Logo Adnexe Transport : bus stylisé (monochrome, suit currentColor) -->
     <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"

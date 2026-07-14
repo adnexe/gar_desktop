@@ -98,7 +98,7 @@ function messageErreur(e: unknown, defaut: string) {
                     <AppLogoIcon class="size-8" />
                 </div>
                 <h1 class="text-lg font-semibold">Connexion</h1>
-                <p class="text-sm font-medium text-muted-foreground">Adenexe Transport</p>
+                <p class="text-sm font-medium text-muted-foreground">Adnexe Transport</p>
                 <p v-if="config.agence" class="text-sm text-muted-foreground">{{ config.agence.nom }} — {{ config.agence.ville_nom }}</p>
             </div>
 
