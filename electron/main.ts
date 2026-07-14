@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import { copyFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { enregistrerIpc } from './ipc';
@@ -72,6 +72,9 @@ function creerFenetre(): void {
 }
 
 app.whenReady().then(() => {
+    // Pas de barre de menu (File/Edit/View/Window) : app de caisse plein écran.
+    Menu.setApplicationMenu(null);
+
     migrerDonneesAncienNom();
 
     // En dev sur macOS, le Dock affiche l'icône Electron par défaut ;
