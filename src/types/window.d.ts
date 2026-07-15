@@ -91,6 +91,31 @@ declare global {
                 villes: () => Promise<{ id: number; uuid: string; nom: string }[]>;
                 agencesParVille: (villeId: number) => Promise<{ id: number; uuid: string; nom: string; ville_id: number }[]>;
                 voyagesDeAgence: (agenceId: number) => Promise<{ id: number; uuid: string; date_depart: string; heure_depart: string; itineraire_nom: string | null }[]>;
+                tarifsAgence: (agenceId: number) => Promise<{
+                    uuid: string;
+                    trajet: string | null;
+                    type_billet: string;
+                    tarification: string;
+                    montant: number;
+                    actif: number;
+                }[]>;
+                chauffeurs: () => Promise<{
+                    id: number;
+                    uuid: string;
+                    nom: string;
+                    telephone: string | null;
+                    numero_permis: string | null;
+                    statut: string;
+                }[]>;
+                vehicules: () => Promise<{
+                    id: number;
+                    uuid: string;
+                    immatriculation: string;
+                    marque: string | null;
+                    modele: string | null;
+                    nombre_places: number;
+                    statut: string;
+                }[]>;
             };
             vente: {
                 rechercherVoyages: (params: { agenceId: number; villeDepartId: number; villeArriveeId: number }) => Promise<unknown>;

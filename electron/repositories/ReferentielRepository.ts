@@ -20,6 +20,9 @@ export interface ChauffeurRow {
     id: number;
     uuid: string;
     nom: string;
+    telephone?: string | null;
+    numero_permis?: string | null;
+    statut?: string;
 }
 
 export interface VehiculeRow {
@@ -27,6 +30,18 @@ export interface VehiculeRow {
     uuid: string;
     immatriculation: string;
     nombre_places: number;
+    marque?: string | null;
+    modele?: string | null;
+    statut?: string;
+}
+
+export interface TarifCatalogueRow {
+    uuid: string;
+    trajet: string | null;
+    type_billet: string;
+    tarification: string;
+    montant: number;
+    actif: number;
 }
 
 export interface AgenceOption {
@@ -85,17 +100,57 @@ export class ReferentielRepository {
             .all() as ItineraireRow[];
     }
 
-    chauffeurs(agenceId: number): ChauffeurRow[] {
-        return getDb()
-            .prepare(`SELECT id, uuid, nom FROM chauffeurs WHERE agence_id = ? AND statut = 'disponible' ORDER BY nom`)
-            .all(agenceId) as ChauffeurRow[];
-    }
-
-    vehicules(agenceId: number): VehiculeRow[] {
+    chauffeurs(_agenceId: number): ChauffeurRow[] {
         return getDb()
             .prepare(
-                `SELECT id, uuid, immatriculation, nombre_places FROM vehicules WHERE agence_id = ? AND statut = 'disponible' ORDER BY immatriculation`,
+                `SELECT id, uuid, nom
+                 FROM chauffeurs
+                 WHERE statut = 'disponible'
+                 ORDER BY nom`,
             )
-            .all(agenceId) as VehiculeRow[];
+            .all() as ChauffeurRow[];
+    }
+
+    vehicules(_agenceId: number): VehiculeRow[] {
+        return getDb()
+            .prepare(
+                `SELECT id, uuid, immatriculation, nombre_places
+                 FROM vehicules
+                 WHERE statut = 'disponible'
+                 ORDER BY immatriculation`,
+            )
+            .all() as VehiculeRow[];
+    }
+
+    tarifsAgence(agenceId: number): TarifCatalogueRow[] {
+        return getDb()
+            .prepare(
+                `SELECT t.uuid, tr.nom AS trajet, t.type_billet, t.tarification, t.montant, t.actif
+                 FROM tarifs t
+                 JOIN trajets tr ON tr.id = t.trajet_id
+                 WHERE t.agence_id = ?
+                 ORDER BY tr.nom, t.tarification, t.type_billet`,
+            )
+            .all(agenceId) as TarifCatalogueRow[];
+    }
+
+    chauffeursCatalogue(): ChauffeurRow[] {
+        return getDb()
+            .prepare(
+                `SELECT id, uuid, nom, telephone, numero_permis, statut
+                 FROM chauffeurs
+                 ORDER BY nom`,
+            )
+            .all() as ChauffeurRow[];
+    }
+
+    vehiculesCatalogue(): VehiculeRow[] {
+        return getDb()
+            .prepare(
+                `SELECT id, uuid, immatriculation, marque, modele, nombre_places, statut
+                 FROM vehicules
+                 ORDER BY immatriculation`,
+            )
+            .all() as VehiculeRow[];
     }
 }

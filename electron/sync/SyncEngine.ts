@@ -206,6 +206,7 @@ export class SyncEngine {
                         b.user_id, b.agent_id, b.description, b.valeur, b.montant, b.statut_paiement,
                         b.created_at, b.updated_at,
                         COALESCE(t.uuid, b.ticket_uuid) AS ticket_uuid,
+                        COALESCE(t.numero_ticket, b.ticket_numero) AS ticket_numero,
                         COALESCE(v.uuid, b.voyage_uuid) AS voyage_uuid
                  FROM bagages b
                  LEFT JOIN tickets t ON t.id = b.ticket_id

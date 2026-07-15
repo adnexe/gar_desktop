@@ -497,7 +497,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
         <!-- Zone des 3 colonnes : hauteur fixe, chacune scrolle indépendamment. -->
         <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 px-6 py-4 lg:grid-cols-[230px_1fr_320px]">
             <!-- Colonne gauche : destinations -->
-            <section class="flex min-h-0 flex-col rounded-xl border">
+            <section class="flex min-h-0 min-w-0 flex-col rounded-xl border">
                 <p class="shrink-0 flex items-center gap-2 border-b bg-muted/50 px-3 py-2 text-sm font-semibold">
                     <MapPin class="size-4" /> Destinations
                 </p>
@@ -528,7 +528,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
             </section>
 
             <!-- Colonne du milieu : client + départ (défilement indépendant) -->
-            <div class="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
+            <div class="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto pr-1">
                 <section class="rounded-xl border">
                     <p class="flex items-center gap-2 border-b bg-muted/50 px-3 py-2 text-sm font-semibold">
                         <User class="size-4" /> Informations du client
@@ -576,17 +576,18 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                             {{ messageAucunVoyage }}
                         </p>
 
-                        <div v-else class="grid gap-1.5">
+                        <div v-else class="grid min-w-0 gap-1.5">
                             <Label>Voyage</Label>
                             <Select v-model="voyageIdSelectionne">
-                                <SelectTrigger class="w-full">
+                                <SelectTrigger class="h-10 w-full min-w-0 max-w-full overflow-hidden *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:flex-1 *:data-[slot=select-value]:truncate">
                                     <SelectValue placeholder="Choisir un voyage" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent class="w-[var(--reka-select-trigger-width)] max-w-[min(42rem,calc(100vw-2rem))]">
                                     <SelectItem
                                         v-for="voyage in voyagesDisponibles"
                                         :key="voyage.id"
                                         :value="voyage.id"
+                                        class="items-start whitespace-normal pr-8 leading-snug [&_[data-slot=select-item-text]]:block [&_[data-slot=select-item-text]]:min-w-0 [&_[data-slot=select-item-text]]:whitespace-normal"
                                     >
                                         {{ libelleVoyage(voyage) }}
                                     </SelectItem>
@@ -701,7 +702,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
             </div>
 
             <!-- Colonne droite : type de ticket + places (défilement indépendant) -->
-            <div class="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
+            <div class="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto pr-1">
                 <section class="shrink-0 rounded-xl border">
                     <p class="flex items-center gap-2 border-b bg-muted/50 px-3 py-2 text-sm font-semibold">
                         <Banknote class="size-4" /> Type de ticket

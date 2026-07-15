@@ -21,6 +21,9 @@ const api = {
         villes: () => ipcRenderer.invoke('referentiel:villes'),
         agencesParVille: (villeId: number) => ipcRenderer.invoke('referentiel:agencesParVille', villeId),
         voyagesDeAgence: (agenceId: number) => ipcRenderer.invoke('referentiel:voyagesDeAgence', agenceId),
+        tarifsAgence: (agenceId: number) => ipcRenderer.invoke('referentiel:tarifsAgence', agenceId),
+        chauffeurs: () => ipcRenderer.invoke('referentiel:chauffeurs'),
+        vehicules: () => ipcRenderer.invoke('referentiel:vehicules'),
     },
     vente: {
         rechercherVoyages: (params: unknown) => ipcRenderer.invoke('vente:rechercherVoyages', params),

@@ -126,3 +126,9 @@ Les tables de catalogue reprennent l'`id` auto-incrémenté du serveur tel quel 
 
 - **Lisibilité** : les reçus ticket/bagage/courrier utilisaient `Courier New` 11px (police fine → pâle sur thermique) et un bandeau gris tramé. Alignés sur le style du reçu de fin de caisse (le plus lisible) : Arial 13px, petits textes 11-12px, fond blanc. Fichiers : `TicketRecu.vue`, `CourrierRecu.vue`, `BagageRecu.vue`.
 - **Vitesse** : la page PDF faisait 11,7 po de haut quel que soit le reçu → l'imprimante déroulait du papier vide. Le renderer mesure désormais la hauteur réelle de `.zone-impression` (`src/lib/impression.ts`) et la transmet par IPC (`imprimerTicket(hauteurMm)` / `imprimerRecu(hauteurMm)`) ; `printToPDF` dimensionne la page en conséquence (bornes 1,5–40 po). Impression plus rapide + économie de papier.
+
+## Espace blanc en tête de ticket (15/07/2026)
+
+Deux causes corrigées :
+1. La mesure de hauteur (`src/lib/impression.ts`) renvoyait toujours 0 : la `.zone-impression` est en `display:none` à l'écran. Corrigé en révélant la zone hors-écran le temps de la mesure. Vérifié par harnais : le PDF généré démarre au ras du contenu et fait exactement sa hauteur (106 mm pour le ticket type).
+2. SumatraPDF centre une page plus petite que le papier du pilote (souvent 80×297) → blanc avant le ticket. Corrigé en passant un papier personnalisé à la taille exacte du reçu (`paperSize: "80mm x Hmm"` → `-print-settings paper=…`), avec repli sans format personnalisé si le pilote refuse.

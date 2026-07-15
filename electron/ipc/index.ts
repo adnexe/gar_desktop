@@ -135,17 +135,30 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
                 .map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
         ];
 
-        for (const cible of cibles) {
-            try {
-                await imprimerFichierPdf(fichier, {
-                    ...(cible.printer ? { printer: cible.printer } : {}),
-                    scale: 'noscale',
-                });
+        // Papier personnalisé à la taille exacte du reçu (paper=80mm x Hmm) :
+        // sans lui, SumatraPDF centre la petite page sur le papier du pilote
+        // (souvent 297 mm) → gros blanc avant le ticket. Repli sans format
+        // personnalisé pour les pilotes qui le refusent.
+        const hauteurPapierMm = Math.round(hauteurPouces * 25.4);
+        const formats: { paperSize?: string; libelle: string }[] = [
+            { paperSize: `80mm x ${hauteurPapierMm}mm`, libelle: `80x${hauteurPapierMm}` },
+            { libelle: 'papier pilote' },
+        ];
 
-                return { ok: true, imprimante: `${cible.libelle} (PDF)` };
-            } catch (erreur) {
-                const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
-                tentatives.push(`${cible.libelle} [PDF] : ${message}`);
+        for (const cible of cibles) {
+            for (const format of formats) {
+                try {
+                    await imprimerFichierPdf(fichier, {
+                        ...(cible.printer ? { printer: cible.printer } : {}),
+                        ...(format.paperSize ? { paperSize: format.paperSize } : {}),
+                        scale: 'noscale',
+                    });
+
+                    return { ok: true, imprimante: `${cible.libelle} (PDF ${format.libelle})` };
+                } catch (erreur) {
+                    const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
+                    tentatives.push(`${cible.libelle} [PDF ${format.libelle}] : ${message}`);
+                }
             }
         }
 
@@ -322,6 +335,9 @@ export function enregistrerIpc(): void {
     gerer('referentiel:villes', ReferentielController.villes);
     gerer('referentiel:agencesParVille', ReferentielController.agencesParVille);
     gerer('referentiel:voyagesDeAgence', ReferentielController.voyagesDeAgence);
+    gerer('referentiel:tarifsAgence', ReferentielController.tarifsAgence);
+    gerer('referentiel:chauffeurs', ReferentielController.chauffeurs);
+    gerer('referentiel:vehicules', ReferentielController.vehicules);
 
     gerer('vente:rechercherVoyages', VenteController.rechercherVoyages);
     gerer('vente:rechercherClient', VenteController.rechercherClient);
