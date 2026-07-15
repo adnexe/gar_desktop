@@ -132,3 +132,11 @@ Les tables de catalogue reprennent l'`id` auto-incrémenté du serveur tel quel 
 Deux causes corrigées :
 1. La mesure de hauteur (`src/lib/impression.ts`) renvoyait toujours 0 : la `.zone-impression` est en `display:none` à l'écran. Corrigé en révélant la zone hors-écran le temps de la mesure. Vérifié par harnais : le PDF généré démarre au ras du contenu et fait exactement sa hauteur (106 mm pour le ticket type).
 2. SumatraPDF centre une page plus petite que le papier du pilote (souvent 80×297) → blanc avant le ticket. Corrigé en passant un papier personnalisé à la taille exacte du reçu (`paperSize: "80mm x Hmm"` → `-print-settings paper=…`), avec repli sans format personnalisé si le pilote refuse.
+
+## Thème sombre (15/07/2026)
+
+- Bouton lune/soleil dans la barre du haut (`ThemeToggle.vue` + `useAppearance` déjà présent) : bascule clair/sombre, persistée en localStorage.
+
+## Écran blanc au lancement (15/07/2026)
+
+- La fenêtre s'affichait avant le premier rendu du renderer → flash blanc de ~1-2 s au lancement de l'exe. Corrigé dans `main.ts` : `show: false` + affichage sur l'événement `ready-to-show`, et `backgroundColor` sombre pour les repaints intermédiaires.

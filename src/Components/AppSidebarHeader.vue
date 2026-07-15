@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { CalendarDays } from '@lucide/vue';
 import { SidebarTrigger } from '@/Components/ui/sidebar';
 import { Badge } from '@/Components/ui/badge';
+import ThemeToggle from '@/Components/ThemeToggle.vue';
 import { useConfigStore } from '@/Stores/config';
 
 defineProps<{ titre?: string }>();
@@ -96,6 +97,7 @@ function formatDate(date: string | null | undefined) {
             <Badge v-if="config.agence" variant="outline" class="hidden max-w-[18rem] rounded-md px-3 py-1.5 text-sm md:inline-flex">
                 <span class="truncate">{{ config.agence.nom }} — {{ config.agence.ville_nom }}</span>
             </Badge>
+            <ThemeToggle />
         </div>
     </header>
 </template>

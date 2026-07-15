@@ -44,6 +44,10 @@ function creerFenetre(): void {
         minHeight: 700,
         title: 'Adnexe Transport — Caisse',
         icon: cheminIcone,
+        // Fenêtre cachée tant que le renderer n'a pas fini son premier rendu :
+        // évite l'écran blanc au lancement (le temps que Vue + SQLite chargent).
+        show: false,
+        backgroundColor: '#0a0a0a',
         webPreferences: {
             preload: join(__dirname, '../preload/index.mjs'),
             contextIsolation: true,
@@ -53,6 +57,10 @@ function creerFenetre(): void {
             // contextIsolation reste actif, donc l'isolation renderer/main l'est aussi.
             sandbox: false,
         },
+    });
+
+    fenetre.once('ready-to-show', () => {
+        fenetre.show();
     });
 
     // Les erreurs JS du renderer (Vue, réseau...) sont invisibles dans le
