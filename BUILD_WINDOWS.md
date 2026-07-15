@@ -5,7 +5,7 @@
 Copier le fichier d'exemple :
 
 ```bash
-cp .env.production.example .env.production
+cp .env.production.example .env
 ```
 
 Puis modifier `.env.production` :

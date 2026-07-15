@@ -7,12 +7,35 @@
     "main": "./out/main/index.js",
     "build": {
         "appId": "com.adnexe.caisse",
+        "productName": "Adnexe transport",
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "out/**/*",
+            "package.json"
+            ],
         "asarUnpack": [
             "**/node_modules/pdf-to-printer/**"
         ],
-        "win": {
-            "target": "nsis"
+       "win": {
+        "target": [
+            {
+            "target": "nsis",
+            "arch": [
+                "x64"
+            ]
+            }
+        ]
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "shortcutName": "Adnexe transport"
         }
+        
     },
     "scripts": {
         "dev": "electron-vite dev",
@@ -21,7 +44,9 @@
         "typecheck": "vue-tsc --noEmit",
         "postinstall": "electron-rebuild -f -w better-sqlite3",
         "pack": "npm run build && electron-builder --dir",
-        "dist": "npm run build && electron-builder"
+        "dist": "npm run build && electron-builder",
+        "build:win": "npm run build && electron-builder -- --win"
+
     },
     "dependencies": {
         "@lucide/vue": "^1.17.0",
@@ -47,7 +72,8 @@
         "@types/better-sqlite3": "^7.6.13",
         "@types/node": "^22.10.2",
         "@vitejs/plugin-vue": "^6.0.7",
-        "electron": "^43.1.0",
+        "electron": "^43.1.1",
+        "electron-builder": "^26.15.3",
         "electron-vite": "^5.0.0",
         "tailwindcss": "^4.1.1",
         "typescript": "^5.9.3",
