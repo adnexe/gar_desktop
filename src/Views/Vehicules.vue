@@ -77,7 +77,7 @@ async function actualiser() {
         if (resultat.ok) {
             message.value = 'Véhicules actualisés depuis admin.';
         } else {
-            avertissement.value = 'Admin injoignable, les véhicules locaux sont affichés.';
+            avertissement.value = resultat.erreur ?? 'Admin injoignable, les véhicules locaux sont affichés.';
         }
     } catch (e) {
         avertissement.value = messageErreur(e, 'Impossible de joindre admin, les véhicules locaux sont affichés.');

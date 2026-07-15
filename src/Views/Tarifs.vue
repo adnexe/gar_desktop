@@ -93,7 +93,7 @@ async function actualiser() {
         if (resultat.ok) {
             message.value = 'Tarifs actualisés depuis admin.';
         } else {
-            avertissement.value = 'Admin injoignable, les tarifs locaux sont affichés.';
+            avertissement.value = resultat.erreur ?? 'Admin injoignable, les tarifs locaux sont affichés.';
         }
     } catch (e) {
         avertissement.value = messageErreur(e, 'Impossible de joindre admin, les tarifs locaux sont affichés.');

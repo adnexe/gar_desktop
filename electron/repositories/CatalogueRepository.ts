@@ -119,12 +119,36 @@ export class CatalogueRepository {
             for (const v of bootstrap.voyages ?? []) voyageStmt.run(v);
 
             const agentStmt = db.prepare(
-                `INSERT OR REPLACE INTO agents (id, uuid, agence_id, nom, telephone, role, type_agent, actif, created_at, updated_at)
-                 VALUES (@id, @uuid, @agence_id, @nom, @telephone, @role, @type_agent, @actif, @created_at, @updated_at)`,
+                `INSERT INTO agents (id, uuid, agence_id, nom, telephone, role, type_agent, actif, created_at, updated_at)
+                 VALUES (@id, @uuid, @agence_id, @nom, @telephone, @role, @type_agent, @actif, @created_at, @updated_at)
+                 ON CONFLICT(id) DO UPDATE SET
+                    uuid = excluded.uuid,
+                    agence_id = excluded.agence_id,
+                    nom = excluded.nom,
+                    telephone = excluded.telephone,
+                    role = excluded.role,
+                    type_agent = excluded.type_agent,
+                    actif = excluded.actif,
+                    created_at = excluded.created_at,
+                    updated_at = excluded.updated_at`,
             );
             const userStmt = db.prepare(
-                `INSERT OR REPLACE INTO users (id, uuid, agent_id, name, email, number, password, role, actif, created_at, updated_at)
-                 VALUES (@id, @uuid, @agent_id, @name, @email, @number, @password, @role, @actif, @created_at, @updated_at)`,
+                `INSERT INTO users (id, uuid, agent_id, name, email, number, password, role, actif, created_at, updated_at)
+                 VALUES (@id, @uuid, @agent_id, @name, @email, @number, @password, @role, @actif, @created_at, @updated_at)
+                 ON CONFLICT(id) DO UPDATE SET
+                    uuid = excluded.uuid,
+                    agent_id = excluded.agent_id,
+                    name = excluded.name,
+                    email = excluded.email,
+                    number = excluded.number,
+                    password = excluded.password,
+                    role = excluded.role,
+                    actif = CASE
+                        WHEN COALESCE(users.desactive_localement, 0) = 1 OR COALESCE(users.supprime_localement, 0) = 1 THEN 0
+                        ELSE excluded.actif
+                    END,
+                    created_at = excluded.created_at,
+                    updated_at = excluded.updated_at`,
             );
             const userPayload = (u: UserApi) => ({
                 ...u,

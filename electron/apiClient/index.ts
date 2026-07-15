@@ -9,6 +9,10 @@ const BASE_URL = (process.env.GAR_API_URL ?? 'http://127.0.0.1:8000').replace(/\
 
 const http = axios.create({ baseURL: BASE_URL, timeout: 15000 });
 
+export function apiBaseUrl(): string {
+    return BASE_URL;
+}
+
 export async function bootstrap(reference: string, appareil: string, timeoutMs = 15000): Promise<BootstrapResponse> {
     const { data } = await http.post<BootstrapResponse>('/api/desktop/bootstrap', { reference, appareil }, { timeout: timeoutMs });
     return data;

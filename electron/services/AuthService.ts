@@ -20,7 +20,26 @@ export class AuthService {
     private readonly bootstrap = new BootstrapService();
 
     async connecter(identifiant: string, motDePasse: string): Promise<Session> {
-        const sessionLocale = await this.authentifierLocal(identifiant, motDePasse);
+        let sessionLocale: Session;
+        try {
+            sessionLocale = await this.authentifierLocal(identifiant, motDePasse);
+        } catch (erreur) {
+            if (!net.isOnline()) {
+                throw erreur;
+            }
+
+            try {
+                await this.bootstrap.actualiser(5000);
+                const sessionApresActualisation = await this.authentifierLocal(identifiant, motDePasse);
+                syncEngine.planifier(1_000);
+
+                return sessionApresActualisation;
+            } catch {
+                logger.warn('Actualisation avant connexion échouée ou identifiants toujours invalides.');
+                syncEngine.planifier(1_000);
+                throw erreur;
+            }
+        }
 
         if (!net.isOnline()) {
             return sessionLocale;

@@ -5,7 +5,9 @@ import { getDb } from '../database/connection';
 import { migrer } from '../database/migrate';
 import { logger } from '../logger';
 import { ConfigRepository } from '../repositories/ConfigRepository';
+import { BootstrapService } from '../services/BootstrapService';
 import { SyncQueueRepository } from '../repositories/SyncQueueRepository';
+import { UserRepository } from '../repositories/UserRepository';
 import { eventBus } from './EventBus';
 
 type LigneSync = {
@@ -25,8 +27,12 @@ type DecisionErreur = {
 export class SyncEngine {
     private readonly repo = new SyncQueueRepository();
     private readonly config = new ConfigRepository();
+    private readonly bootstrap = new BootstrapService();
+    private readonly users = new UserRepository();
     private enCours = false;
     private demarre = false;
+    private derniereVerificationLicence = 0;
+    private derniereActualisationCatalogue = 0;
     private minuterie: ReturnType<typeof setTimeout> | null = null;
     private intervalle: ReturnType<typeof setInterval> | null = null;
 
@@ -75,6 +81,26 @@ export class SyncEngine {
         try {
             migrer(getDb());
 
+            // Licence/agence revérifiées en ligne au plus une fois toutes les
+            // 5 minutes : assez rapide pour couper un poste déjà connecté,
+            // sans saturer l'admin.
+            if (Date.now() - this.derniereVerificationLicence > 300_000) {
+                this.derniereVerificationLicence = Date.now();
+                await this.bootstrap.verifierLicenceEnLigne();
+            }
+
+            // Check-in silencieux régulier : agents, comptes, agence, tarifs,
+            // voyages futurs... Si le serveur répond, l'état local est remis
+            // à jour; s'il ne répond pas, on garde la caisse opérationnelle.
+            if (Date.now() - this.derniereActualisationCatalogue > 300_000) {
+                this.derniereActualisationCatalogue = Date.now();
+                try {
+                    await this.bootstrap.actualiser(5000);
+                } catch {
+                    logger.warn('Check-in catalogue ignoré : serveur admin injoignable.');
+                }
+            }
+
             const token = this.config.obtenir('api_token');
             if (!token) {
                 return;
@@ -96,6 +122,9 @@ export class SyncEngine {
                 try {
                     await envoyerOperationSync(token, operation);
                     this.repo.marquerSynchronise(ligne.id);
+                    if (ligne.entite === 'users') {
+                        this.users.marquerActionSynchronisee(operation.payload);
+                    }
                 } catch (erreur) {
                     const decision = this.classerErreur(erreur);
 
@@ -153,6 +182,8 @@ export class SyncEngine {
                 return this.bagagePayload(ligne.entite_uuid);
             case 'courriers':
                 return this.courrierPayload(ligne.entite_uuid);
+            case 'users':
+                return JSON.parse(ligne.payload) as Record<string, unknown>;
             default:
                 return JSON.parse(ligne.payload) as Record<string, unknown>;
         }

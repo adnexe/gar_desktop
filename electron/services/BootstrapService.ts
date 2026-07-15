@@ -7,6 +7,10 @@ import { migrer } from '../database/migrate';
 import { getDb } from '../database/connection';
 import { logger } from '../logger';
 
+// Statuts renvoyés par le serveur qui doivent bloquer le poste (par
+// opposition à une simple panne réseau, qui ne bloque jamais).
+const STATUTS_LICENCE_BLOQUANTS = ['expiree', 'desactivee', 'aucune_licence', 'inexistante', 'agence_desactivee'];
+
 export class BootstrapService {
     private readonly config = new ConfigRepository();
     private readonly catalogue = new CatalogueRepository();
@@ -62,9 +66,76 @@ export class BootstrapService {
 
         if (resultat.ok && resultat.licence) {
             this.enregistrerLicence(resultat.licence);
+        } else if (resultat.statut === 'agence_inexistante') {
+            // L'agence a été supprimée côté admin : les données locales sont
+            // orphelines (aucune synchro possible). On remet le poste à zéro,
+            // il redemandera une référence d'agence à l'écran de configuration.
+            this.reinitialiserPoste();
+        } else if (STATUTS_LICENCE_BLOQUANTS.includes(resultat.statut ?? '')) {
+            // Réponse ferme du serveur (et non une panne réseau) : la licence
+            // est expirée/désactivée/supprimée côté admin. On PERSISTE
+            // l'invalidation — sinon un simple redémarrage hors-ligne
+            // rechargerait la licence locale intacte et débloquerait le poste.
+            this.invaliderLicenceLocale(resultat.statut ?? 'aucune_licence');
         }
 
         return resultat;
+    }
+
+    /**
+     * Revérifie la licence auprès du serveur (au lancement, à la connexion et
+     * périodiquement dès qu'un réseau est disponible). Passe par `reclamer` :
+     * le serveur rafraîchit l'état réel (expirée, désactivée, supprimée) et
+     * assigne automatiquement une nouvelle licence si l'admin en a créé une.
+     * Hors-ligne : silencieux, la licence locale reste la référence.
+     */
+    async verifierLicenceEnLigne(): Promise<void> {
+        try {
+            migrer(getDb());
+
+            const reference = this.config.obtenir('agence_reference');
+            if (!reference) return;
+
+            const resultat = await this.reclamerLicence(reference, 'poste-caisse');
+            if (!resultat.ok) {
+                logger.warn(`Licence refusée par le serveur (statut: ${resultat.statut ?? 'inconnu'}).`);
+            }
+        } catch {
+            // Serveur injoignable : on ne bloque pas le poste pour autant.
+        }
+    }
+
+    /**
+     * Vide toute la base locale (catalogue, opérations, config, licence) en
+     * conservant le schéma. Appelée UNIQUEMENT sur réponse ferme du serveur
+     * « agence inexistante » — jamais sur une panne réseau.
+     */
+    private reinitialiserPoste(): void {
+        const db = getDb();
+        const tables = db
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('migrations', 'sqlite_sequence')")
+            .all() as { name: string }[];
+
+        db.pragma('foreign_keys = OFF');
+        try {
+            const vider = db.transaction(() => {
+                for (const table of tables) {
+                    db.prepare(`DELETE FROM "${table.name}"`).run();
+                }
+            });
+            vider();
+        } finally {
+            db.pragma('foreign_keys = ON');
+        }
+
+        logger.warn('Agence supprimée côté serveur : poste réinitialisé, reconfiguration requise.');
+    }
+
+    private invaliderLicenceLocale(statut: string): void {
+        this.config.definir('licence_actif', '0');
+        this.config.definir('licence_statut', statut);
+        this.config.definir('licence_derniere_verification', new Date().toISOString());
+        logger.warn(`Licence locale invalidée (${statut}).`);
     }
 
     async configurer(reference: string, appareil: string) {

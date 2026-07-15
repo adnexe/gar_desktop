@@ -33,6 +33,7 @@ declare global {
                     statut: string;
                 } | null>;
                 reclamerLicence: (reference: string, appareil: string) => Promise<{
+                verifierLicence: () => Promise<unknown>;
                     ok: boolean;
                     statut: string;
                     message: string;
@@ -49,7 +50,7 @@ declare global {
                     };
                 }>;
                 configurer: (reference: string, appareil: string) => Promise<unknown>;
-                actualiser: () => Promise<{ ok: boolean; agence?: unknown }>;
+                actualiser: () => Promise<{ ok: boolean; agence?: unknown; erreur?: string; baseUrl?: string }>;
                 reseauLocal: () => Promise<{
                     mode: 'autonome' | 'serveur' | 'client';
                     serveurUrl: string | null;
@@ -86,6 +87,28 @@ declare global {
                     agenceId: number | null;
                     typeAgent: string[];
                 }>;
+                verifierSession: (userId: number) => Promise<{ ok: true } | { ok: false; raison: string }>;
+            };
+            agents: {
+                lister: (agenceId: number) => Promise<{
+                    id: number;
+                    uuid: string;
+                    nom: string;
+                    telephone: string | null;
+                    role: string;
+                    type_agent: string[];
+                    actif: boolean;
+                    desactive_localement: boolean;
+                    user_id: number | null;
+                    user_uuid: string | null;
+                    user_email: string | null;
+                    user_number: string | null;
+                    user_actif: boolean | null;
+                    user_desactive_localement: boolean | null;
+                }[]>;
+                desactiver: (agentUuid: string, acteurUserId: number) => Promise<{ ok: boolean }>;
+                reactiver: (agentUuid: string, acteurUserId: number) => Promise<{ ok: boolean }>;
+                supprimerLocalement: (agentUuid: string, acteurUserId: number) => Promise<{ ok: boolean }>;
             };
             referentiel: {
                 villes: () => Promise<{ id: number; uuid: string; nom: string }[]>;

@@ -64,6 +64,23 @@ export const useConfigStore = defineStore('config', () => {
         }
     }
 
+    // Revérifie la licence auprès du serveur (silencieux hors-ligne) puis
+    // recharge l'état local — c'est la base locale qui fait foi ensuite.
+    async function verifierLicence() {
+        licence.value = (await window.api.config.verifierLicence()) as LicenceLocale | null;
+    }
+
+    async function chargerLicence() {
+        licence.value = await window.api.config.licenceActuelle();
+    }
+
+    // Relit l'état local complet : détecte l'invalidation de licence comme la
+    // réinitialisation du poste (agence supprimée) faites en arrière-plan.
+    async function rafraichirEtat() {
+        configuree.value = (await window.api.config.estConfiguree()) as boolean;
+        licence.value = await window.api.config.licenceActuelle();
+    }
+
     async function reclamerLicence(reference: string, appareil: string): Promise<ReponseLicence> {
         const resultat = (await window.api.config.reclamerLicence(reference, appareil)) as ReponseLicence;
         if (resultat.ok && resultat.licence) {
@@ -89,5 +106,5 @@ export const useConfigStore = defineStore('config', () => {
         return `${maintenant.getFullYear()}-${pad(maintenant.getMonth() + 1)}-${pad(maintenant.getDate())}`;
     }
 
-    return { configuree, agence, compagnie, licence, licenceValide, charger, reclamerLicence, configurer };
+    return { configuree, agence, compagnie, licence, licenceValide, charger, chargerLicence, rafraichirEtat, verifierLicence, reclamerLicence, configurer };
 });

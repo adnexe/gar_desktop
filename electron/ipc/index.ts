@@ -8,6 +8,7 @@ import pdfToPrinter from 'pdf-to-printer';
 const { print: imprimerFichierPdf } = pdfToPrinter;
 import { ConfigController } from '../controllers/ConfigController';
 import { AuthController } from '../controllers/AuthController';
+import { AgentController } from '../controllers/AgentController';
 import { ReferentielController } from '../controllers/ReferentielController';
 import { VenteController } from '../controllers/VenteController';
 import { BagageController } from '../controllers/BagageController';
@@ -323,6 +324,7 @@ export function enregistrerIpc(): void {
     gerer('config:compagnieActuelle', ConfigController.compagnieActuelle);
     gerer('config:licenceActuelle', ConfigController.licenceActuelle);
     gerer('config:reclamerLicence', ConfigController.reclamerLicence);
+    gerer('config:verifierLicence', ConfigController.verifierLicence);
     gerer('config:configurer', ConfigController.configurer);
     gerer('config:actualiser', ConfigController.actualiser);
     gerer('config:reseauLocal', ConfigController.reseauLocal);
@@ -331,6 +333,12 @@ export function enregistrerIpc(): void {
     gerer('config:actualiserVoyagesServeurLocal', ConfigController.actualiserVoyagesServeurLocal);
 
     gerer('auth:connecter', AuthController.connecter);
+    gerer('auth:verifierSession', AgentController.verifierSession);
+
+    gerer('agents:lister', AgentController.lister);
+    gerer('agents:desactiver', AgentController.desactiver);
+    gerer('agents:reactiver', AgentController.reactiver);
+    gerer('agents:supprimerLocalement', AgentController.supprimerLocalement);
 
     gerer('referentiel:villes', ReferentielController.villes);
     gerer('referentiel:agencesParVille', ReferentielController.agencesParVille);

@@ -140,3 +140,20 @@ Deux causes corrigées :
 ## Écran blanc au lancement (15/07/2026)
 
 - La fenêtre s'affichait avant le premier rendu du renderer → flash blanc de ~1-2 s au lancement de l'exe. Corrigé dans `main.ts` : `show: false` + affichage sur l'événement `ready-to-show`, et `backgroundColor` sombre pour les repaints intermédiaires.
+
+## Faille licence corrigée (15/07/2026)
+
+- **Faille** : l'invalidation d'une licence (expirée/désactivée/supprimée côté admin) n'était appliquée qu'en mémoire du renderer — un redémarrage rechargeait la licence locale intacte et débloquait le poste ; et la vérification en ligne n'avait lieu qu'à l'écran de connexion.
+- **Corrections** :
+  - `BootstrapService.reclamerLicence` **persiste** l'invalidation en base locale (`licence_actif=0` + statut) pour tout statut bloquant renvoyé par le serveur : `expiree`, `desactivee`, `aucune_licence`, `inexistante`, `agence_desactivee`. Une panne réseau, elle, ne bloque jamais (tolérance hors-ligne).
+  - `verifierLicenceEnLigne()` appelée par le SyncEngine **au plus une fois par heure dès qu'un réseau est disponible** : couvre le lancement (premier cycle ~2 s) et le retour de connexion. Passe par `reclamer` → si l'admin a créé une nouvelle licence, elle est automatiquement assignée (renouvellement sans intervention).
+  - Garde de navigation : l'état local de la licence est relu à **chaque navigation** → une invalidation faite en arrière-plan bloque le poste au prochain écran.
+  - Serveur : la réponse « agence introuvable/désactivée » porte désormais un statut explicite (`agence_desactivee`).
+- **Vérifié en réel** : desktop pointé sur un admin sans licence → log « Licence locale invalidée », `licence_actif=0` en base locale.
+
+## Réinitialisation si agence supprimée (15/07/2026)
+
+- Le serveur distingue désormais `agence_inexistante` (supprimée) de `agence_desactivee` (réversible).
+- **Agence désactivée** → poste bloqué sur l'écran licence (les données locales restent, réactivable côté admin).
+- **Agence supprimée** → `reinitialiserPoste()` vide toute la base locale (schéma conservé) et le poste revient à l'écran de configuration initiale (saisie de la référence agence). Déclenché uniquement sur réponse ferme du serveur, jamais sur panne réseau. La garde de navigation relit `configuree` + licence à chaque écran.
+- Vérifié en réel : agence inconnue du serveur → base vidée (0 lignes partout) + log « poste réinitialisé ».

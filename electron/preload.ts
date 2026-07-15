@@ -7,6 +7,7 @@ const api = {
         compagnieActuelle: () => ipcRenderer.invoke('config:compagnieActuelle'),
         licenceActuelle: () => ipcRenderer.invoke('config:licenceActuelle'),
         reclamerLicence: (reference: string, appareil: string) => ipcRenderer.invoke('config:reclamerLicence', reference, appareil),
+        verifierLicence: () => ipcRenderer.invoke('config:verifierLicence'),
         configurer: (reference: string, appareil: string) => ipcRenderer.invoke('config:configurer', reference, appareil),
         actualiser: () => ipcRenderer.invoke('config:actualiser'),
         reseauLocal: () => ipcRenderer.invoke('config:reseauLocal'),
@@ -16,6 +17,13 @@ const api = {
     },
     auth: {
         connecter: (identifiant: string, motDePasse: string) => ipcRenderer.invoke('auth:connecter', identifiant, motDePasse),
+        verifierSession: (userId: number) => ipcRenderer.invoke('auth:verifierSession', userId),
+    },
+    agents: {
+        lister: (agenceId: number) => ipcRenderer.invoke('agents:lister', agenceId),
+        desactiver: (agentUuid: string, acteurUserId: number) => ipcRenderer.invoke('agents:desactiver', agentUuid, acteurUserId),
+        reactiver: (agentUuid: string, acteurUserId: number) => ipcRenderer.invoke('agents:reactiver', agentUuid, acteurUserId),
+        supprimerLocalement: (agentUuid: string, acteurUserId: number) => ipcRenderer.invoke('agents:supprimerLocalement', agentUuid, acteurUserId),
     },
     referentiel: {
         villes: () => ipcRenderer.invoke('referentiel:villes'),

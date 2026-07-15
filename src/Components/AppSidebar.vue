@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router';
-import { Bus, Car, History, LayoutGrid, Luggage, Mail, Settings, Tags, Ticket, Users } from '@lucide/vue';
+import { Bus, Car, History, LayoutGrid, Luggage, Mail, Settings, Tags, Ticket, UserCog, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/Components/AppLogo.vue';
 import NavMain from '@/Components/NavMain.vue';
@@ -29,14 +29,25 @@ const mainNavItems = computed<NavItem[]>(() => {
     return items;
 });
 
-const exploitationNavItems: NavItem[] = [
-    { title: 'Voyages', routeName: 'voyages', icon: Bus },
-    { title: 'Tarifs', routeName: 'tarifs', icon: Tags },
-    { title: 'Véhicules', routeName: 'vehicules', icon: Car },
-    { title: 'Chauffeurs', routeName: 'chauffeurs', icon: Users },
-    { title: 'Historique', routeName: 'historique', icon: History },
-    { title: 'Paramètres', routeName: 'parametres', icon: Settings },
-];
+const exploitationNavItems = computed<NavItem[]>(() => {
+    const items: NavItem[] = [
+        { title: 'Voyages', routeName: 'voyages', icon: Bus },
+        { title: 'Tarifs', routeName: 'tarifs', icon: Tags },
+        { title: 'Véhicules', routeName: 'vehicules', icon: Car },
+        { title: 'Chauffeurs', routeName: 'chauffeurs', icon: Users },
+    ];
+
+    if (['chef_gare', 'super_admin'].includes(session.role)) {
+        items.push({ title: 'Agents', routeName: 'agents', icon: UserCog });
+    }
+
+    items.push(
+        { title: 'Historique', routeName: 'historique', icon: History },
+        { title: 'Paramètres', routeName: 'parametres', icon: Settings },
+    );
+
+    return items;
+});
 </script>
 
 <template>

@@ -7,6 +7,9 @@ const moduleParRoute: Record<string, 'ticket' | 'bagage' | 'courrier'> = {
     bagages: 'bagage',
     courrier: 'courrier',
 };
+const rolesParRoute: Record<string, string[]> = {
+    agents: ['chef_gare', 'super_admin'],
+};
 
 const router = createRouter({
     history: createWebHashHistory(),
@@ -22,6 +25,7 @@ const router = createRouter({
         { path: '/tarifs', name: 'tarifs', component: () => import('@/Views/Tarifs.vue') },
         { path: '/vehicules', name: 'vehicules', component: () => import('@/Views/Vehicules.vue') },
         { path: '/chauffeurs', name: 'chauffeurs', component: () => import('@/Views/Chauffeurs.vue') },
+        { path: '/agents', name: 'agents', component: () => import('@/Views/Agents.vue') },
         { path: '/historique', name: 'historique', component: () => import('@/Views/Historique.vue') },
         { path: '/parametres', name: 'parametres', component: () => import('@/Views/Parametres.vue') },
     ],
@@ -31,6 +35,11 @@ router.beforeEach(async (to) => {
     const config = useConfigStore();
     if (config.configuree === null) {
         await config.charger();
+    } else if (config.configuree) {
+        // La licence peut avoir été invalidée — ou le poste réinitialisé
+        // (agence supprimée) — en arrière-plan : on relit l'état local
+        // à chaque navigation.
+        await config.rafraichirEtat();
     }
 
     if (!config.configuree && to.name !== 'configuration') {
@@ -52,6 +61,9 @@ router.beforeEach(async (to) => {
     }
 
     if (typeof to.name === 'string' && moduleParRoute[to.name] && !session.peutModule(moduleParRoute[to.name])) {
+        return { name: 'dashboard' };
+    }
+    if (typeof to.name === 'string' && rolesParRoute[to.name] && !rolesParRoute[to.name].includes(session.role)) {
         return { name: 'dashboard' };
     }
 

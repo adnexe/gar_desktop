@@ -354,4 +354,29 @@ export const migrations: { nom: string; sql: string }[] = [
             CREATE INDEX IF NOT EXISTS idx_clients_telephone_source ON clients(telephone, source);
         `,
     },
+    {
+        nom: '0011_statut_local_agents_users',
+        sql: `
+            -- Statuts locaux de sécurité : un chef de gare peut couper un accès
+            -- même si le poste est hors-ligne. On ne supprime pas physiquement
+            -- pour conserver les ventes passées liées aux users/agents.
+            ALTER TABLE agents ADD COLUMN desactive_localement INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE agents ADD COLUMN supprime_localement INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE users ADD COLUMN desactive_localement INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE users ADD COLUMN supprime_localement INTEGER NOT NULL DEFAULT 0;
+        `,
+    },
+    {
+        nom: '0012_agent_reste_trace_vente',
+        sql: `
+            -- L'agent est la trace métier des ventes. Seul le user gère
+            -- l'accès à l'application; on annule donc d'éventuelles anciennes
+            -- suppressions/désactivations locales posées sur agents.
+            UPDATE agents
+               SET desactive_localement = 0,
+                   supprime_localement = 0
+             WHERE COALESCE(desactive_localement, 0) = 1
+                OR COALESCE(supprime_localement, 0) = 1;
+        `,
+    },
 ];

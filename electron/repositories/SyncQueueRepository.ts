@@ -47,6 +47,22 @@ export class SyncQueueRepository {
             .run(erreur, id);
     }
 
+    annulerEnAttente(entite: string, uuids: string[], motif: string): void {
+        const valeurs = uuids.filter(Boolean);
+        if (valeurs.length === 0) return;
+
+        const placeholders = valeurs.map(() => '?').join(', ');
+        getDb()
+            .prepare(
+                `UPDATE sync_queue
+                 SET statut = 'synchronise', synced_at = ?, derniere_erreur = ?
+                 WHERE statut = 'en_attente'
+                   AND entite = ?
+                   AND entite_uuid IN (${placeholders})`,
+            )
+            .run(new Date().toISOString(), motif, entite, ...valeurs);
+    }
+
     compterEnAttente(): number {
         const ligne = getDb().prepare(`SELECT COUNT(*) AS n FROM sync_queue WHERE statut = 'en_attente'`).get() as {
             n: number;

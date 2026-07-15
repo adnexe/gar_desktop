@@ -76,7 +76,7 @@ async function actualiser() {
         if (resultat.ok) {
             message.value = 'Chauffeurs actualisés depuis admin.';
         } else {
-            avertissement.value = 'Admin injoignable, les chauffeurs locaux sont affichés.';
+            avertissement.value = resultat.erreur ?? 'Admin injoignable, les chauffeurs locaux sont affichés.';
         }
     } catch (e) {
         avertissement.value = messageErreur(e, 'Impossible de joindre admin, les chauffeurs locaux sont affichés.');
