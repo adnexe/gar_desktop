@@ -80,7 +80,7 @@ function formatDate(date: string | null | undefined) {
 
 <template>
     <header
-        class="flex h-[68px] shrink-0 items-center gap-3 border-b border-sidebar-border/70 bg-background/95 px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-14"
+        class="sticky top-0 z-30 flex h-[68px] shrink-0 items-center gap-3 border-b border-sidebar-border/70 bg-background/95 px-6 backdrop-blur transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-14"
     >
         <div class="flex items-center gap-2">
             <SidebarTrigger class="-ml-1" />

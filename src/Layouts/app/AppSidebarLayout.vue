@@ -54,9 +54,9 @@ onUnmounted(() => {
 <template>
     <AppShell variant="sidebar">
         <AppSidebar />
-        <AppContent class="overflow-x-hidden bg-muted/20">
+        <AppContent class="h-full min-h-0 overflow-hidden bg-muted/20">
             <AppSidebarHeader :titre="titre" />
-            <div class="flex-1 overflow-y-auto p-5 lg:p-6">
+            <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-5 lg:p-6">
                 <slot />
             </div>
         </AppContent>
