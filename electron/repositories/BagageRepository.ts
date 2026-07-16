@@ -47,8 +47,13 @@ export class BagageRepository {
             .all(agenceId, date ?? 'now') as BagageDuJour[];
     }
 
-    rapportDuJour(agenceId: number, date?: string): { nombre_bagages: number; montant_total: number } {
-        const ligne = getDb()
+    rapportDuJour(agenceId: number, date?: string): {
+        destinations: { destination_id: number | null; destination: string; nombre_bagages: number; montant_total: number }[];
+        nombre_bagages: number;
+        montant_total: number;
+    } {
+        const db = getDb();
+        const ligne = db
             .prepare(
                 `SELECT COUNT(*) AS nombre_bagages, COALESCE(SUM(montant), 0) AS montant_total
                  FROM bagages
@@ -56,7 +61,21 @@ export class BagageRepository {
             )
             .get(agenceId, date ?? 'now') as { nombre_bagages: number; montant_total: number };
 
-        return ligne;
+        const destinations = db
+            .prepare(
+                `SELECT b.ville_arrivee_id AS destination_id,
+                        COALESCE(v.nom, 'Non renseignée') AS destination,
+                        COUNT(b.id) AS nombre_bagages,
+                        COALESCE(SUM(b.montant), 0) AS montant_total
+                 FROM bagages b
+                 LEFT JOIN villes v ON v.id = b.ville_arrivee_id
+                 WHERE b.agence_id = ? AND date(b.created_at) = date(?) AND b.statut_paiement = 'paye'
+                 GROUP BY b.ville_arrivee_id, v.nom
+                 ORDER BY destination ASC`,
+            )
+            .all(agenceId, date ?? 'now') as { destination_id: number | null; destination: string; nombre_bagages: number; montant_total: number }[];
+
+        return { ...ligne, destinations };
     }
 
     creer(donnees: NouveauBagage): { id: number; uuid: string; numero_bagage: string } {

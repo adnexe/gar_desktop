@@ -33,6 +33,10 @@ type ImprimanteExposee = {
 
 type ResultatImpression = { ok: true; imprimante: string } | { ok: false; erreur: string };
 
+function dureeMs(debut: number): number {
+    return Math.round(performance.now() - debut);
+}
+
 function nomImprimante(imprimante: ImprimanteRuntime): string {
     return imprimante.displayName || imprimante.name || 'Imprimante sans nom';
 }
@@ -61,10 +65,21 @@ function exposerImprimante(imprimante: ImprimanteRuntime): ImprimanteExposee {
 }
 
 async function listerImprimantes(sender: WebContents): Promise<ImprimanteRuntime[]> {
+    const debut = performance.now();
+
     try {
-        return await sender.getPrintersAsync() as ImprimanteRuntime[];
+        const imprimantes = await sender.getPrintersAsync() as ImprimanteRuntime[];
+        logger.info('Chrono impression - liste imprimantes', {
+            duree_ms: dureeMs(debut),
+            nombre: imprimantes.length,
+        });
+
+        return imprimantes;
     } catch (erreur) {
-        logger.warn('Liste des imprimantes indisponible.', erreur);
+        logger.warn('Liste des imprimantes indisponible.', {
+            duree_ms: dureeMs(debut),
+            erreur: erreur instanceof Error ? erreur.message : String(erreur),
+        });
         return [];
     }
 }
@@ -74,8 +89,17 @@ function imprimerWebContents(sender: WebContents, options: Electron.WebContentsP
         return Promise.resolve({ ok: false, erreur: 'Fenêtre d’impression introuvable.' });
     }
 
+    const debut = performance.now();
+
     return new Promise((resolve) => {
         sender.print(options, (succes, raison) => {
+            logger.info('Chrono impression Electron directe', {
+                libelle,
+                ok: succes,
+                duree_ms: dureeMs(debut),
+                raison: succes ? null : raison,
+            });
+
             if (succes) {
                 resolve({ ok: true, imprimante: libelle });
                 return;
@@ -108,25 +132,54 @@ function estImprimanteVirtuelle(imprimante: ImprimanteRuntime): boolean {
  * SumatraPDF embarqué (paquet pdf-to-printer).
  */
 async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntime[], tentatives: string[], hauteurMm?: number): Promise<ResultatImpression> {
+    const debutTotal = performance.now();
+    const chrono = {
+        hauteur_mesuree_mm: hauteurMm ?? null,
+        hauteur_page_pouces: 0,
+        hauteur_papier_mm: 0,
+        pdf_octets: 0,
+        print_to_pdf_ms: 0,
+        ecriture_pdf_ms: 0,
+        suppression_pdf_ms: 0,
+        total_ms: 0,
+        tentatives_sumatra: [] as {
+            cible: string;
+            format: string;
+            ok: boolean;
+            duree_ms: number;
+            erreur?: string;
+        }[],
+        resultat: 'succes' as 'succes' | 'echec',
+        imprimante: null as string | null,
+    };
+
     // La hauteur de page suit la hauteur réelle du reçu (mesurée par le
     // renderer) : l'imprimante ne déroule plus une page A4 quasi vide, ce qui
     // accélère nettement la sortie et économise le papier.
     const hauteurPouces = hauteurMm
         ? Math.min(Math.max(hauteurMm / 25.4 + 0.2, 1.5), 40)
         : 11.7;
-
-    const pdf = await sender.printToPDF({
-        printBackground: true,
-        preferCSSPageSize: true,
-        margins: { top: 0, bottom: 0, left: 0, right: 0 },
-        // 80 mm de large (3,15 po) ; le @page du CSS prime s'il est défini.
-        pageSize: { width: 3.15, height: hauteurPouces },
-    });
-
-    const fichier = join(app.getPath('temp'), `adnexe-ticket-${randomUUID()}.pdf`);
-    await writeFile(fichier, pdf);
+    chrono.hauteur_page_pouces = Number(hauteurPouces.toFixed(2));
+    let fichier: string | null = null;
+    let resultat: ResultatImpression | null = null;
 
     try {
+        const debutPdf = performance.now();
+        const pdf = await sender.printToPDF({
+            printBackground: true,
+            preferCSSPageSize: true,
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            // 80 mm de large (3,15 po) ; le @page du CSS prime s'il est défini.
+            pageSize: { width: 3.15, height: hauteurPouces },
+        });
+        chrono.print_to_pdf_ms = dureeMs(debutPdf);
+        chrono.pdf_octets = pdf.length;
+
+        fichier = join(app.getPath('temp'), `adnexe-ticket-${randomUUID()}.pdf`);
+        const debutEcriture = performance.now();
+        await writeFile(fichier, pdf);
+        chrono.ecriture_pdf_ms = dureeMs(debutEcriture);
+
         // Imprimante par défaut d'abord (sans nom), puis les imprimantes
         // physiques (défaut en tête) — jamais les virtuelles en repli.
         const cibles: { printer?: string; libelle: string }[] = [
@@ -141,6 +194,7 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
         // (souvent 297 mm) → gros blanc avant le ticket. Repli sans format
         // personnalisé pour les pilotes qui le refusent.
         const hauteurPapierMm = Math.round(hauteurPouces * 25.4);
+        chrono.hauteur_papier_mm = hauteurPapierMm;
         const formats: { paperSize?: string; libelle: string }[] = [
             { paperSize: `80mm x ${hauteurPapierMm}mm`, libelle: `80x${hauteurPapierMm}` },
             { libelle: 'papier pilote' },
@@ -148,6 +202,8 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
 
         for (const cible of cibles) {
             for (const format of formats) {
+                const debutSumatra = performance.now();
+
                 try {
                     await imprimerFichierPdf(fichier, {
                         ...(cible.printer ? { printer: cible.printer } : {}),
@@ -155,17 +211,46 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
                         scale: 'noscale',
                     });
 
-                    return { ok: true, imprimante: `${cible.libelle} (PDF ${format.libelle})` };
+                    const imprimante = `${cible.libelle} (PDF ${format.libelle})`;
+                    chrono.tentatives_sumatra.push({
+                        cible: cible.libelle,
+                        format: format.libelle,
+                        ok: true,
+                        duree_ms: dureeMs(debutSumatra),
+                    });
+                    chrono.imprimante = imprimante;
+                    resultat = { ok: true, imprimante };
+
+                    return resultat;
                 } catch (erreur) {
                     const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
+                    chrono.tentatives_sumatra.push({
+                        cible: cible.libelle,
+                        format: format.libelle,
+                        ok: false,
+                        duree_ms: dureeMs(debutSumatra),
+                        erreur: message,
+                    });
                     tentatives.push(`${cible.libelle} [PDF ${format.libelle}] : ${message}`);
                 }
             }
         }
 
-        return { ok: false, erreur: tentatives.join(' | ') };
+        chrono.resultat = 'echec';
+        resultat = { ok: false, erreur: tentatives.join(' | ') };
+
+        return resultat;
     } finally {
-        void unlink(fichier).catch(() => undefined);
+        if (fichier) {
+            const debutSuppression = performance.now();
+            await unlink(fichier).catch(() => undefined);
+            chrono.suppression_pdf_ms = dureeMs(debutSuppression);
+        }
+
+        chrono.total_ms = dureeMs(debutTotal);
+        chrono.resultat = resultat?.ok ? 'succes' : 'echec';
+
+        logger[chrono.resultat === 'succes' ? 'info' : 'warn']('Chrono impression PDF/Sumatra', chrono);
     }
 }
 

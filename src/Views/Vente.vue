@@ -186,7 +186,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
             </DialogContent>
         </Dialog>
 
-        <!-- Rapport de fin de caisse : nombre de tickets et montant par voyage,
+        <!-- Rapport de fin de caisse : nombre de tickets et montant par trajet,
              pour faire le point avec le chef de gare avant de clôturer. -->
         <Dialog v-model:open="finDeCaisseOuvert">
             <DialogContent class="sm:max-w-md">
@@ -195,7 +195,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 </DialogHeader>
 
                 <div v-if="rapportFinDeCaisse" class="space-y-2 text-sm">
-                    <div v-for="v in rapportFinDeCaisse.voyages" :key="v.voyage_id" class="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div v-for="v in rapportFinDeCaisse.voyages" :key="v.trajet_id" class="flex items-center justify-between rounded-md border px-3 py-2">
                         <div>
                             <p class="font-medium">{{ v.trajet }}</p>
                             <p class="text-xs text-muted-foreground">{{ v.heure_depart }} · {{ v.nombre_tickets }} ticket(s)</p>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 export interface RapportFinDeCaisse {
     date: string;
-    voyages: { voyage_id: number; trajet: string; date_depart: string; heure_depart: string; numero_depart: number; nombre_tickets: number; montant_total: number }[];
+    voyages: { trajet_id: number; trajet: string; date_depart: string; heure_depart: string; numero_depart: number; nombre_tickets: number; montant_total: number }[];
     nombre_tickets_total: number;
     montant_total: number;
 }
@@ -32,7 +32,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
         <p style="border-top: 1px dashed #000; margin: 4px 0" />
 
-        <div v-for="v in rapport.voyages" :key="v.voyage_id" style="margin-bottom: 4px">
+        <div v-for="v in rapport.voyages" :key="v.trajet_id" style="margin-bottom: 4px">
             <p style="font-weight: 700">{{ v.trajet }} — {{ v.heure_depart }}</p>
             <div class="ligne" style="display:flex;justify-content:space-between">
                 <span>{{ v.nombre_tickets }} ticket(s)</span>

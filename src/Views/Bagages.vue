@@ -20,6 +20,14 @@ import type { BagageDuJour } from '@/types/bagage';
 const config = useConfigStore();
 const session = useSessionStore();
 
+type RapportBagageDestination = { destination_id: number | null; destination: string; nombre_bagages: number; montant_total: number };
+type RapportFinDeCaisseBagage = {
+    date: string;
+    destinations: RapportBagageDestination[];
+    nombre_bagages: number;
+    montant_total: number;
+};
+
 const aujourdhui = () => new Date().toISOString().slice(0, 10);
 const dateFiltre = ref(aujourdhui());
 
@@ -64,16 +72,18 @@ watch(dateFiltre, charger);
 onMounted(charger);
 
 const finDeCaisseOuvert = ref(false);
-const rapportFinDeCaisse = ref<{ date: string; nombre_bagages: number; montant_total: number } | null>(null);
+const rapportFinDeCaisse = ref<RapportFinDeCaisseBagage | null>(null);
 const erreurImpression = ref('');
+const lignesRapportFinDeCaisse = computed(() => rapportFinDeCaisse.value?.destinations.map((destination) => ({
+    id: destination.destination_id,
+    libelle: destination.destination,
+    nombre: destination.nombre_bagages,
+    montant_total: destination.montant_total,
+})) ?? []);
 
 async function ouvrirFinDeCaisse() {
     if (!session.agenceId) return;
-    rapportFinDeCaisse.value = (await window.api.bagage.finDeCaisse(session.agenceId, dateFiltre.value)) as {
-        date: string;
-        nombre_bagages: number;
-        montant_total: number;
-    };
+    rapportFinDeCaisse.value = (await window.api.bagage.finDeCaisse(session.agenceId, dateFiltre.value)) as RapportFinDeCaisseBagage;
     finDeCaisseOuvert.value = true;
 }
 
@@ -158,13 +168,25 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         </Dialog>
 
         <Dialog v-model:open="finDeCaisseOuvert">
-            <DialogContent class="sm:max-w-sm">
+            <DialogContent class="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle class="flex items-center gap-2"><ClipboardList class="size-5" /> Fin de caisse — {{ dateFiltre }}</DialogTitle>
                 </DialogHeader>
-                <div v-if="rapportFinDeCaisse" class="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-                    <span>{{ rapportFinDeCaisse.nombre_bagages }} bagage(s)</span>
-                    <span class="text-lg font-semibold">{{ formatMontant(rapportFinDeCaisse.montant_total) }}</span>
+                <div v-if="rapportFinDeCaisse" class="space-y-2 text-sm">
+                    <div v-for="destination in rapportFinDeCaisse.destinations" :key="destination.destination_id ?? destination.destination" class="flex items-center justify-between rounded-md border px-3 py-2">
+                        <div>
+                            <p class="font-medium">{{ destination.destination }}</p>
+                            <p class="text-xs text-muted-foreground">{{ destination.nombre_bagages }} bagage(s)</p>
+                        </div>
+                        <span class="font-semibold">{{ formatMontant(destination.montant_total) }}</span>
+                    </div>
+                    <p v-if="rapportFinDeCaisse.destinations.length === 0" class="text-sm text-muted-foreground">
+                        Aucun bagage pour cette date.
+                    </p>
+                    <div class="flex items-center justify-between border-t pt-2 font-semibold">
+                        <span>{{ rapportFinDeCaisse.nombre_bagages }} bagage(s) au total</span>
+                        <span class="text-lg">{{ formatMontant(rapportFinDeCaisse.montant_total) }}</span>
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" @click="finDeCaisseOuvert = false">Fermer</Button>
@@ -186,6 +208,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 libelle-compteur="Nombre de bagages"
                 :nombre="rapportFinDeCaisse.nombre_bagages"
                 :montant-total="rapportFinDeCaisse.montant_total"
+                :lignes="lignesRapportFinDeCaisse"
             />
         </div>
     </AppSidebarLayout>

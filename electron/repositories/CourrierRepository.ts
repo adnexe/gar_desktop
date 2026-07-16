@@ -51,8 +51,13 @@ export class CourrierRepository {
             .all(agenceId, date ?? 'now') as CourrierDuJour[];
     }
 
-    rapportDuJour(agenceId: number, date?: string): { nombre_courriers: number; montant_total: number } {
-        const ligne = getDb()
+    rapportDuJour(agenceId: number, date?: string): {
+        destinations: { destination_id: number | null; destination: string; nombre_courriers: number; montant_total: number }[];
+        nombre_courriers: number;
+        montant_total: number;
+    } {
+        const db = getDb();
+        const ligne = db
             .prepare(
                 `SELECT COUNT(*) AS nombre_courriers, COALESCE(SUM(montant_total), 0) AS montant_total
                  FROM courriers
@@ -60,7 +65,21 @@ export class CourrierRepository {
             )
             .get(agenceId, date ?? 'now') as { nombre_courriers: number; montant_total: number };
 
-        return ligne;
+        const destinations = db
+            .prepare(
+                `SELECT c.ville_arrivee_id AS destination_id,
+                        COALESCE(v.nom, 'Non renseignée') AS destination,
+                        COUNT(c.id) AS nombre_courriers,
+                        COALESCE(SUM(c.montant_total), 0) AS montant_total
+                 FROM courriers c
+                 LEFT JOIN villes v ON v.id = c.ville_arrivee_id
+                 WHERE c.agence_depart_id = ? AND date(c.created_at) = date(?) AND c.statut = 'enregistre'
+                 GROUP BY c.ville_arrivee_id, v.nom
+                 ORDER BY destination ASC`,
+            )
+            .all(agenceId, date ?? 'now') as { destination_id: number | null; destination: string; nombre_courriers: number; montant_total: number }[];
+
+        return { ...ligne, destinations };
     }
 
     creer(donnees: NouveauCourrier): { id: number; uuid: string; numeroCourrier: string; montantColis: number; montantTotal: number } {

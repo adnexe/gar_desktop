@@ -413,9 +413,10 @@ export class TicketRepository {
     }
 
     // Rapport « fin de caisse » : nombre de tickets et montant encaissé par
-    // voyage, pour que la caissière fasse le point avec le chef de gare.
+    // trajet. Un même voyage peut contenir plusieurs trajets, donc grouper
+    // seulement par voyage mélangerait les destinations dans une seule ligne.
     rapportParVoyage(agenceId: number, date?: string): {
-        voyage_id: number;
+        trajet_id: number;
         trajet: string;
         date_depart: string;
         heure_depart: string;
@@ -425,15 +426,23 @@ export class TicketRepository {
     }[] {
         return getDb()
             .prepare(
-                `SELECT v.id AS voyage_id, tr.nom AS trajet, v.date_depart, v.heure_depart, v.numero_depart,
-                        COUNT(t.id) AS nombre_tickets, SUM(t.montant + t.timbre) AS montant_total
+                `SELECT t.trajet_id AS trajet_id,
+                        tr.nom AS trajet,
+                        MIN(v.date_depart) AS date_depart,
+                        CASE
+                            WHEN COUNT(DISTINCT v.id) = 1 THEN substr(MIN(v.heure_depart), 1, 5)
+                            ELSE COUNT(DISTINCT v.id) || ' départs'
+                        END AS heure_depart,
+                        MIN(v.numero_depart) AS numero_depart,
+                        COUNT(t.id) AS nombre_tickets,
+                        COALESCE(SUM(t.montant + t.timbre), 0) AS montant_total
                  FROM tickets t
                  JOIN voyages v ON v.id = t.voyage_id
                  JOIN trajets tr ON tr.id = t.trajet_id
                  WHERE v.agence_depart_id = ? AND date(t.created_at) = date(?)
                    AND t.statut_ticket = 'valide'
-                 GROUP BY t.voyage_id
-                 ORDER BY v.heure_depart ASC`,
+                 GROUP BY t.trajet_id, tr.nom
+                 ORDER BY MIN(v.heure_depart) ASC, tr.nom ASC`,
             )
             .all(agenceId, date ?? 'now') as never[];
     }
