@@ -200,19 +200,34 @@ const FORMES_IMPRESSION: { libelle: string; options: Electron.WebContentsPrintOp
 ];
 
 async function imprimerDirect(sender: WebContents, hauteurMm?: number): Promise<ResultatImpression> {
-    const imprimantes = await listerImprimantes(sender);
     const tentatives: string[] = [];
+    let imprimantes: ImprimanteRuntime[] | null = null;
 
-    // Sous Windows, la voie PDF + SumatraPDF est la seule fiable.
+    // Sous Windows, la voie PDF + SumatraPDF est la seule fiable. Chemin
+    // rapide : on imprime d'abord directement sur l'imprimante par défaut,
+    // sans lister toutes les imprimantes. Si ce chemin échoue, on retombe sur
+    // le repli complet historique (liste imprimantes + imprimantes physiques).
     if (process.platform === 'win32') {
         try {
-            const viaPdf = await imprimerViaPdf(sender, imprimantes, tentatives, hauteurMm);
-            if (viaPdf.ok) return viaPdf;
+            const viaPdfDefaut = await imprimerViaPdf(sender, [], tentatives, hauteurMm);
+            if (viaPdfDefaut.ok) return viaPdfDefaut;
         } catch (erreur) {
             const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
-            tentatives.push(`génération PDF : ${message}`);
+            tentatives.push(`PDF défaut rapide : ${message}`);
+        }
+
+        imprimantes = await listerImprimantes(sender);
+
+        try {
+            const viaPdfComplet = await imprimerViaPdf(sender, imprimantes, tentatives, hauteurMm);
+            if (viaPdfComplet.ok) return viaPdfComplet;
+        } catch (erreur) {
+            const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
+            tentatives.push(`génération PDF complète : ${message}`);
         }
     }
+
+    imprimantes ??= await listerImprimantes(sender);
 
     // Cibles dans l'ordre : imprimante par défaut (deviceName absent), puis
     // chaque imprimante physique nommée (défaut en tête).
