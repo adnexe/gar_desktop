@@ -1,11 +1,14 @@
 import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 // pdf-to-printer est en CommonJS : import par défaut obligatoire (main en ESM).
 import pdfToPrinter from 'pdf-to-printer';
 
 const { print: imprimerFichierPdf } = pdfToPrinter;
+const execFileAsync = promisify(execFile);
 import { ConfigController } from '../controllers/ConfigController';
 import { AuthController } from '../controllers/AuthController';
 import { AgentController } from '../controllers/AgentController';
@@ -254,6 +257,178 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
     }
 }
 
+async function envoyerCoupeMacos(printer?: string): Promise<{ ok: true; duree_ms: number } | { ok: false; duree_ms: number; erreur: string }> {
+    const debut = performance.now();
+    let fichier: string | null = null;
+
+    try {
+        fichier = join(app.getPath('temp'), `adnexe-cut-${randomUUID()}.bin`);
+        // ESC/POS : avance légèrement le papier puis coupe complète.
+        await writeFile(fichier, Buffer.from([0x1b, 0x64, 0x03, 0x1d, 0x56, 0x00]));
+
+        try {
+            await execFileAsync('/usr/bin/lp', [
+                ...(printer ? ['-d', printer] : []),
+                '-o',
+                'raw',
+                fichier,
+            ], { timeout: 5_000 });
+
+            return { ok: true, duree_ms: dureeMs(debut) };
+        } catch (erreurLp) {
+            const messageLp = erreurLp instanceof Error ? erreurLp.message.split('\n')[0] : String(erreurLp);
+
+            try {
+                await execFileAsync('/usr/bin/lpr', [
+                    ...(printer ? ['-P', printer] : []),
+                    '-l',
+                    fichier,
+                ], { timeout: 5_000 });
+
+                return { ok: true, duree_ms: dureeMs(debut) };
+            } catch (erreurLpr) {
+                const messageLpr = erreurLpr instanceof Error ? erreurLpr.message.split('\n')[0] : String(erreurLpr);
+                return { ok: false, duree_ms: dureeMs(debut), erreur: `${messageLp} | ${messageLpr}` };
+            }
+        }
+    } finally {
+        if (fichier) await unlink(fichier).catch(() => undefined);
+    }
+}
+
+/**
+ * Voie principale sous macOS : Chromium/Electron peut détecter l'imprimante
+ * mais refuser les réglages silencieux avec « Invalid printer settings ».
+ * On rend donc le reçu en PDF puis on confie le fichier à CUPS (`lp`), le
+ * système d'impression natif macOS.
+ */
+async function imprimerViaPdfMacos(sender: WebContents, imprimantes: ImprimanteRuntime[], tentatives: string[], hauteurMm?: number): Promise<ResultatImpression> {
+    const debutTotal = performance.now();
+    const chrono = {
+        hauteur_mesuree_mm: hauteurMm ?? null,
+        hauteur_page_pouces: 0,
+        hauteur_papier_mm: 0,
+        pdf_octets: 0,
+        print_to_pdf_ms: 0,
+        ecriture_pdf_ms: 0,
+        suppression_pdf_ms: 0,
+        total_ms: 0,
+        tentatives_cups: [] as {
+            cible: string;
+            format: string;
+            ok: boolean;
+            duree_ms: number;
+            erreur?: string;
+            coupe_ok?: boolean;
+            coupe_ms?: number;
+            coupe_erreur?: string;
+        }[],
+        resultat: 'succes' as 'succes' | 'echec',
+        imprimante: null as string | null,
+    };
+    const hauteurPouces = hauteurMm
+        ? Math.min(Math.max(hauteurMm / 25.4 + 0.2, 1.5), 40)
+        : 11.7;
+    chrono.hauteur_page_pouces = Number(hauteurPouces.toFixed(2));
+    let fichier: string | null = null;
+    let resultat: ResultatImpression | null = null;
+
+    try {
+        const debutPdf = performance.now();
+        const pdf = await sender.printToPDF({
+            printBackground: true,
+            preferCSSPageSize: true,
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            pageSize: { width: 3.15, height: hauteurPouces },
+        });
+        chrono.print_to_pdf_ms = dureeMs(debutPdf);
+        chrono.pdf_octets = pdf.length;
+
+        fichier = join(app.getPath('temp'), `adnexe-ticket-${randomUUID()}.pdf`);
+        const debutEcriture = performance.now();
+        await writeFile(fichier, pdf);
+        chrono.ecriture_pdf_ms = dureeMs(debutEcriture);
+
+        const cibles: { printer?: string; libelle: string }[] = [
+            { libelle: 'imprimante par défaut' },
+            ...ordonnerImprimantes(imprimantes)
+                .filter((imprimante) => imprimante.name && !estImprimanteVirtuelle(imprimante))
+                .map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
+        ];
+        const hauteurPapierMm = Math.round(hauteurPouces * 25.4);
+        chrono.hauteur_papier_mm = hauteurPapierMm;
+        const formats: { options: string[]; libelle: string }[] = [
+            { options: ['-o', `media=Custom.80x${hauteurPapierMm}mm`, '-o', 'fit-to-page'], libelle: `80x${hauteurPapierMm}` },
+            { options: ['-o', 'fit-to-page'], libelle: 'papier pilote' },
+            { options: [], libelle: 'défaut CUPS' },
+        ];
+
+        for (const cible of cibles) {
+            for (const format of formats) {
+                const args = [
+                    ...(cible.printer ? ['-d', cible.printer] : []),
+                    ...format.options,
+                    fichier,
+                ];
+                const debutCups = performance.now();
+
+                try {
+                    await execFileAsync('/usr/bin/lp', args, { timeout: 15_000 });
+
+                    const imprimante = `${cible.libelle} (CUPS ${format.libelle})`;
+                    const coupe = await envoyerCoupeMacos(cible.printer);
+                    chrono.tentatives_cups.push({
+                        cible: cible.libelle,
+                        format: format.libelle,
+                        ok: true,
+                        duree_ms: dureeMs(debutCups),
+                        coupe_ok: coupe.ok,
+                        coupe_ms: coupe.duree_ms,
+                        ...(coupe.ok ? {} : { coupe_erreur: coupe.erreur }),
+                    });
+                    if (!coupe.ok) {
+                        logger.warn('Coupe macOS/CUPS non confirmée.', {
+                            cible: cible.libelle,
+                            imprimante,
+                            erreur: coupe.erreur,
+                        });
+                    }
+                    chrono.imprimante = imprimante;
+                    resultat = { ok: true, imprimante };
+
+                    return resultat;
+                } catch (erreur) {
+                    const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
+                    chrono.tentatives_cups.push({
+                        cible: cible.libelle,
+                        format: format.libelle,
+                        ok: false,
+                        duree_ms: dureeMs(debutCups),
+                        erreur: message,
+                    });
+                    tentatives.push(`${cible.libelle} [CUPS ${format.libelle}] : ${message}`);
+                }
+            }
+        }
+
+        chrono.resultat = 'echec';
+        resultat = { ok: false, erreur: tentatives.join(' | ') };
+
+        return resultat;
+    } finally {
+        if (fichier) {
+            const debutSuppression = performance.now();
+            await unlink(fichier).catch(() => undefined);
+            chrono.suppression_pdf_ms = dureeMs(debutSuppression);
+        }
+
+        chrono.total_ms = dureeMs(debutTotal);
+        chrono.resultat = resultat?.ok ? 'succes' : 'echec';
+
+        logger[chrono.resultat === 'succes' ? 'info' : 'warn']('Chrono impression PDF/CUPS', chrono);
+    }
+}
+
 // Chromium (Windows) rejette l'impression silencieuse avec « Invalid printer
 // settings » quand les réglages sont incomplets : il faut fournir explicitement
 // dpi + pageSize. On essaie donc plusieurs formats connus, du plus adapté
@@ -313,6 +488,16 @@ async function imprimerDirect(sender: WebContents, hauteurMm?: number): Promise<
     }
 
     imprimantes ??= await listerImprimantes(sender);
+
+    if (process.platform === 'darwin') {
+        try {
+            const viaPdfMacos = await imprimerViaPdfMacos(sender, imprimantes, tentatives, hauteurMm);
+            if (viaPdfMacos.ok) return viaPdfMacos;
+        } catch (erreur) {
+            const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
+            tentatives.push(`PDF macOS/CUPS : ${message}`);
+        }
+    }
 
     // Cibles dans l'ordre : imprimante par défaut (deviceName absent), puis
     // chaque imprimante physique nommée (défaut en tête).

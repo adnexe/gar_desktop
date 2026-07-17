@@ -35,7 +35,10 @@ export class CatalogueRepository {
                 `INSERT OR REPLACE INTO agences (id, uuid, reference, ville_id, nom, adresse, telephone, actif, created_at, updated_at)
                  VALUES (@id, @uuid, @reference, @ville_id, @nom, @adresse, @telephone, @actif, @created_at, @updated_at)`,
             );
-            agenceStmt.run({ ...bootstrap.agence, actif: bootstrap.agence.actif ? 1 : 0 });
+            db.prepare('UPDATE agences SET actif = 0').run();
+            for (const agence of bootstrap.agences ?? [bootstrap.agence]) {
+                agenceStmt.run({ ...agence, actif: agence.actif ? 1 : 0 });
+            }
 
             const configStmt = db.prepare(
                 `INSERT INTO config (cle, valeur) VALUES (?, ?)

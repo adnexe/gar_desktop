@@ -14,19 +14,19 @@
         "files": [
             "out/**/*",
             "package.json"
-            ],
+        ],
         "asarUnpack": [
             "**/node_modules/pdf-to-printer/**"
         ],
-       "win": {
-        "target": [
-            {
-            "target": "nsis",
-            "arch": [
-                "x64"
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
             ]
-            }
-        ]
         },
         "nsis": {
             "oneClick": false,
@@ -35,7 +35,6 @@
             "createStartMenuShortcut": true,
             "shortcutName": "Adnexe transport"
         }
-        
     },
     "scripts": {
         "dev": "electron-vite dev",
@@ -46,7 +45,6 @@
         "pack": "npm run build && electron-builder --dir",
         "dist": "npm run build && electron-builder",
         "build:win": "npm run build && electron-builder -- --win"
-
     },
     "dependencies": {
         "@lucide/vue": "^1.17.0",

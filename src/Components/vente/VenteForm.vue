@@ -341,17 +341,32 @@ function messageErreurInconnue(erreur: unknown, defaut: string) {
         .replace(/^Error invoking remote method "[^"]+": Error: /, '');
 }
 
-// Ticket et talon partent en deux jobs séparés : l'imprimante coupe entre
-// les deux, le talon de contrôle n'est plus collé au ticket du client.
-const partieImpression = ref<'tout' | 'ticket' | 'talon'>('tout');
+// La zone d'impression ne contient qu'une seule partie à la fois. C'est
+// important pour éviter qu'un PDF capture le ticket + le talon ensemble.
+const partieImpression = ref<'ticket' | 'talon' | null>(null);
+
+function attendre(ms: number) {
+    return new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
+function attendreRenduImpression() {
+    return new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => resolve());
+        });
+    });
+}
 
 async function imprimer(partie: 'ticket' | 'talon'): Promise<ResultatImpression> {
     partieImpression.value = partie;
     try {
         await nextTick();
+        await attendreRenduImpression();
         return await window.api.impression.imprimerTicket(hauteurZoneImpressionMm());
     } finally {
-        partieImpression.value = 'tout';
+        partieImpression.value = null;
     }
 }
 
@@ -419,6 +434,7 @@ async function vendre() {
         // Le ticket client est sorti : le talon part en second job (coupe entre
         // les deux). Son échec n'annule pas la vente, on avertit simplement.
         try {
+            await attendre(800);
             const talon = await imprimer('talon');
             if (!talon.ok) {
                 erreur.value = `Le ticket est imprimé, mais le talon de contrôle n'est pas sorti : ${talon.erreur ?? 'erreur inconnue'}.`;
@@ -834,7 +850,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     </Dialog>
 
     <!-- Zone d'impression : invisible à l'écran, seule visible à l'impression. -->
-    <div class="zone-impression hidden print:block">
+    <div v-if="partieImpression" class="zone-impression hidden print:block">
         <TicketRecu v-for="(r, index) in recus" :key="index" :recu="r" :partie="partieImpression" />
     </div>
 </template>

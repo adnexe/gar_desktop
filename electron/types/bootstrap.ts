@@ -139,6 +139,7 @@ export interface CompagnieApi {
 
 export interface BootstrapResponse {
     agence: AgenceApi;
+    agences?: AgenceApi[];
     compagnie: CompagnieApi;
     villes: VilleApi[];
     itineraires: ItineraireApi[];
