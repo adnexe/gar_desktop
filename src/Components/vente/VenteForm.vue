@@ -580,6 +580,37 @@ function programmerPreparationPdfTicket() {
     }, 350);
 }
 
+function demarrerPreparationPdfMaintenant() {
+    if (minuteriePreparationPdf) {
+        clearTimeout(minuteriePreparationPdf);
+        minuteriePreparationPdf = null;
+    }
+
+    if (!peutVendre.value || preparationPdfEnCours.value || cachePdfPret()) {
+        return preparationPdfEnCours.value;
+    }
+
+    logDiagnostic('info', 'Préparation ticket lancée immédiatement');
+    preparationPdfEnCours.value = lancerPreparationPdfTicket()
+        .catch((e) => logDiagnostic('warn', 'Préparation PDF ticket interrompue', {
+            erreur: messageErreurInconnue(e, 'Erreur inconnue'),
+        }))
+        .finally(() => {
+            preparationPdfEnCours.value = null;
+        });
+
+    return preparationPdfEnCours.value;
+}
+
+async function assurerPreparationPdfAvantVente() {
+    if (cachePdfPret()) return;
+
+    demarrerPreparationPdfMaintenant();
+    if (preparationPdfEnCours.value) {
+        await preparationPdfEnCours.value;
+    }
+}
+
 function cachePdfPret() {
     const cache = cachePdfTicket.value;
     if (!cache) return null;
@@ -631,6 +662,11 @@ onBeforeUnmount(() => {
     void nettoyerCachePdfPrepare();
 });
 
+function ouvrirConfirmationVente() {
+    confirmationOuverte.value = true;
+    void assurerPreparationPdfAvantVente();
+}
+
 /**
  * Enregistre la vente (après confirmation) puis imprime le ticket.
  * Le formulaire n'est PAS réinitialisé : on peut réimprimer le dernier
@@ -640,9 +676,7 @@ onBeforeUnmount(() => {
 async function vendre() {
     if (!peutVendre.value || !voyageSelectionne.value || !trajetActuel.value || !props.agenceId) return;
 
-    if (preparationPdfEnCours.value) {
-        await preparationPdfEnCours.value;
-    }
+    await assurerPreparationPdfAvantVente();
     const cachePrepare = cachePdfPret();
     logDiagnostic(cachePrepare ? 'info' : 'warn', cachePrepare ? 'Cache ticket prêt avant vente' : 'Cache ticket absent avant vente, impression classique prévue', {
         numero: cachePrepare?.numero ?? null,
@@ -1092,7 +1126,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 <RotateCcw />
                 Nouveau ticket
             </Button>
-            <Button :disabled="!peutVendre" @click="confirmationOuverte = true">
+            <Button :disabled="!peutVendre" @click="ouvrirConfirmationVente">
                 <Ticket />
                 {{ venteEffectuee ? 'Vendre à nouveau' : 'Vendre' }}
             </Button>
