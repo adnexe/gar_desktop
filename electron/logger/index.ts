@@ -10,7 +10,7 @@ function cheminLog(): string | null {
     if (cheminLogMemo) return cheminLogMemo;
     if (!app.isReady()) return null;
 
-    const dossier = join(app.getPath('userData'), 'logs');
+    const dossier = join(app.getPath('userData'), 'l ogs');
     mkdirSync(dossier, { recursive: true });
     cheminLogMemo = join(dossier, 'app.log');
 
