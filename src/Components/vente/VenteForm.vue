@@ -428,6 +428,10 @@ async function supprimerPdfPrepare(id: string | null | undefined) {
     }
 }
 
+function logDiagnostic(niveau: 'info' | 'warn', message: string, contexte?: Record<string, unknown>) {
+    void window.api.diagnostic.log(niveau, message, contexte).catch(() => undefined);
+}
+
 async function nettoyerCachePdfPrepare() {
     sequencePreparationPdf++;
     if (minuteriePreparationPdf) {
@@ -438,6 +442,10 @@ async function nettoyerCachePdfPrepare() {
     const cache = cachePdfTicket.value;
     cachePdfTicket.value = null;
     if (cache) {
+        logDiagnostic('info', 'Préparation ticket invalidée', {
+            numero: cache.numero,
+            age_ms: Date.now() - cache.creeLe,
+        });
         await Promise.all([
             supprimerPdfPrepare(cache.ticketId),
             supprimerPdfPrepare(cache.talonId),
@@ -504,7 +512,11 @@ async function lancerPreparationPdfTicket() {
     const sequence = ++sequencePreparationPdf;
     const empreinte = empreinteTicketCourant();
     const numero = await window.api.vente.preparerNumero();
-    if (!numero || sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
+    if (!numero) {
+        logDiagnostic('info', 'Préparation ticket ignorée : aucun numéro préparé disponible');
+        return;
+    }
+    if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
 
     const createdAtIso = new Date().toISOString();
     const recu = await creerRecuPrepare(numero, createdAtIso);
@@ -514,6 +526,11 @@ async function lancerPreparationPdfTicket() {
     let talonId: string | null = null;
 
     try {
+        logDiagnostic('info', 'Préparation ticket démarrée', {
+            numero,
+            voyage_id: voyageSelectionne.value.id,
+            place: placeSelectionnee.value,
+        });
         ticketId = await preparerPdfPartie(recu, 'ticket');
         if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
 
@@ -528,10 +545,18 @@ async function lancerPreparationPdfTicket() {
             talonId,
             creeLe: Date.now(),
         };
+        logDiagnostic('info', 'Préparation ticket prête', {
+            numero,
+            voyage_id: voyageSelectionne.value.id,
+            place: placeSelectionnee.value,
+        });
         ticketId = null;
         talonId = null;
     } catch (e) {
-        console.warn('Préparation PDF ticket ignorée', e);
+        logDiagnostic('warn', 'Préparation PDF ticket ignorée', {
+            numero,
+            erreur: messageErreurInconnue(e, 'Erreur inconnue'),
+        });
     } finally {
         partieImpression.value = null;
         if (ticketId) await supprimerPdfPrepare(ticketId);
@@ -546,7 +571,9 @@ function programmerPreparationPdfTicket() {
     if (minuteriePreparationPdf) clearTimeout(minuteriePreparationPdf);
     minuteriePreparationPdf = setTimeout(() => {
         preparationPdfEnCours.value = lancerPreparationPdfTicket()
-            .catch((e) => console.warn('Préparation PDF ticket ignorée', e))
+            .catch((e) => logDiagnostic('warn', 'Préparation PDF ticket interrompue', {
+                erreur: messageErreurInconnue(e, 'Erreur inconnue'),
+            }))
             .finally(() => {
                 preparationPdfEnCours.value = null;
             });
@@ -617,6 +644,11 @@ async function vendre() {
         await preparationPdfEnCours.value;
     }
     const cachePrepare = cachePdfPret();
+    logDiagnostic(cachePrepare ? 'info' : 'warn', cachePrepare ? 'Cache ticket prêt avant vente' : 'Cache ticket absent avant vente, impression classique prévue', {
+        numero: cachePrepare?.numero ?? null,
+        voyage_id: voyageSelectionne.value.id,
+        place: placeSelectionnee.value,
+    });
 
     enVente.value = true;
     erreur.value = null;
@@ -648,8 +680,17 @@ async function vendre() {
         recus.value = [reponse.ticket];
         const cacheUtilisable = cachePrepare && reponse.ticket.numero === cachePrepare.numero ? cachePrepare : null;
         if (cachePrepare && !cacheUtilisable) {
+            logDiagnostic('warn', 'Cache ticket refusé : numéro final différent', {
+                numero_prepare: cachePrepare.numero,
+                numero_final: reponse.ticket.numero,
+            });
             void nettoyerCachePdfPrepare();
         } else if (cacheUtilisable) {
+            logDiagnostic('info', 'Cache ticket utilisé pour impression', {
+                numero: cacheUtilisable.numero,
+                ticket_pdf: cacheUtilisable.ticketId,
+                talon_pdf: cacheUtilisable.talonId,
+            });
             cachePdfTicket.value = null;
         }
 
@@ -666,6 +707,11 @@ async function vendre() {
         if (!impression.ok) {
             const motif = impression.erreur ?? 'Impression non confirmée par le système.';
             recus.value = [];
+            logDiagnostic('warn', 'Impression ticket échouée, annulation demandée', {
+                numero: reponse.ticket.numero,
+                via_cache: !!cacheUtilisable,
+                motif,
+            });
 
             try {
                 await window.api.vente.annulerImpression(reponse.ticket.uuid, motif);
@@ -687,6 +733,11 @@ async function vendre() {
             await attendre(800);
             const talon = await imprimerDepuisCacheOuClassique('talon', cacheUtilisable?.talonId);
             if (!talon.ok) {
+                logDiagnostic('warn', 'Impression talon échouée', {
+                    numero: reponse.ticket.numero,
+                    via_cache: !!cacheUtilisable,
+                    erreur: talon.erreur ?? 'erreur inconnue',
+                });
                 erreur.value = `Le ticket est imprimé, mais le talon de contrôle n'est pas sorti : ${talon.erreur ?? 'erreur inconnue'}.`;
             }
         } catch (e) {

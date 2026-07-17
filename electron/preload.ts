@@ -75,6 +75,9 @@ const api = {
     historique: {
         duJour: (agenceId: number) => ipcRenderer.invoke('historique:duJour', agenceId),
     },
+    diagnostic: {
+        log: (niveau: 'info' | 'warn', message: string, contexte?: unknown) => ipcRenderer.invoke('diagnostic:log', niveau, message, contexte),
+    },
 };
 
 contextBridge.exposeInMainWorld('api', api);

@@ -190,6 +190,9 @@ declare global {
             historique: {
                 duJour: (agenceId: number) => Promise<unknown>;
             };
+            diagnostic: {
+                log: (niveau: 'info' | 'warn', message: string, contexte?: unknown) => Promise<{ ok: boolean }>;
+            };
         };
     }
 }

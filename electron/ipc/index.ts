@@ -809,6 +809,16 @@ export function enregistrerIpc(): void {
     });
     ipcMain.handle('impression:listerImprimantes', async (event) => (await listerImprimantes(event.sender)).map(exposerImprimante));
     ipcMain.handle('impression:tester', async () => imprimerTicketTest());
+    ipcMain.handle('diagnostic:log', async (_event, niveau: 'info' | 'warn', message: string, contexte?: unknown) => {
+        const details = typeof contexte === 'object' && contexte !== null ? contexte as Record<string, unknown> : { contexte };
+        if (niveau === 'warn') {
+            logger.warn(message, details);
+        } else {
+            logger.info(message, details);
+        }
+
+        return { ok: true as const };
+    });
 
     gerer('bagage:rechercherTicket', BagageController.rechercherTicket);
     gerer('bagage:enregistrer', BagageController.enregistrer);
