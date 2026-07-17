@@ -1,7 +1,8 @@
 import { getDb } from '../database/connection';
 import { nouvelUuid } from '../database/ids';
-import { genererNumeroUnique } from '../database/numero';
+import { genererNumeroTicket, prevoirNumeroTicket } from '../database/numero';
 import { queueManager } from '../sync/QueueManager';
+import { ConfigRepository } from './ConfigRepository';
 import type { ClientServeur } from './ClientRepository';
 import type { VoyageServeur } from './VoyageRepository';
 
@@ -16,6 +17,8 @@ export interface NouveauTicket {
     montant: number;
     timbre: number;
     tarification: string;
+    numeroTicket?: string | null;
+    createdAt?: string | null;
 }
 
 export interface TicketRow {
@@ -70,6 +73,21 @@ export interface TicketServeur {
 }
 
 export class TicketRepository {
+    private readonly config = new ConfigRepository();
+
+    private codeAgenceTicket(): string | null {
+        const ligne = getDb()
+            .prepare(
+                `SELECT code_ticket
+                 FROM agences
+                 WHERE reference = (SELECT valeur FROM config WHERE cle = 'agence_reference')
+                 LIMIT 1`,
+            )
+            .get() as { code_ticket: string | null } | undefined;
+
+        return ligne?.code_ticket ?? null;
+    }
+
     placeDejaVendue(voyageId: number, numeroPlace: number): boolean {
         const ligne = getDb()
             .prepare(
@@ -83,6 +101,10 @@ export class TicketRepository {
         return ligne !== undefined;
     }
 
+    prochainNumeroPrepare(): string | null {
+        return prevoirNumeroTicket(getDb(), this.config.obtenir('licence_code_poste'), this.codeAgenceTicket());
+    }
+
     creer(donnees: NouveauTicket): TicketRow {
         const db = getDb();
 
@@ -92,8 +114,13 @@ export class TicketRepository {
             }
 
             const uuid = nouvelUuid();
-            const numeroTicket = genererNumeroUnique(db, 'tickets', 'numero_ticket');
-            const maintenant = new Date().toISOString();
+            const numeroTicket = genererNumeroTicket(
+                db,
+                this.config.obtenir('licence_code_poste'),
+                this.codeAgenceTicket(),
+                donnees.numeroTicket,
+            );
+            const maintenant = donnees.createdAt || new Date().toISOString();
 
             const info = db
                 .prepare(

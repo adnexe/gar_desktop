@@ -32,8 +32,8 @@ export class CatalogueRepository {
             }
 
             const agenceStmt = db.prepare(
-                `INSERT OR REPLACE INTO agences (id, uuid, reference, ville_id, nom, adresse, telephone, actif, created_at, updated_at)
-                 VALUES (@id, @uuid, @reference, @ville_id, @nom, @adresse, @telephone, @actif, @created_at, @updated_at)`,
+                `INSERT OR REPLACE INTO agences (id, uuid, reference, code_ticket, ville_id, nom, adresse, telephone, actif, created_at, updated_at)
+                 VALUES (@id, @uuid, @reference, @code_ticket, @ville_id, @nom, @adresse, @telephone, @actif, @created_at, @updated_at)`,
             );
             db.prepare('UPDATE agences SET actif = 0').run();
             for (const agence of bootstrap.agences ?? [bootstrap.agence]) {

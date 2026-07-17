@@ -1,7 +1,8 @@
 import { getDb } from '../database/connection';
 import { nouvelUuid } from '../database/ids';
-import { genererNumeroUnique } from '../database/numero';
+import { genererNumeroBagage } from '../database/numero';
 import { queueManager } from '../sync/QueueManager';
+import { ConfigRepository } from './ConfigRepository';
 
 export interface NouveauBagage {
     agenceId: number;
@@ -30,6 +31,16 @@ export interface BagageDuJour {
 }
 
 export class BagageRepository {
+    private readonly config = new ConfigRepository();
+
+    private codeAgenceTicket(agenceId: number): string | null {
+        const ligne = getDb()
+            .prepare('SELECT code_ticket FROM agences WHERE id = ? LIMIT 1')
+            .get(agenceId) as { code_ticket: string | null } | undefined;
+
+        return ligne?.code_ticket ?? null;
+    }
+
     duJour(agenceId: number, date?: string): BagageDuJour[] {
         return getDb()
             .prepare(
@@ -81,7 +92,7 @@ export class BagageRepository {
     creer(donnees: NouveauBagage): { id: number; uuid: string; numero_bagage: string } {
         const db = getDb();
         const uuid = nouvelUuid();
-        const numeroBagage = genererNumeroUnique(db, 'bagages', 'numero_bagage');
+        const numeroBagage = genererNumeroBagage(db, this.config.obtenir('licence_code_poste'), this.codeAgenceTicket(donnees.agenceId));
         const maintenant = new Date().toISOString();
 
         const info = db

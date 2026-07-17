@@ -35,9 +35,88 @@ type ImprimanteExposee = {
 };
 
 type ResultatImpression = { ok: true; imprimante: string } | { ok: false; erreur: string };
+type PdfPrepare = {
+    fichier: string;
+    hauteurMm?: number;
+    hauteurPouces: number;
+    hauteurPapierMm: number;
+    creeLe: number;
+};
+
+const pdfPrepares = new Map<string, PdfPrepare>();
 
 function dureeMs(debut: number): number {
     return Math.round(performance.now() - debut);
+}
+
+function hauteurPagePouces(hauteurMm?: number): number {
+    return hauteurMm
+        ? Math.min(Math.max(hauteurMm / 25.4 + 0.2, 1.5), 40)
+        : 11.7;
+}
+
+async function supprimerPdfPrepare(id: string): Promise<void> {
+    const prepare = pdfPrepares.get(id);
+    if (!prepare) return;
+
+    pdfPrepares.delete(id);
+    await unlink(prepare.fichier).catch(() => undefined);
+}
+
+async function preparerPdfDepuisRenderer(sender: WebContents, hauteurMm?: number): Promise<{ ok: true; id: string } | { ok: false; erreur: string }> {
+    if (sender.isDestroyed()) {
+        return { ok: false, erreur: 'Fenêtre d’impression introuvable.' };
+    }
+
+    const debutTotal = performance.now();
+    const hauteurPouces = hauteurPagePouces(hauteurMm);
+    const id = randomUUID();
+    const fichier = join(app.getPath('temp'), `adnexe-ticket-prepared-${id}.pdf`);
+
+    try {
+        const debutPdf = performance.now();
+        const pdf = await sender.printToPDF({
+            printBackground: true,
+            preferCSSPageSize: true,
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            pageSize: { width: 3.15, height: hauteurPouces },
+        });
+        const printToPdfMs = dureeMs(debutPdf);
+
+        const debutEcriture = performance.now();
+        await writeFile(fichier, pdf);
+
+        pdfPrepares.set(id, {
+            fichier,
+            hauteurMm,
+            hauteurPouces,
+            hauteurPapierMm: Math.round(hauteurPouces * 25.4),
+            creeLe: Date.now(),
+        });
+
+        logger.info('Chrono impression PDF préparé', {
+            id,
+            hauteur_mesuree_mm: hauteurMm ?? null,
+            hauteur_page_pouces: Number(hauteurPouces.toFixed(2)),
+            hauteur_papier_mm: Math.round(hauteurPouces * 25.4),
+            pdf_octets: pdf.length,
+            print_to_pdf_ms: printToPdfMs,
+            ecriture_pdf_ms: dureeMs(debutEcriture),
+            total_ms: dureeMs(debutTotal),
+        });
+
+        return { ok: true, id };
+    } catch (erreur) {
+        await unlink(fichier).catch(() => undefined);
+        const message = erreur instanceof Error ? erreur.message : String(erreur);
+        logger.warn('Préparation PDF impossible.', {
+            hauteur_mesuree_mm: hauteurMm ?? null,
+            total_ms: dureeMs(debutTotal),
+            erreur: message,
+        });
+
+        return { ok: false, erreur: message };
+    }
 }
 
 function nomImprimante(imprimante: ImprimanteRuntime): string {
@@ -429,6 +508,72 @@ async function imprimerViaPdfMacos(sender: WebContents, imprimantes: ImprimanteR
     }
 }
 
+async function imprimerPdfPrepare(id: string): Promise<ResultatImpression> {
+    const debutTotal = performance.now();
+    const prepare = pdfPrepares.get(id);
+    if (!prepare) {
+        return { ok: false, erreur: 'PDF préparé introuvable ou déjà utilisé.' };
+    }
+
+    const chrono = {
+        id,
+        age_ms: Date.now() - prepare.creeLe,
+        hauteur_mesuree_mm: prepare.hauteurMm ?? null,
+        hauteur_page_pouces: Number(prepare.hauteurPouces.toFixed(2)),
+        hauteur_papier_mm: prepare.hauteurPapierMm,
+        sortie_ms: 0,
+        suppression_pdf_ms: 0,
+        total_ms: 0,
+        resultat: 'echec' as 'succes' | 'echec',
+        imprimante: null as string | null,
+        erreur: null as string | null,
+    };
+
+    try {
+        if (process.platform === 'darwin') {
+            const debutCups = performance.now();
+            await execFileAsync('/usr/bin/lp', [
+                '-o',
+                `media=Custom.80x${prepare.hauteurPapierMm}mm`,
+                '-o',
+                'fit-to-page',
+                prepare.fichier,
+            ], { timeout: 15_000 });
+
+            const coupe = await envoyerCoupeMacos();
+            chrono.sortie_ms = dureeMs(debutCups);
+            chrono.resultat = 'succes';
+            chrono.imprimante = `imprimante par défaut (PDF préparé CUPS 80x${prepare.hauteurPapierMm})`;
+            if (!coupe.ok) {
+                logger.warn('Coupe macOS/CUPS non confirmée sur PDF préparé.', { id, erreur: coupe.erreur });
+            }
+
+            return { ok: true, imprimante: chrono.imprimante };
+        }
+
+        const debutSumatra = performance.now();
+        await imprimerFichierPdf(prepare.fichier, {
+            paperSize: `80mm x ${prepare.hauteurPapierMm}mm`,
+            scale: 'noscale',
+        });
+        chrono.sortie_ms = dureeMs(debutSumatra);
+        chrono.resultat = 'succes';
+        chrono.imprimante = `imprimante par défaut (PDF préparé 80x${prepare.hauteurPapierMm})`;
+
+        return { ok: true, imprimante: chrono.imprimante };
+    } catch (erreur) {
+        const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
+        chrono.erreur = message;
+        return { ok: false, erreur: message };
+    } finally {
+        const debutSuppression = performance.now();
+        await supprimerPdfPrepare(id);
+        chrono.suppression_pdf_ms = dureeMs(debutSuppression);
+        chrono.total_ms = dureeMs(debutTotal);
+        logger[chrono.resultat === 'succes' ? 'info' : 'warn']('Chrono impression PDF préparé sortie', chrono);
+    }
+}
+
 // Chromium (Windows) rejette l'impression silencieuse avec « Invalid printer
 // settings » quand les réglages sont incomplets : il faut fournir explicitement
 // dpi + pageSize. On essaie donc plusieurs formats connus, du plus adapté
@@ -634,6 +779,7 @@ export function enregistrerIpc(): void {
 
     gerer('vente:rechercherVoyages', VenteController.rechercherVoyages);
     gerer('vente:rechercherClient', VenteController.rechercherClient);
+    gerer('vente:preparerNumero', VenteController.preparerNumero);
     gerer('vente:vendre', VenteController.vendre);
     gerer('vente:confirmerImpression', VenteController.confirmerImpression);
     gerer('vente:annulerImpression', VenteController.annulerImpression);
@@ -655,6 +801,12 @@ export function enregistrerIpc(): void {
 
     ipcMain.handle('impression:ticket', imprimerDepuisRenderer);
     ipcMain.handle('impression:recu', imprimerDepuisRenderer);
+    ipcMain.handle('impression:preparerPdf', async (event, hauteurMm?: number) => preparerPdfDepuisRenderer(event.sender, hauteurMm));
+    ipcMain.handle('impression:imprimerPdfPrepare', async (_event, id: string) => imprimerPdfPrepare(id));
+    ipcMain.handle('impression:supprimerPdfPrepare', async (_event, id: string) => {
+        await supprimerPdfPrepare(id);
+        return { ok: true as const };
+    });
     ipcMain.handle('impression:listerImprimantes', async (event) => (await listerImprimantes(event.sender)).map(exposerImprimante));
     ipcMain.handle('impression:tester', async () => imprimerTicketTest());
 

@@ -5,6 +5,7 @@ export interface AgenceLocale {
     id: number;
     uuid: string;
     reference: string;
+    code_ticket: string | null;
     nom: string;
     ville_id: number;
     ville_nom: string;
@@ -13,6 +14,7 @@ export interface AgenceLocale {
 export interface LicenceLocale {
     uuid: string;
     code: string;
+    code_poste: string | null;
     agence_id: number;
     date_debut: string;
     date_expiration: string;

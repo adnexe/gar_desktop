@@ -36,6 +36,7 @@ const api = {
     vente: {
         rechercherVoyages: (params: unknown) => ipcRenderer.invoke('vente:rechercherVoyages', params),
         rechercherClient: (telephone: string) => ipcRenderer.invoke('vente:rechercherClient', telephone),
+        preparerNumero: () => ipcRenderer.invoke('vente:preparerNumero'),
         vendre: (demande: unknown) => ipcRenderer.invoke('vente:vendre', demande),
         confirmerImpression: (uuid: string) => ipcRenderer.invoke('vente:confirmerImpression', uuid),
         annulerImpression: (uuid: string, motif: string) => ipcRenderer.invoke('vente:annulerImpression', uuid, motif),
@@ -45,6 +46,9 @@ const api = {
     impression: {
         imprimerTicket: (hauteurMm?: number) => ipcRenderer.invoke('impression:ticket', hauteurMm),
         imprimerRecu: (hauteurMm?: number) => ipcRenderer.invoke('impression:recu', hauteurMm),
+        preparerPdf: (hauteurMm?: number) => ipcRenderer.invoke('impression:preparerPdf', hauteurMm),
+        imprimerPdfPrepare: (id: string) => ipcRenderer.invoke('impression:imprimerPdfPrepare', id),
+        supprimerPdfPrepare: (id: string) => ipcRenderer.invoke('impression:supprimerPdfPrepare', id),
         listerImprimantes: () => ipcRenderer.invoke('impression:listerImprimantes'),
         tester: () => ipcRenderer.invoke('impression:tester'),
     },

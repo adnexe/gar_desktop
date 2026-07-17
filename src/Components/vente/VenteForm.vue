@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watchDebounced } from '@vueuse/core';
 import { Armchair, Banknote, Check, MapPin, RotateCcw, Ticket, User, X } from '@lucide/vue';
-import { computed, nextTick, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import SeatMap from '@/Components/vente/SeatMap.vue';
 import TicketRecu, { type Recu } from '@/Components/vente/TicketRecu.vue';
 import { Badge } from '@/Components/ui/badge';
@@ -100,6 +100,21 @@ let sequenceRechercheClient = 0;
 const enVente = ref(false);
 const erreur = ref<string | null>(null);
 const recus = ref<Recu[]>([]);
+
+type CachePdfTicket = {
+    empreinte: string;
+    numero: string;
+    createdAtIso: string;
+    ticketId: string;
+    talonId: string;
+    creeLe: number;
+};
+
+const cachePdfTicket = ref<CachePdfTicket | null>(null);
+const preparationPdfEnCours = ref<Promise<void> | null>(null);
+let sequencePreparationPdf = 0;
+let minuteriePreparationPdf: ReturnType<typeof setTimeout> | null = null;
+const DUREE_VALIDITE_PDF_PREPARE_MS = 45_000;
 
 const villesAffichables = computed(() => {
     const terme = rechercheVille.value.trim().toLowerCase();
@@ -301,6 +316,7 @@ const libelleVoyage = (voyage: VoyageDisponible) =>
     `${formatDateAffichee(voyage.date_depart)} · ${voyage.heure_depart} · ${numeroDepartLabel(voyage.numero_depart)} · ${voyage.itineraire ?? ''} · ${voyage.vehicule_immatriculation} · ${voyage.places_occupees.length}/${voyage.nombre_places} places`;
 
 function resetTout() {
+    void nettoyerCachePdfPrepare();
     villeArriveeId.value = null;
     rechercheVille.value = '';
     voyagesDisponibles.value = [];
@@ -370,6 +386,224 @@ async function imprimer(partie: 'ticket' | 'talon'): Promise<ResultatImpression>
     }
 }
 
+function empreinteTicketCourant() {
+    return JSON.stringify({
+        agenceId: props.agenceId,
+        villeDepartId: props.villeDepartId,
+        villeArriveeId: villeArriveeId.value,
+        voyageId: voyageSelectionne.value?.id ?? null,
+        trajetId: trajetActuel.value?.id ?? null,
+        place: placeSelectionnee.value,
+        typeBillet: typeBillet.value,
+        tarification: tarification.value,
+        prix: prixAffiche.value,
+        timbre: timbre.value || 0,
+        total: totalAPayer.value,
+        client: {
+            telephone: client.telephone.trim(),
+            nom: client.nom.trim(),
+            prenoms: client.prenoms.trim(),
+            cni: client.cni.trim(),
+        },
+        vendeur: session.nom,
+        userId: session.userId,
+        agentId: session.agentId,
+    });
+}
+
+function formatDateHeureLocale(iso: string) {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function supprimerPdfPrepare(id: string | null | undefined) {
+    if (!id) return;
+
+    try {
+        await window.api.impression.supprimerPdfPrepare(id);
+    } catch {
+        // Le PDF a peut-être déjà été consommé par l'impression.
+    }
+}
+
+async function nettoyerCachePdfPrepare() {
+    sequencePreparationPdf++;
+    if (minuteriePreparationPdf) {
+        clearTimeout(minuteriePreparationPdf);
+        minuteriePreparationPdf = null;
+    }
+
+    const cache = cachePdfTicket.value;
+    cachePdfTicket.value = null;
+    if (cache) {
+        await Promise.all([
+            supprimerPdfPrepare(cache.ticketId),
+            supprimerPdfPrepare(cache.talonId),
+        ]);
+    }
+}
+
+async function creerRecuPrepare(numero: string, createdAtIso: string): Promise<Recu | null> {
+    if (!props.agenceId || !voyageSelectionne.value || !trajetActuel.value || !placeSelectionnee.value) {
+        return null;
+    }
+
+    const [agence, compagnie] = await Promise.all([
+        window.api.config.agenceActuelle(),
+        window.api.config.compagnieActuelle(),
+    ]);
+    const villeArrivee = props.villes.find((v) => v.id === villeArriveeId.value)?.nom ?? '';
+    const villeDepart = agence?.ville_nom ?? props.villes.find((v) => v.id === props.villeDepartId)?.nom ?? '';
+    const nomClient = [client.prenoms.trim(), client.nom.trim()].filter(Boolean).join(' ') || client.telephone.trim() || null;
+
+    return {
+        uuid: '',
+        numero,
+        numero_place: placeSelectionnee.value,
+        type_billet: typeBillet.value,
+        tarification: tarification.value,
+        montant: prixAffiche.value,
+        timbre: timbre.value || 0,
+        total: totalAPayer.value,
+        created_at: formatDateHeureLocale(createdAtIso),
+        agence: agence?.nom ?? '',
+        ville_depart: villeDepart,
+        ville_arrivee: villeArrivee,
+        date_depart: formatDateAffichee(voyageSelectionne.value.date_depart),
+        heure_depart: voyageSelectionne.value.heure_depart,
+        vehicule: voyageSelectionne.value.vehicule_immatriculation,
+        client: nomClient,
+        vendeur: session.nom || 'Caisse',
+        compagnie,
+    };
+}
+
+async function preparerPdfPartie(recu: Recu, partie: 'ticket' | 'talon') {
+    recus.value = [recu];
+    partieImpression.value = partie;
+
+    try {
+        await nextTick();
+        await attendreRenduImpression();
+        const resultat = await window.api.impression.preparerPdf(hauteurZoneImpressionMm());
+        if (!resultat.ok) {
+            throw new Error(resultat.erreur);
+        }
+
+        return resultat.id;
+    } finally {
+        partieImpression.value = null;
+    }
+}
+
+async function lancerPreparationPdfTicket() {
+    if (!peutVendre.value || !voyageSelectionne.value || !trajetActuel.value) return;
+
+    const sequence = ++sequencePreparationPdf;
+    const empreinte = empreinteTicketCourant();
+    const numero = await window.api.vente.preparerNumero();
+    if (!numero || sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
+
+    const createdAtIso = new Date().toISOString();
+    const recu = await creerRecuPrepare(numero, createdAtIso);
+    if (!recu || sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
+
+    let ticketId: string | null = null;
+    let talonId: string | null = null;
+
+    try {
+        ticketId = await preparerPdfPartie(recu, 'ticket');
+        if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
+
+        talonId = await preparerPdfPartie(recu, 'talon');
+        if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
+
+        cachePdfTicket.value = {
+            empreinte,
+            numero,
+            createdAtIso,
+            ticketId,
+            talonId,
+            creeLe: Date.now(),
+        };
+        ticketId = null;
+        talonId = null;
+    } catch (e) {
+        console.warn('Préparation PDF ticket ignorée', e);
+    } finally {
+        partieImpression.value = null;
+        if (ticketId) await supprimerPdfPrepare(ticketId);
+        if (talonId) await supprimerPdfPrepare(talonId);
+    }
+}
+
+function programmerPreparationPdfTicket() {
+    void nettoyerCachePdfPrepare();
+    if (!peutVendre.value) return;
+
+    if (minuteriePreparationPdf) clearTimeout(minuteriePreparationPdf);
+    minuteriePreparationPdf = setTimeout(() => {
+        preparationPdfEnCours.value = lancerPreparationPdfTicket()
+            .catch((e) => console.warn('Préparation PDF ticket ignorée', e))
+            .finally(() => {
+                preparationPdfEnCours.value = null;
+            });
+    }, 350);
+}
+
+function cachePdfPret() {
+    const cache = cachePdfTicket.value;
+    if (!cache) return null;
+    if (Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_PREPARE_MS) return null;
+    if (cache.empreinte !== empreinteTicketCourant()) return null;
+
+    return cache;
+}
+
+async function imprimerDepuisCacheOuClassique(partie: 'ticket' | 'talon', idPrepare?: string | null) {
+    if (!idPrepare) {
+        return await imprimer(partie);
+    }
+
+    try {
+        return await window.api.impression.imprimerPdfPrepare(idPrepare);
+    } catch (e) {
+        return {
+            ok: false,
+            erreur: messageErreurInconnue(e, "L'impression préparée n'a pas pu être lancée."),
+        };
+    }
+}
+
+watch(
+    () => [
+        props.agenceId,
+        props.villeDepartId,
+        villeArriveeId.value,
+        voyageSelectionne.value?.id ?? null,
+        trajetActuel.value?.id ?? null,
+        placeSelectionnee.value,
+        typeBillet.value,
+        tarification.value,
+        prixAffiche.value,
+        timbre.value || 0,
+        totalAPayer.value,
+        client.telephone,
+        client.nom,
+        client.prenoms,
+        client.cni,
+        session.userId,
+        session.agentId,
+    ],
+    programmerPreparationPdfTicket,
+);
+
+onBeforeUnmount(() => {
+    void nettoyerCachePdfPrepare();
+});
+
 /**
  * Enregistre la vente (après confirmation) puis imprime le ticket.
  * Le formulaire n'est PAS réinitialisé : on peut réimprimer le dernier
@@ -378,6 +612,11 @@ async function imprimer(partie: 'ticket' | 'talon'): Promise<ResultatImpression>
  */
 async function vendre() {
     if (!peutVendre.value || !voyageSelectionne.value || !trajetActuel.value || !props.agenceId) return;
+
+    if (preparationPdfEnCours.value) {
+        await preparationPdfEnCours.value;
+    }
+    const cachePrepare = cachePdfPret();
 
     enVente.value = true;
     erreur.value = null;
@@ -395,6 +634,8 @@ async function vendre() {
             numeroPlace: placeSelectionnee.value,
             timbre: timbre.value || 0,
             client: { telephone: client.telephone || null, nom: client.nom || null, prenoms: client.prenoms || null, cni: client.cni || null },
+            numeroTicket: cachePrepare?.numero ?? null,
+            createdAt: cachePrepare?.createdAtIso ?? null,
         })) as { ok: boolean; ticket?: Recu; erreur?: string };
 
         if (!reponse.ok || !reponse.ticket) {
@@ -405,10 +646,16 @@ async function vendre() {
 
         confirmationOuverte.value = false;
         recus.value = [reponse.ticket];
+        const cacheUtilisable = cachePrepare && reponse.ticket.numero === cachePrepare.numero ? cachePrepare : null;
+        if (cachePrepare && !cacheUtilisable) {
+            void nettoyerCachePdfPrepare();
+        } else if (cacheUtilisable) {
+            cachePdfTicket.value = null;
+        }
 
         let impression: ResultatImpression;
         try {
-            impression = await imprimer('ticket');
+            impression = await imprimerDepuisCacheOuClassique('ticket', cacheUtilisable?.ticketId);
         } catch (e) {
             impression = {
                 ok: false,
@@ -427,6 +674,9 @@ async function vendre() {
                 erreur.value = `Impression non confirmée pour le ticket ${reponse.ticket.numero}, mais l'annulation automatique a échoué : ${messageErreurInconnue(e, motif)}. Vérifiez avant de revendre la place.`;
             }
 
+            if (cacheUtilisable) {
+                await supprimerPdfPrepare(cacheUtilisable.talonId);
+            }
             await chargerVoyagesConservantSelection(idVoyageCourant);
             return;
         }
@@ -435,7 +685,7 @@ async function vendre() {
         // les deux). Son échec n'annule pas la vente, on avertit simplement.
         try {
             await attendre(800);
-            const talon = await imprimer('talon');
+            const talon = await imprimerDepuisCacheOuClassique('talon', cacheUtilisable?.talonId);
             if (!talon.ok) {
                 erreur.value = `Le ticket est imprimé, mais le talon de contrôle n'est pas sorti : ${talon.erreur ?? 'erreur inconnue'}.`;
             }
@@ -474,6 +724,10 @@ async function vendre() {
     } catch (e) {
         erreur.value = messageErreurInconnue(e, 'Une erreur est survenue pendant la vente.');
     } finally {
+        const cache = cachePdfTicket.value;
+        if (cache && Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_PREPARE_MS) {
+            void nettoyerCachePdfPrepare();
+        }
         enVente.value = false;
     }
 }

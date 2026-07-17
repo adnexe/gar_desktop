@@ -8,6 +8,7 @@ export const VenteController = {
     exporterClientPourClient: (telephone: string) => service.exporterClientPourClient(telephone),
     exporterTicketPourClient: (code: string) => service.exporterTicketPourClient(code),
     exporterTicketsPourClient: (agenceId: number, date?: string | null) => service.exporterTicketsPourClient(agenceId, date),
+    preparerNumero: () => service.preparerNumero(),
     vendre: (demande: DemandeVente) => {
         try {
             return { ok: true as const, ticket: service.vendre(demande) };

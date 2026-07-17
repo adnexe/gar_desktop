@@ -379,4 +379,10 @@ export const migrations: { nom: string; sql: string }[] = [
                 OR COALESCE(supprime_localement, 0) = 1;
         `,
     },
+    {
+        nom: '0013_code_ticket_agences',
+        sql: `
+            ALTER TABLE agences ADD COLUMN code_ticket TEXT;
+        `,
+    },
 ];

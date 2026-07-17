@@ -115,6 +115,7 @@ export interface AgenceApi {
     id: number;
     uuid: string;
     reference: string;
+    code_ticket: string | null;
     ville_id: number;
     nom: string;
     adresse: string | null;

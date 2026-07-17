@@ -8,7 +8,7 @@ declare global {
         api: {
             config: {
                 estConfiguree: () => Promise<boolean>;
-                agenceActuelle: () => Promise<{ id: number; uuid: string; reference: string; nom: string; ville_id: number; ville_nom: string } | null>;
+                agenceActuelle: () => Promise<{ id: number; uuid: string; reference: string; code_ticket: string | null; nom: string; ville_id: number; ville_nom: string } | null>;
                 compagnieActuelle: () => Promise<{
                     nom: string | null;
                     slogan: string | null;
@@ -24,6 +24,7 @@ declare global {
                 licenceActuelle: () => Promise<{
                     uuid: string;
                     code: string;
+                    code_poste: string | null;
                     agence_id: number;
                     date_debut: string;
                     date_expiration: string;
@@ -40,6 +41,7 @@ declare global {
                     licence?: {
                         uuid: string;
                         code: string;
+                        code_poste: string | null;
                         agence_id: number;
                         date_debut: string;
                         date_expiration: string;
@@ -143,6 +145,7 @@ declare global {
             vente: {
                 rechercherVoyages: (params: { agenceId: number; villeDepartId: number; villeArriveeId: number }) => Promise<unknown>;
                 rechercherClient: (telephone: string) => Promise<unknown>;
+                preparerNumero: () => Promise<string | null>;
                 vendre: (demande: unknown) => Promise<{ ok: boolean; ticket?: unknown; erreur?: string }>;
                 confirmerImpression: (uuid: string) => Promise<{ ok: boolean; erreur?: string }>;
                 annulerImpression: (uuid: string, motif: string) => Promise<{ ok: boolean }>;
@@ -152,6 +155,9 @@ declare global {
             impression: {
                 imprimerTicket: (hauteurMm?: number) => Promise<{ ok: boolean; erreur?: string }>;
                 imprimerRecu: (hauteurMm?: number) => Promise<{ ok: boolean; erreur?: string }>;
+                preparerPdf: (hauteurMm?: number) => Promise<{ ok: true; id: string } | { ok: false; erreur: string }>;
+                imprimerPdfPrepare: (id: string) => Promise<{ ok: boolean; erreur?: string; imprimante?: string }>;
+                supprimerPdfPrepare: (id: string) => Promise<{ ok: boolean }>;
                 listerImprimantes: () => Promise<{
                     name: string;
                     displayName: string;

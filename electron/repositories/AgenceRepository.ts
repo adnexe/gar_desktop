@@ -4,6 +4,7 @@ export interface AgenceLocale {
     id: number;
     uuid: string;
     reference: string;
+    code_ticket: string | null;
     nom: string;
     ville_id: number;
     ville_nom: string;
@@ -14,7 +15,7 @@ export class AgenceRepository {
         const db = getDb();
         const ligne = db
             .prepare(
-                `SELECT a.id, a.uuid, a.reference, a.nom, a.ville_id, v.nom AS ville_nom
+                `SELECT a.id, a.uuid, a.reference, a.code_ticket, a.nom, a.ville_id, v.nom AS ville_nom
                  FROM agences a JOIN villes v ON v.id = a.ville_id
                  WHERE a.reference = (SELECT valeur FROM config WHERE cle = 'agence_reference')
                  LIMIT 1`,
@@ -25,7 +26,7 @@ export class AgenceRepository {
 
         const fallback = db
             .prepare(
-                `SELECT a.id, a.uuid, a.reference, a.nom, a.ville_id, v.nom AS ville_nom
+                `SELECT a.id, a.uuid, a.reference, a.code_ticket, a.nom, a.ville_id, v.nom AS ville_nom
                  FROM agences a JOIN villes v ON v.id = a.ville_id
                  ORDER BY a.id
                  LIMIT 1`,

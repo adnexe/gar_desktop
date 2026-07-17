@@ -21,6 +21,7 @@ export async function bootstrap(reference: string, appareil: string, timeoutMs =
 export interface LicenceDesktop {
     uuid: string;
     code: string;
+    code_poste: string | null;
     agence_id: number;
     date_debut: string;
     date_expiration: string;

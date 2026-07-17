@@ -33,6 +33,7 @@ export class BootstrapService {
     licenceActuelle(): LicenceDesktop | null {
         const uuid = this.config.obtenir('licence_uuid');
         const code = this.config.obtenir('licence_code');
+        const codePoste = this.config.obtenir('licence_code_poste');
         const agenceId = this.config.obtenir('licence_agence_id');
         const dateDebut = this.config.obtenir('licence_date_debut');
         const dateExpiration = this.config.obtenir('licence_date_expiration');
@@ -48,6 +49,7 @@ export class BootstrapService {
         return {
             uuid,
             code,
+            code_poste: codePoste || null,
             agence_id: Number(agenceId),
             date_debut: dateDebut,
             date_expiration: dateExpiration,
@@ -188,6 +190,7 @@ export class BootstrapService {
     private enregistrerLicence(licence: LicenceDesktop): void {
         this.config.definir('licence_uuid', licence.uuid);
         this.config.definir('licence_code', licence.code);
+        this.config.definir('licence_code_poste', licence.code_poste ?? '');
         this.config.definir('licence_agence_id', String(licence.agence_id));
         this.config.definir('licence_date_debut', licence.date_debut);
         this.config.definir('licence_date_expiration', licence.date_expiration);

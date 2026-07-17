@@ -1,7 +1,8 @@
 import { getDb } from '../database/connection';
 import { nouvelUuid } from '../database/ids';
-import { genererNumeroUnique } from '../database/numero';
+import { genererNumeroCourrier } from '../database/numero';
 import { queueManager } from '../sync/QueueManager';
+import { ConfigRepository } from './ConfigRepository';
 
 export interface LigneColis {
     nom: string;
@@ -34,6 +35,16 @@ export interface CourrierDuJour {
 }
 
 export class CourrierRepository {
+    private readonly config = new ConfigRepository();
+
+    private codeAgenceTicket(agenceId: number): string | null {
+        const ligne = getDb()
+            .prepare('SELECT code_ticket FROM agences WHERE id = ? LIMIT 1')
+            .get(agenceId) as { code_ticket: string | null } | undefined;
+
+        return ligne?.code_ticket ?? null;
+    }
+
     duJour(agenceId: number, date?: string): CourrierDuJour[] {
         return getDb()
             .prepare(
@@ -85,7 +96,7 @@ export class CourrierRepository {
     creer(donnees: NouveauCourrier): { id: number; uuid: string; numeroCourrier: string; montantColis: number; montantTotal: number } {
         const db = getDb();
         const uuid = nouvelUuid();
-        const numeroCourrier = genererNumeroUnique(db, 'courriers', 'numero_courrier');
+        const numeroCourrier = genererNumeroCourrier(db, this.config.obtenir('licence_code_poste'), this.codeAgenceTicket(donnees.agenceDepartId));
         const maintenant = new Date().toISOString();
 
         const montantColis = donnees.colis.reduce((total, ligne) => total + ligne.quantite * ligne.prix, 0);

@@ -23,6 +23,8 @@ export interface DemandeVente {
     numeroPlace: number;
     timbre: number;
     client: InfosClient;
+    numeroTicket?: string | null;
+    createdAt?: string | null;
 }
 
 export class VenteService {
@@ -80,6 +82,10 @@ export class VenteService {
         return this.tickets.exporterPourClient(agenceId, date);
     }
 
+    preparerNumero(): string | null {
+        return this.tickets.prochainNumeroPrepare();
+    }
+
     // Le prix n'est JAMAIS accepté depuis le frontend : il est toujours
     // recalculé ici à partir de agenceId + trajetId + typeBillet + tarification.
     vendre(demande: DemandeVente) {
@@ -101,6 +107,8 @@ export class VenteService {
             montant,
             timbre: demande.timbre,
             tarification: demande.tarification,
+            numeroTicket: demande.numeroTicket,
+            createdAt: demande.createdAt,
         });
 
         const d = this.tickets.avecDetails(ticket.id) as {
