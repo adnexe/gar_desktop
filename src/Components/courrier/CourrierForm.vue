@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watchDebounced } from '@vueuse/core';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
-import { Check, LoaderCircle, Mail, Package, Plus, Send, Trash2, UserRound, X } from '@lucide/vue';
+import { Check, LoaderCircle, Mail, Package, Plus, Printer, Send, Trash2, UserRound, X } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
@@ -157,14 +157,12 @@ type CachePdfCourrier = {
     numero: string;
     createdAt: string;
     recuId: string;
-    etiquetteId: string;
     creeLe: number;
 };
 const cachePdfCourrier = ref<CachePdfCourrier | null>(null);
 const preparationPdfCourrier = ref<Promise<void> | null>(null);
 let sequencePreparationPdfCourrier = 0;
 const DUREE_VALIDITE_PDF_COURRIER_MS = 45_000;
-const PAUSE_AVANT_ETIQUETTE_MS = 100;
 
 async function chargerVoyagesAgence() {
     if (!config.agence) {
@@ -248,7 +246,7 @@ function nomComplet(personne: { nom: string; prenoms: string }) {
     return [personne.prenoms, personne.nom].filter(Boolean).join(' ').trim();
 }
 
-function resetTout() {
+function resetSaisie() {
     void nettoyerCachePdfCourrier();
     villeArriveeId.value = null;
     agenceArriveeId.value = null;
@@ -270,8 +268,12 @@ function resetTout() {
     expeditionManuelle.value = false;
     confirmationOuverte.value = false;
     erreur.value = '';
-    recu.value = null;
     void chargerVoyagesAgence();
+}
+
+function resetTout() {
+    resetSaisie();
+    recu.value = null;
 }
 
 defineExpose({ resetTout });
@@ -286,8 +288,8 @@ function messageErreurInconnue(e: unknown, defaut: string) {
         .replace(/^Error invoking remote method "[^"]+": Error: /, '');
 }
 
-// Reçu et étiquette colis partent en deux jobs séparés : l'imprimante coupe
-// entre les deux, l'étiquette n'est plus collée au reçu du client.
+// Le reçu sort automatiquement à la vente. L'étiquette/talon se lance ensuite
+// manuellement, tant que le dernier courrier reste affiché dans le formulaire.
 const partieImpression = ref<'tout' | 'recu' | 'etiquette'>('tout');
 
 async function imprimer(partie: 'recu' | 'etiquette'): Promise<ResultatImpression> {
@@ -339,10 +341,7 @@ async function nettoyerCachePdfCourrier() {
             numero: cache.numero,
             age_ms: Date.now() - cache.creeLe,
         });
-        await Promise.all([
-            supprimerPdfPrepare(cache.recuId),
-            supprimerPdfPrepare(cache.etiquetteId),
-        ]);
+        await supprimerPdfPrepare(cache.recuId);
     }
 }
 
@@ -421,7 +420,6 @@ async function preparerPdfCourrier() {
     if (!recuPrepare || sequence !== sequencePreparationPdfCourrier || empreinte !== empreinteCourrierCourante()) return;
 
     let recuId: string | null = null;
-    let etiquetteId: string | null = null;
 
     try {
         logDiagnostic('info', 'Préparation courrier démarrée', { numero });
@@ -431,16 +429,9 @@ async function preparerPdfCourrier() {
             return;
         }
 
-        etiquetteId = await preparerPdfCourrierPartie(recuPrepare, 'etiquette');
-        if (sequence !== sequencePreparationPdfCourrier || empreinte !== empreinteCourrierCourante()) {
-            logDiagnostic('info', 'Préparation courrier abandonnée : étiquette PDF obsolète', { numero });
-            return;
-        }
-
-        cachePdfCourrier.value = { empreinte, numero, createdAt, recuId, etiquetteId, creeLe: Date.now() };
-        logDiagnostic('info', 'Préparation courrier prête', { numero, recu_pdf: recuId, etiquette_pdf: etiquetteId });
+        cachePdfCourrier.value = { empreinte, numero, createdAt, recuId, creeLe: Date.now() };
+        logDiagnostic('info', 'Préparation courrier prête', { numero, recu_pdf: recuId });
         recuId = null;
-        etiquetteId = null;
     } catch (e) {
         logDiagnostic('warn', 'Préparation PDF courrier ignorée', {
             numero,
@@ -449,7 +440,6 @@ async function preparerPdfCourrier() {
     } finally {
         partieImpression.value = 'tout';
         if (recuId) await supprimerPdfPrepare(recuId);
-        if (etiquetteId) await supprimerPdfPrepare(etiquetteId);
     }
 }
 
@@ -483,6 +473,27 @@ async function imprimerDepuisCacheOuClassique(partie: 'recu' | 'etiquette', idPr
             ok: false,
             erreur: messageErreurInconnue(e, "L'impression préparée n'a pas pu être lancée."),
         };
+    }
+}
+
+async function imprimerTalon() {
+    if (!recu.value) return;
+
+    erreur.value = '';
+
+    try {
+        const imprimante = await window.api.impression.verifierDisponible();
+        if (!imprimante.ok) {
+            erreur.value = imprimante.erreur ?? "Aucune imprimante utilisable n'est disponible.";
+            return;
+        }
+
+        const impression = await imprimer('etiquette');
+        if (!impression.ok) {
+            erreur.value = `Talon non imprimé : ${impression.erreur ?? 'Impression non confirmée par le système.'}`;
+        }
+    } catch (e) {
+        erreur.value = `Talon non imprimé : ${messageErreurInconnue(e, "L'impression n'a pas pu être lancée.")}`;
     }
 }
 
@@ -569,7 +580,6 @@ async function envoyer() {
             logDiagnostic('info', 'Cache courrier utilisé pour impression', {
                 numero: cacheUtilisable.numero,
                 recu_pdf: cacheUtilisable.recuId,
-                etiquette_pdf: cacheUtilisable.etiquetteId,
             });
             cachePdfCourrier.value = null;
         }
@@ -596,40 +606,8 @@ async function envoyer() {
             }
 
             if (cacheUtilisable) {
-                await supprimerPdfPrepare(cacheUtilisable.etiquetteId);
+                await nettoyerCachePdfCourrier();
             }
-            return;
-        }
-
-        // Le reçu client est sorti : l'étiquette colis part en second job.
-        // L'envoi n'est validé qu'après les deux sorties.
-        let erreurEtiquette: string | null = null;
-        try {
-            logDiagnostic('info', 'Pause avant impression étiquette courrier', {
-                numero: reponse.courrier.numeroCourrier,
-                pause_ms: PAUSE_AVANT_ETIQUETTE_MS,
-            });
-            await new Promise((resolve) => setTimeout(resolve, PAUSE_AVANT_ETIQUETTE_MS));
-            const etiquette = await imprimerDepuisCacheOuClassique('etiquette', cacheUtilisable?.etiquetteId);
-            if (!etiquette.ok) {
-                erreurEtiquette = etiquette.erreur ?? 'erreur inconnue';
-                logDiagnostic('warn', 'Impression étiquette courrier échouée', {
-                    numero: reponse.courrier.numeroCourrier,
-                    via_cache: !!cacheUtilisable,
-                    erreur: erreurEtiquette,
-                });
-            }
-        } catch (e) {
-            erreurEtiquette = messageErreurInconnue(e, 'erreur inconnue');
-            logDiagnostic('warn', 'Impression étiquette courrier interrompue', {
-                numero: reponse.courrier.numeroCourrier,
-                via_cache: !!cacheUtilisable,
-                erreur: erreurEtiquette,
-            });
-        }
-
-        if (erreurEtiquette) {
-            erreur.value = `Le reçu courrier ${reponse.courrier.numeroCourrier} est sorti, mais l'étiquette colis n'est pas sortie : ${erreurEtiquette}. La vente reste en attente et n'est pas comptabilisée.`;
             return;
         }
 
@@ -649,7 +627,7 @@ async function envoyer() {
             montant_total: reponse.courrier.montantTotal,
         });
 
-        resetTout();
+        resetSaisie();
     } catch (e) {
         erreur.value = messageErreurInconnue(e, "Une erreur est survenue lors de l'enregistrement.");
         confirmationOuverte.value = false;
@@ -671,6 +649,20 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
             <p v-if="erreur" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {{ erreur }}
             </p>
+
+            <div v-if="recu" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                <div>
+                    <p class="text-sm font-semibold">Dernier courrier enregistré : {{ recu.numero_courrier }}</p>
+                    <p class="text-sm text-muted-foreground">
+                        {{ recu.destination }}
+                        <span v-if="recu.destinataire_nom"> · {{ recu.destinataire_nom }}</span>
+                    </p>
+                </div>
+                <Button variant="outline" @click="imprimerTalon">
+                    <Printer />
+                    Imprimer talon
+                </Button>
+            </div>
 
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div class="space-y-1.5">
