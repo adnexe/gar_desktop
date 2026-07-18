@@ -117,6 +117,7 @@ let minuteriePreparationPdf: ReturnType<typeof setTimeout> | null = null;
 const DUREE_VALIDITE_PDF_PREPARE_MS = 45_000;
 const DELAI_PREPARATION_APRES_VOYAGE_MS = 900;
 const DELAI_PREPARATION_APRES_MODIFICATION_MS = 1_400;
+const PAUSE_AVANT_TALON_MS = 100;
 type SourcePreparationPdf = 'selection_voyage' | 'selection_place' | 'modification_formulaire' | 'confirmation';
 
 const villesAffichables = computed(() => {
@@ -822,7 +823,11 @@ async function vendre() {
         // Le ticket client est sorti : le talon part en second job (coupe entre
         // les deux). Son échec n'annule pas la vente, on avertit simplement.
         try {
-            await attendre(800);
+            logDiagnostic('info', 'Pause avant impression talon', {
+                numero: reponse.ticket.numero,
+                pause_ms: PAUSE_AVANT_TALON_MS,
+            });
+            await attendre(PAUSE_AVANT_TALON_MS);
             const talon = await imprimerDepuisCacheOuClassique('talon', cacheUtilisable?.talonId);
             if (!talon.ok) {
                 logDiagnostic('warn', 'Impression talon échouée', {

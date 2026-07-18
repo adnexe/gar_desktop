@@ -35,6 +35,13 @@ type ImprimanteExposee = {
 };
 
 type ResultatImpression = { ok: true; imprimante: string } | { ok: false; erreur: string };
+type EtatImprimanteWindows = {
+    name?: string;
+    workOffline?: boolean;
+    printerStatus?: number | null;
+    detectedErrorState?: number | null;
+    extendedPrinterStatus?: number | null;
+};
 type PdfPrepare = {
     fichier: string;
     hauteurMm?: number;
@@ -53,6 +60,91 @@ function hauteurPagePouces(hauteurMm?: number): number {
     return hauteurMm
         ? Math.min(Math.max(hauteurMm / 25.4 + 0.2, 1.5), 40)
         : 11.7;
+}
+
+function messageEtatImprimanteWindows(etat: EtatImprimanteWindows): string | null {
+    if (etat.workOffline) {
+        return `L'imprimante par défaut ${etat.name ?? ''} est hors ligne. Allumez-la avant de vendre.`.trim();
+    }
+
+    if ([6, 7].includes(Number(etat.printerStatus ?? 0))) {
+        return `L'imprimante par défaut ${etat.name ?? ''} n'est pas prête (statut ${etat.printerStatus}).`.trim();
+    }
+
+    const erreursBloquantes: Record<number, string> = {
+        4: 'papier absent',
+        7: 'capot ouvert',
+        8: 'papier bloqué',
+        9: 'hors ligne',
+        10: 'intervention requise',
+        11: 'bac de sortie plein',
+    };
+    const erreur = erreursBloquantes[Number(etat.detectedErrorState ?? 0)];
+    if (erreur) {
+        return `L'imprimante par défaut ${etat.name ?? ''} signale : ${erreur}.`.trim();
+    }
+
+    return null;
+}
+
+async function verifierImprimanteWindowsPrete(): Promise<ResultatImpression | null> {
+    if (process.platform !== 'win32') return null;
+
+    const debut = performance.now();
+    const script = `
+$printer = Get-CimInstance Win32_Printer | Where-Object { $_.Default -eq $true } | Select-Object -First 1 Name,WorkOffline,PrinterStatus,DetectedErrorState,ExtendedPrinterStatus
+if ($null -eq $printer) {
+  Write-Output '{"absent":true}'
+} else {
+  $printer | ConvertTo-Json -Compress
+}
+`;
+
+    try {
+        const { stdout } = await execFileAsync('powershell.exe', [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            script,
+        ], { timeout: 3_000 });
+        const brut = String(stdout).trim();
+        const data = JSON.parse(brut) as {
+            absent?: boolean;
+            Name?: string;
+            WorkOffline?: boolean;
+            PrinterStatus?: number | null;
+            DetectedErrorState?: number | null;
+            ExtendedPrinterStatus?: number | null;
+        };
+
+        if (data.absent) {
+            logger.warn('Contrôle imprimante Windows refusé : aucune imprimante par défaut.', { duree_ms: dureeMs(debut) });
+            return { ok: false, erreur: 'Aucune imprimante par défaut configurée. La vente est annulée.' };
+        }
+
+        const etat: EtatImprimanteWindows = {
+            name: data.Name,
+            workOffline: data.WorkOffline,
+            printerStatus: data.PrinterStatus,
+            detectedErrorState: data.DetectedErrorState,
+            extendedPrinterStatus: data.ExtendedPrinterStatus,
+        };
+        const blocage = messageEtatImprimanteWindows(etat);
+        logger.info('Contrôle imprimante Windows avant impression', {
+            ...etat,
+            ok: blocage === null,
+            duree_ms: dureeMs(debut),
+        });
+
+        return blocage ? { ok: false, erreur: blocage } : null;
+    } catch (erreur) {
+        logger.warn('Contrôle imprimante Windows indisponible, impression tentée.', {
+            duree_ms: dureeMs(debut),
+            erreur: erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur),
+        });
+        return null;
+    }
 }
 
 async function supprimerPdfPrepare(id: string): Promise<void> {
@@ -551,6 +643,12 @@ async function imprimerPdfPrepare(id: string): Promise<ResultatImpression> {
             return { ok: true, imprimante: chrono.imprimante };
         }
 
+        const controleWindows = await verifierImprimanteWindowsPrete();
+        if (controleWindows) {
+            chrono.erreur = controleWindows.erreur;
+            return controleWindows;
+        }
+
         const debutSumatra = performance.now();
         await imprimerFichierPdf(prepare.fichier, {
             paperSize: `80mm x ${prepare.hauteurPapierMm}mm`,
@@ -613,6 +711,9 @@ async function imprimerDirect(sender: WebContents, hauteurMm?: number): Promise<
     // sans lister toutes les imprimantes. Si ce chemin échoue, on retombe sur
     // le repli complet historique (liste imprimantes + imprimantes physiques).
     if (process.platform === 'win32') {
+        const controleWindows = await verifierImprimanteWindowsPrete();
+        if (controleWindows) return controleWindows;
+
         try {
             const viaPdfDefaut = await imprimerViaPdf(sender, [], tentatives, hauteurMm);
             if (viaPdfDefaut.ok) return viaPdfDefaut;
