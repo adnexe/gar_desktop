@@ -4,6 +4,7 @@ const service = new BagageService();
 
 export const BagageController = {
     rechercherTicket: (code: string) => service.rechercherTicket(code),
+    preparerNumero: (agenceId: number) => service.preparerNumero(agenceId),
     enregistrer: (demande: DemandeBagage) => {
         try {
             return { ok: true as const, bagage: service.enregistrer(demande) };

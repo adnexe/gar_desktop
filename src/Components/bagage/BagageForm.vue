@@ -87,6 +87,17 @@ const recu = ref<{
 const modeImpression = ref<'recu' | 'talon'>('recu');
 const confirmationOuverte = ref(false);
 let intervalleVoyages: ReturnType<typeof setInterval> | null = null;
+type CachePdfBagage = {
+    empreinte: string;
+    numero: string;
+    createdAt: string;
+    pdfId: string;
+    creeLe: number;
+};
+const cachePdfBagage = ref<CachePdfBagage | null>(null);
+const preparationPdfBagage = ref<Promise<void> | null>(null);
+let sequencePreparationPdfBagage = 0;
+const DUREE_VALIDITE_PDF_BAGAGE_MS = 45_000;
 
 const destinationNom = computed(() => villes.value.find((v) => v.id === villeArriveeId.value)?.nom ?? null);
 const voyageSelectionne = computed(() => voyagesAgence.value.find((v) => v.id === voyageId.value) ?? null);
@@ -122,6 +133,7 @@ onUnmounted(() => {
     if (intervalleVoyages) {
         clearInterval(intervalleVoyages);
     }
+    void nettoyerCachePdfBagage();
 });
 
 async function rechercher() {
@@ -151,16 +163,6 @@ function libelleVoyage(v: VoyageOption) {
     return `${v.date_depart} ${v.heure_depart} · ${v.itineraire_nom ?? ''}`;
 }
 
-function dateHeureRecu() {
-    return new Date().toLocaleString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
-
 function voyageRecu() {
     if (ticket.value) {
         return `${ticket.value.date_depart} à ${ticket.value.heure_depart}`;
@@ -171,6 +173,7 @@ function voyageRecu() {
 }
 
 function resetSaisie() {
+    void nettoyerCachePdfBagage();
     code.value = '';
     ticket.value = null;
     rechercheEffectuee.value = false;
@@ -207,6 +210,175 @@ async function lancerImpression(): Promise<ResultatImpression> {
     return await window.api.impression.imprimerRecu(hauteurZoneImpressionMm());
 }
 
+function logDiagnostic(niveau: 'info' | 'warn', message: string, contexte?: Record<string, unknown>) {
+    void window.api.diagnostic.log(niveau, message, contexte).catch(() => undefined);
+}
+
+function empreinteBagageCourante() {
+    return JSON.stringify({
+        agenceId: config.agence?.id ?? null,
+        code: code.value.trim(),
+        ticketUuid: ticket.value?.uuid ?? null,
+        ticketNumero: ticket.value?.numero_ticket ?? null,
+        villeArriveeId: villeArriveeId.value,
+        voyageId: voyageId.value,
+        voyageUuid: ticket.value?.voyage_uuid ?? voyageSelectionne.value?.uuid ?? null,
+        userId: session.userId,
+        agentId: session.agentId,
+        description: description.value.trim(),
+        valeur: valeur.value,
+        montant: montant.value,
+    });
+}
+
+function formatDateHeureRecu(iso: string) {
+    return new Date(iso).toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+async function supprimerPdfPrepare(id: string | null | undefined) {
+    if (!id) return;
+
+    try {
+        await window.api.impression.supprimerPdfPrepare(id);
+    } catch {
+        // Le PDF a peut-être déjà été consommé par l'impression.
+    }
+}
+
+async function nettoyerCachePdfBagage() {
+    sequencePreparationPdfBagage++;
+    const cache = cachePdfBagage.value;
+    cachePdfBagage.value = null;
+    if (cache) {
+        logDiagnostic('info', 'Préparation bagage invalidée', {
+            numero: cache.numero,
+            age_ms: Date.now() - cache.creeLe,
+        });
+        await supprimerPdfPrepare(cache.pdfId);
+    }
+}
+
+function creerRecuBagage(numero: string, createdAt: string) {
+    if (!config.agence || montant.value === null) return null;
+
+    const reference = ticket.value ? `Ticket ${ticket.value.numero_ticket}` : 'Sans ticket';
+    const destination = villes.value.find((v) => v.id === villeArriveeId.value)?.nom ?? null;
+
+    return {
+        numero_bagage: numero,
+        numero_ticket: ticket.value?.numero_ticket ?? null,
+        numero_place: ticket.value?.numero_place ?? null,
+        reference,
+        destination,
+        voyage: voyageRecu(),
+        client: clientNomComplet.value || null,
+        valeur: valeur.value,
+        montant: montant.value,
+        description: description.value || null,
+        agence: config.agence.nom,
+        agent: session.nom || null,
+        created_at: formatDateHeureRecu(createdAt),
+        compagnie: config.compagnie,
+    };
+}
+
+function cachePdfBagagePret() {
+    const cache = cachePdfBagage.value;
+    if (!cache) return null;
+    if (Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_BAGAGE_MS) {
+        logDiagnostic('info', 'Cache bagage expiré', { numero: cache.numero, age_ms: Date.now() - cache.creeLe });
+        return null;
+    }
+    if (cache.empreinte !== empreinteBagageCourante()) {
+        logDiagnostic('info', 'Cache bagage obsolète : données modifiées', { numero: cache.numero });
+        return null;
+    }
+
+    return cache;
+}
+
+async function preparerPdfBagage() {
+    if (!config.agence || montant.value === null) return;
+
+    const sequence = ++sequencePreparationPdfBagage;
+    const empreinte = empreinteBagageCourante();
+    const numero = await window.api.bagage.preparerNumero(config.agence.id);
+    if (!numero) {
+        logDiagnostic('info', 'Préparation bagage ignorée : aucun numéro préparé disponible');
+        return;
+    }
+
+    const createdAt = new Date().toISOString();
+    const recuPrepare = creerRecuBagage(numero, createdAt);
+    if (!recuPrepare || sequence !== sequencePreparationPdfBagage || empreinte !== empreinteBagageCourante()) return;
+
+    let pdfId: string | null = null;
+
+    try {
+        logDiagnostic('info', 'Préparation bagage démarrée', { numero });
+        recu.value = recuPrepare;
+        modeImpression.value = 'recu';
+        await nextTick();
+        const resultat = await window.api.impression.preparerPdf(hauteurZoneImpressionMm());
+        if (!resultat.ok) throw new Error(resultat.erreur);
+        pdfId = resultat.id;
+        if (sequence !== sequencePreparationPdfBagage || empreinte !== empreinteBagageCourante()) {
+            logDiagnostic('info', 'Préparation bagage abandonnée : PDF obsolète', { numero });
+            return;
+        }
+
+        cachePdfBagage.value = { empreinte, numero, createdAt, pdfId, creeLe: Date.now() };
+        logDiagnostic('info', 'Préparation bagage prête', { numero, pdf: pdfId });
+        pdfId = null;
+    } catch (e) {
+        logDiagnostic('warn', 'Préparation PDF bagage ignorée', {
+            numero,
+            erreur: messageErreurInconnue(e, 'Erreur inconnue'),
+        });
+    } finally {
+        if (pdfId) await supprimerPdfPrepare(pdfId);
+    }
+}
+
+function ouvrirConfirmation() {
+    confirmationOuverte.value = true;
+    void nettoyerCachePdfBagage().then(() => {
+        preparationPdfBagage.value = preparerPdfBagage()
+            .catch((e) => logDiagnostic('warn', 'Préparation PDF bagage interrompue', {
+                erreur: messageErreurInconnue(e, 'Erreur inconnue'),
+            }))
+            .finally(() => {
+                preparationPdfBagage.value = null;
+            });
+    });
+}
+
+async function fermerConfirmation() {
+    confirmationOuverte.value = false;
+    await nettoyerCachePdfBagage();
+}
+
+async function imprimerRecuDepuisCacheOuClassique(idPrepare?: string | null): Promise<ResultatImpression> {
+    if (!idPrepare) {
+        return await imprimerRecu();
+    }
+
+    try {
+        return await window.api.impression.imprimerPdfPrepare(idPrepare);
+    } catch (e) {
+        return {
+            ok: false,
+            erreur: messageErreurInconnue(e, "L'impression préparée n'a pas pu être lancée."),
+        };
+    }
+}
+
 async function imprimerRecu(): Promise<ResultatImpression> {
     modeImpression.value = 'recu';
     return await lancerImpression();
@@ -231,6 +403,14 @@ async function imprimerTalon() {
 async function enregistrer() {
     if (!config.agence || !session.userId || montant.value === null) return;
 
+    if (preparationPdfBagage.value) {
+        await preparationPdfBagage.value;
+    }
+    const cachePrepare = cachePdfBagagePret();
+    logDiagnostic(cachePrepare ? 'info' : 'warn', cachePrepare ? 'Cache bagage prêt avant enregistrement' : 'Cache bagage absent avant enregistrement, impression classique prévue', {
+        numero: cachePrepare?.numero ?? null,
+    });
+
     enCours.value = true;
     erreur.value = '';
     const agenceActuelle = config.agence;
@@ -251,6 +431,8 @@ async function enregistrer() {
             description: description.value || null,
             valeur: valeur.value,
             montant: montantActuel,
+            numeroBagage: cachePrepare?.numero ?? null,
+            createdAt: cachePrepare?.createdAt ?? null,
         })) as { ok: boolean; bagage?: { uuid: string; numero_bagage: string }; erreur?: string };
 
         if (!reponse.ok || !reponse.bagage) {
@@ -261,29 +443,31 @@ async function enregistrer() {
 
         confirmationOuverte.value = false;
 
-        const reference = ticket.value ? `Ticket ${ticket.value.numero_ticket}` : 'Sans ticket';
         const destination = villes.value.find((v) => v.id === villeArriveeId.value)?.nom ?? null;
-        const dernierRecu = {
-            numero_bagage: reponse.bagage.numero_bagage,
-            numero_ticket: ticket.value?.numero_ticket ?? null,
-            numero_place: ticket.value?.numero_place ?? null,
-            reference,
-            destination,
-            voyage: voyageRecu(),
-            client: clientNomComplet.value || null,
-            valeur: valeur.value,
-            montant: montantActuel,
-            description: description.value || null,
-            agence: agenceActuelle.nom,
-            agent: session.nom || null,
-            created_at: dateHeureRecu(),
-            compagnie: config.compagnie,
-        };
+        const dernierRecu = creerRecuBagage(reponse.bagage.numero_bagage, cachePrepare?.createdAt ?? new Date().toISOString());
+        if (!dernierRecu) {
+            erreur.value = "Le reçu bagage n'a pas pu être préparé.";
+            return;
+        }
         recu.value = dernierRecu;
+        const cacheUtilisable = cachePrepare && reponse.bagage.numero_bagage === cachePrepare.numero ? cachePrepare : null;
+        if (cachePrepare && !cacheUtilisable) {
+            logDiagnostic('warn', 'Cache bagage refusé : numéro final différent', {
+                numero_prepare: cachePrepare.numero,
+                numero_final: reponse.bagage.numero_bagage,
+            });
+            void nettoyerCachePdfBagage();
+        } else if (cacheUtilisable) {
+            logDiagnostic('info', 'Cache bagage utilisé pour impression', {
+                numero: cacheUtilisable.numero,
+                pdf: cacheUtilisable.pdfId,
+            });
+            cachePdfBagage.value = null;
+        }
 
         let impression: ResultatImpression;
         try {
-            impression = await imprimerRecu();
+            impression = await imprimerRecuDepuisCacheOuClassique(cacheUtilisable?.pdfId);
         } catch (e) {
             impression = {
                 ok: false,
@@ -328,6 +512,10 @@ async function enregistrer() {
         erreur.value = messageErreurInconnue(e, "Une erreur est survenue lors de l'enregistrement.");
         confirmationOuverte.value = false;
     } finally {
+        const cache = cachePdfBagage.value;
+        if (cache && Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_BAGAGE_MS) {
+            void nettoyerCachePdfBagage();
+        }
         enCours.value = false;
     }
 }
@@ -419,8 +607,8 @@ async function enregistrer() {
         </div>
 
         <div class="flex justify-end gap-2 border-t pt-4">
-            <Button variant="outline" @click="emit('fermer')">Fermer</Button>
-            <Button :disabled="montant === null || enCours" @click="confirmationOuverte = true">
+            <Button variant="outline" @click="() => { void nettoyerCachePdfBagage(); emit('fermer'); }">Fermer</Button>
+            <Button :disabled="montant === null || enCours" @click="ouvrirConfirmation">
                 {{ enCours ? 'Enregistrement…' : 'Enregistrer et imprimer' }}
             </Button>
         </div>
@@ -458,7 +646,7 @@ async function enregistrer() {
             </div>
 
             <DialogFooter class="gap-2">
-                <Button variant="outline" @click="confirmationOuverte = false">
+                <Button variant="outline" @click="fermerConfirmation">
                     <X />
                     Fermer
                 </Button>

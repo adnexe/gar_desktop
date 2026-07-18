@@ -13,7 +13,6 @@ import {
     DialogTitle,
 } from '@/Components/ui/dialog';
 import { useConfigStore } from '@/Stores/config';
-import { useSessionStore } from '@/Stores/session';
 
 interface VoyageListe {
     id: number;
@@ -39,10 +38,9 @@ type ReseauLocal = {
 };
 
 const config = useConfigStore();
-const session = useSessionStore();
 const reseau = ref<ReseauLocal | null>(null);
 const posteClient = computed(() => reseau.value?.mode === 'client');
-const peutCreerVoyage = computed(() => session.peutModule('ticket') && !posteClient.value);
+const peutCreerVoyage = computed(() => !posteClient.value);
 
 const aujourdhui = () => new Date().toISOString().slice(0, 10);
 const dateFiltre = ref(aujourdhui());

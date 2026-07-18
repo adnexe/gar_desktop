@@ -14,11 +14,17 @@ export interface DemandeCourrier {
     expediteur: { nom: string; prenoms?: string | null; telephone: string };
     destinataire: { nom: string; prenoms?: string | null; telephone: string };
     colis: LigneColis[];
+    numeroCourrier?: string | null;
+    createdAt?: string | null;
 }
 
 export class CourrierService {
     private readonly clients = new ClientRepository();
     private readonly courriers = new CourrierRepository();
+
+    preparerNumero(agenceId: number): string | null {
+        return this.courriers.prochainNumeroPrepare(agenceId);
+    }
 
     enregistrer(demande: DemandeCourrier) {
         const expediteur = this.clients.trouverOuCreer(demande.expediteur, 'courrier');
@@ -40,6 +46,8 @@ export class CourrierService {
             agentId: demande.agentId,
             prixExpedition: demande.prixExpedition,
             colis: demande.colis,
+            numeroCourrier: demande.numeroCourrier,
+            createdAt: demande.createdAt,
         });
     }
 

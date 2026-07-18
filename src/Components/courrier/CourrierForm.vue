@@ -152,6 +152,19 @@ const peutEnvoyer = computed(() =>
     prixExpedition.value !== null &&
     !enregistrement.value,
 );
+type CachePdfCourrier = {
+    empreinte: string;
+    numero: string;
+    createdAt: string;
+    recuId: string;
+    etiquetteId: string;
+    creeLe: number;
+};
+const cachePdfCourrier = ref<CachePdfCourrier | null>(null);
+const preparationPdfCourrier = ref<Promise<void> | null>(null);
+let sequencePreparationPdfCourrier = 0;
+const DUREE_VALIDITE_PDF_COURRIER_MS = 45_000;
+const PAUSE_AVANT_ETIQUETTE_MS = 100;
 
 async function chargerVoyagesAgence() {
     if (!config.agence) {
@@ -179,6 +192,7 @@ onUnmounted(() => {
     if (intervalleVoyages) {
         clearInterval(intervalleVoyages);
     }
+    void nettoyerCachePdfCourrier();
 });
 
 // Une ville peut contenir plusieurs agences (ex : Abidjan → Yopougon, Adjamé...).
@@ -220,11 +234,22 @@ function dateHeureRecu() {
     });
 }
 
+function formatDateHeureRecu(iso: string) {
+    return new Date(iso).toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
 function nomComplet(personne: { nom: string; prenoms: string }) {
     return [personne.prenoms, personne.nom].filter(Boolean).join(' ').trim();
 }
 
 function resetTout() {
+    void nettoyerCachePdfCourrier();
     villeArriveeId.value = null;
     agenceArriveeId.value = null;
     agencesDestination.value = [];
@@ -275,11 +300,205 @@ async function imprimer(partie: 'recu' | 'etiquette'): Promise<ResultatImpressio
     }
 }
 
+function logDiagnostic(niveau: 'info' | 'warn', message: string, contexte?: Record<string, unknown>) {
+    void window.api.diagnostic.log(niveau, message, contexte).catch(() => undefined);
+}
+
+function empreinteCourrierCourante() {
+    return JSON.stringify({
+        agenceId: config.agence?.id ?? null,
+        villeArriveeId: villeArriveeId.value,
+        agenceArriveeId: agenceArriveeId.value,
+        voyageId: voyageId.value,
+        voyageUuid: voyageSelectionne.value?.uuid ?? null,
+        userId: session.userId,
+        agentId: session.agentId,
+        prixExpedition: prixExpedition.value ?? 0,
+        expediteur: { ...expediteur },
+        destinataire: { ...destinataire },
+        colis: colisListe.value.map((c) => ({ ...c })),
+    });
+}
+
+async function supprimerPdfPrepare(id: string | null | undefined) {
+    if (!id) return;
+
+    try {
+        await window.api.impression.supprimerPdfPrepare(id);
+    } catch {
+        // Le PDF a peut-être déjà été consommé par l'impression.
+    }
+}
+
+async function nettoyerCachePdfCourrier() {
+    sequencePreparationPdfCourrier++;
+    const cache = cachePdfCourrier.value;
+    cachePdfCourrier.value = null;
+    if (cache) {
+        logDiagnostic('info', 'Préparation courrier invalidée', {
+            numero: cache.numero,
+            age_ms: Date.now() - cache.creeLe,
+        });
+        await Promise.all([
+            supprimerPdfPrepare(cache.recuId),
+            supprimerPdfPrepare(cache.etiquetteId),
+        ]);
+    }
+}
+
+function creerRecuCourrier(numero: string, createdAt: string, montantColisActuel = montantColis.value, montantTotalActuel = montantTotal.value) {
+    if (!config.agence) return null;
+
+    return {
+        numero_courrier: numero,
+        destination: villeArriveeNom.value,
+        agence_arrivee: agenceArriveeNom.value || null,
+        voyage: voyageSelectionne.value ? libelleVoyage(voyageSelectionne.value) : null,
+        expediteur: `${nomComplet(expediteur)} (${expediteur.telephone})`.trim(),
+        expediteur_nom: nomComplet(expediteur),
+        expediteur_telephone: expediteur.telephone,
+        destinataire: `${nomComplet(destinataire)} (${destinataire.telephone})`.trim(),
+        destinataire_nom: nomComplet(destinataire),
+        destinataire_telephone: destinataire.telephone,
+        colis: colisListe.value.map((c) => ({
+            nom: c.nom,
+            type: typeLabel[c.type] ?? c.type,
+            quantite: c.quantite,
+            montant: c.quantite * c.prix,
+        })),
+        prix_expedition: prixExpedition.value ?? 0,
+        montant_colis: montantColisActuel,
+        montant_total: montantTotalActuel,
+        agence_depart: config.agence.nom,
+        agent: session.nom || null,
+        created_at: formatDateHeureRecu(createdAt),
+        compagnie: config.compagnie,
+    };
+}
+
+async function preparerPdfCourrierPartie(recuPrepare: NonNullable<typeof recu.value>, partie: 'recu' | 'etiquette') {
+    recu.value = recuPrepare;
+    partieImpression.value = partie;
+
+    try {
+        await nextTick();
+        const resultat = await window.api.impression.preparerPdf(hauteurZoneImpressionMm());
+        if (!resultat.ok) throw new Error(resultat.erreur);
+        return resultat.id;
+    } finally {
+        partieImpression.value = 'tout';
+    }
+}
+
+function cachePdfCourrierPret() {
+    const cache = cachePdfCourrier.value;
+    if (!cache) return null;
+    if (Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_COURRIER_MS) {
+        logDiagnostic('info', 'Cache courrier expiré', { numero: cache.numero, age_ms: Date.now() - cache.creeLe });
+        return null;
+    }
+    if (cache.empreinte !== empreinteCourrierCourante()) {
+        logDiagnostic('info', 'Cache courrier obsolète : données modifiées', { numero: cache.numero });
+        return null;
+    }
+
+    return cache;
+}
+
+async function preparerPdfCourrier() {
+    if (!config.agence || !peutEnvoyer.value) return;
+
+    const sequence = ++sequencePreparationPdfCourrier;
+    const empreinte = empreinteCourrierCourante();
+    const numero = await window.api.courrier.preparerNumero(config.agence.id);
+    if (!numero) {
+        logDiagnostic('info', 'Préparation courrier ignorée : aucun numéro préparé disponible');
+        return;
+    }
+
+    const createdAt = new Date().toISOString();
+    const recuPrepare = creerRecuCourrier(numero, createdAt);
+    if (!recuPrepare || sequence !== sequencePreparationPdfCourrier || empreinte !== empreinteCourrierCourante()) return;
+
+    let recuId: string | null = null;
+    let etiquetteId: string | null = null;
+
+    try {
+        logDiagnostic('info', 'Préparation courrier démarrée', { numero });
+        recuId = await preparerPdfCourrierPartie(recuPrepare, 'recu');
+        if (sequence !== sequencePreparationPdfCourrier || empreinte !== empreinteCourrierCourante()) {
+            logDiagnostic('info', 'Préparation courrier abandonnée : reçu PDF obsolète', { numero });
+            return;
+        }
+
+        etiquetteId = await preparerPdfCourrierPartie(recuPrepare, 'etiquette');
+        if (sequence !== sequencePreparationPdfCourrier || empreinte !== empreinteCourrierCourante()) {
+            logDiagnostic('info', 'Préparation courrier abandonnée : étiquette PDF obsolète', { numero });
+            return;
+        }
+
+        cachePdfCourrier.value = { empreinte, numero, createdAt, recuId, etiquetteId, creeLe: Date.now() };
+        logDiagnostic('info', 'Préparation courrier prête', { numero, recu_pdf: recuId, etiquette_pdf: etiquetteId });
+        recuId = null;
+        etiquetteId = null;
+    } catch (e) {
+        logDiagnostic('warn', 'Préparation PDF courrier ignorée', {
+            numero,
+            erreur: messageErreurInconnue(e, 'Erreur inconnue'),
+        });
+    } finally {
+        partieImpression.value = 'tout';
+        if (recuId) await supprimerPdfPrepare(recuId);
+        if (etiquetteId) await supprimerPdfPrepare(etiquetteId);
+    }
+}
+
+function ouvrirConfirmation() {
+    confirmationOuverte.value = true;
+    void nettoyerCachePdfCourrier().then(() => {
+        preparationPdfCourrier.value = preparerPdfCourrier()
+            .catch((e) => logDiagnostic('warn', 'Préparation PDF courrier interrompue', {
+                erreur: messageErreurInconnue(e, 'Erreur inconnue'),
+            }))
+            .finally(() => {
+                preparationPdfCourrier.value = null;
+            });
+    });
+}
+
+async function fermerConfirmation() {
+    confirmationOuverte.value = false;
+    await nettoyerCachePdfCourrier();
+}
+
+async function imprimerDepuisCacheOuClassique(partie: 'recu' | 'etiquette', idPrepare?: string | null): Promise<ResultatImpression> {
+    if (!idPrepare) {
+        return await imprimer(partie);
+    }
+
+    try {
+        return await window.api.impression.imprimerPdfPrepare(idPrepare);
+    } catch (e) {
+        return {
+            ok: false,
+            erreur: messageErreurInconnue(e, "L'impression préparée n'a pas pu être lancée."),
+        };
+    }
+}
+
 async function envoyer() {
     if (!config.agence || !villeArriveeId.value || !agenceArriveeId.value || !session.userId) {
         erreur.value = "Choisissez la ville et l'agence de destination.";
         return;
     }
+
+    if (preparationPdfCourrier.value) {
+        await preparationPdfCourrier.value;
+    }
+    const cachePrepare = cachePdfCourrierPret();
+    logDiagnostic(cachePrepare ? 'info' : 'warn', cachePrepare ? 'Cache courrier prêt avant enregistrement' : 'Cache courrier absent avant enregistrement, impression classique prévue', {
+        numero: cachePrepare?.numero ?? null,
+    });
 
     enregistrement.value = true;
     erreur.value = '';
@@ -304,6 +523,8 @@ async function envoyer() {
             // Objets simples (non réactifs) : un proxy Vue casse la sérialisation
             // structured-clone d'Electron (« An object could not be cloned »).
             colis: colisListe.value.map((c) => ({ nom: c.nom, type: c.type, quantite: c.quantite, prix: c.prix })),
+            numeroCourrier: cachePrepare?.numero ?? null,
+            createdAt: cachePrepare?.createdAt ?? null,
         })) as {
             ok: boolean;
             courrier?: { uuid: string; numeroCourrier: string; montantColis: number; montantTotal: number };
@@ -319,39 +540,36 @@ async function envoyer() {
         confirmationOuverte.value = false;
 
         const destination = villes.value.find((v) => v.id === villeArriveeIdActuelle)?.nom ?? '';
-        const agenceNom = agencesDestination.value.find((a) => a.id === agenceArriveeIdActuelle)?.nom ?? null;
-        const voyageLabel = voyageSelectionne.value ? libelleVoyage(voyageSelectionne.value) : null;
-
-        const dernierRecu = {
-            numero_courrier: reponse.courrier.numeroCourrier,
-            destination,
-            agence_arrivee: agenceNom,
-            voyage: voyageLabel,
-            expediteur: `${nomComplet(expediteur)} (${expediteur.telephone})`.trim(),
-            expediteur_nom: nomComplet(expediteur),
-            expediteur_telephone: expediteur.telephone,
-            destinataire: `${nomComplet(destinataire)} (${destinataire.telephone})`.trim(),
-            destinataire_nom: nomComplet(destinataire),
-            destinataire_telephone: destinataire.telephone,
-            colis: colisListe.value.map((c) => ({
-                nom: c.nom,
-                type: typeLabel[c.type] ?? c.type,
-                quantite: c.quantite,
-                montant: c.quantite * c.prix,
-            })),
-            prix_expedition: prixExpeditionActuel,
-            montant_colis: reponse.courrier.montantColis,
-            montant_total: reponse.courrier.montantTotal,
-            agence_depart: agenceActuelle.nom,
-            agent: session.nom || null,
-            created_at: dateHeureRecu(),
-            compagnie: config.compagnie,
-        };
+        const dernierRecu = creerRecuCourrier(
+            reponse.courrier.numeroCourrier,
+            cachePrepare?.createdAt ?? new Date().toISOString(),
+            reponse.courrier.montantColis,
+            reponse.courrier.montantTotal,
+        );
+        if (!dernierRecu) {
+            erreur.value = "Le reçu courrier n'a pas pu être préparé.";
+            return;
+        }
         recu.value = dernierRecu;
+        const cacheUtilisable = cachePrepare && reponse.courrier.numeroCourrier === cachePrepare.numero ? cachePrepare : null;
+        if (cachePrepare && !cacheUtilisable) {
+            logDiagnostic('warn', 'Cache courrier refusé : numéro final différent', {
+                numero_prepare: cachePrepare.numero,
+                numero_final: reponse.courrier.numeroCourrier,
+            });
+            void nettoyerCachePdfCourrier();
+        } else if (cacheUtilisable) {
+            logDiagnostic('info', 'Cache courrier utilisé pour impression', {
+                numero: cacheUtilisable.numero,
+                recu_pdf: cacheUtilisable.recuId,
+                etiquette_pdf: cacheUtilisable.etiquetteId,
+            });
+            cachePdfCourrier.value = null;
+        }
 
         let impression: ResultatImpression;
         try {
-            impression = await imprimer('recu');
+            impression = await imprimerDepuisCacheOuClassique('recu', cacheUtilisable?.recuId);
         } catch (e) {
             impression = {
                 ok: false,
@@ -370,13 +588,21 @@ async function envoyer() {
                 erreur.value = `Impression non confirmée pour le courrier ${reponse.courrier.numeroCourrier}, mais l'annulation automatique a échoué : ${messageErreurInconnue(e, motif)}. Vérifiez avant de continuer.`;
             }
 
+            if (cacheUtilisable) {
+                await supprimerPdfPrepare(cacheUtilisable.etiquetteId);
+            }
             return;
         }
 
         // Le reçu client est sorti : l'étiquette colis part en second job.
         // Son échec n'annule pas l'envoi, on avertit simplement.
         try {
-            const etiquette = await imprimer('etiquette');
+            logDiagnostic('info', 'Pause avant impression étiquette courrier', {
+                numero: reponse.courrier.numeroCourrier,
+                pause_ms: PAUSE_AVANT_ETIQUETTE_MS,
+            });
+            await new Promise((resolve) => setTimeout(resolve, PAUSE_AVANT_ETIQUETTE_MS));
+            const etiquette = await imprimerDepuisCacheOuClassique('etiquette', cacheUtilisable?.etiquetteId);
             if (!etiquette.ok) {
                 erreur.value = `Le reçu est imprimé, mais l'étiquette colis n'est pas sortie : ${etiquette.erreur ?? 'erreur inconnue'}.`;
             }
@@ -405,6 +631,10 @@ async function envoyer() {
         erreur.value = messageErreurInconnue(e, "Une erreur est survenue lors de l'enregistrement.");
         confirmationOuverte.value = false;
     } finally {
+        const cache = cachePdfCourrier.value;
+        if (cache && Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_COURRIER_MS) {
+            void nettoyerCachePdfCourrier();
+        }
         enregistrement.value = false;
     }
 }
@@ -602,8 +832,8 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 
         <!-- Barre d'actions fixe : hors de la zone qui défile. -->
         <div class="shrink-0 flex items-center justify-end gap-2 border-t bg-background px-6 py-3">
-            <Button variant="outline" @click="emit('fermer')">Fermer</Button>
-            <Button :disabled="!peutEnvoyer" @click="confirmationOuverte = true">
+            <Button variant="outline" @click="() => { void nettoyerCachePdfCourrier(); emit('fermer'); }">Fermer</Button>
+            <Button :disabled="!peutEnvoyer" @click="ouvrirConfirmation">
                 <Send />
                 {{ enregistrement ? 'Enregistrement…' : 'Enregistrer et imprimer' }}
             </Button>
@@ -640,7 +870,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 </div>
 
                 <div class="mt-4 flex items-center justify-end gap-2">
-                    <Button variant="outline" @click="confirmationOuverte = false">
+                    <Button variant="outline" @click="fermerConfirmation">
                         <X />
                         Fermer
                     </Button>

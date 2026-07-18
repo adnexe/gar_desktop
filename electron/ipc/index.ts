@@ -922,12 +922,14 @@ export function enregistrerIpc(): void {
     });
 
     gerer('bagage:rechercherTicket', BagageController.rechercherTicket);
+    gerer('bagage:preparerNumero', BagageController.preparerNumero);
     gerer('bagage:enregistrer', BagageController.enregistrer);
     gerer('bagage:confirmerImpression', BagageController.confirmerImpression);
     gerer('bagage:annulerImpression', BagageController.annulerImpression);
     gerer('bagage:duJour', BagageController.duJour);
     gerer('bagage:finDeCaisse', BagageController.finDeCaisse);
 
+    gerer('courrier:preparerNumero', CourrierController.preparerNumero);
     gerer('courrier:enregistrer', CourrierController.enregistrer);
     gerer('courrier:confirmerImpression', CourrierController.confirmerImpression);
     gerer('courrier:annulerImpression', CourrierController.annulerImpression);

@@ -54,6 +54,7 @@ const api = {
     },
     bagage: {
         rechercherTicket: (code: string) => ipcRenderer.invoke('bagage:rechercherTicket', code),
+        preparerNumero: (agenceId: number) => ipcRenderer.invoke('bagage:preparerNumero', agenceId),
         enregistrer: (demande: unknown) => ipcRenderer.invoke('bagage:enregistrer', demande),
         confirmerImpression: (uuid: string) => ipcRenderer.invoke('bagage:confirmerImpression', uuid),
         annulerImpression: (uuid: string, motif: string) => ipcRenderer.invoke('bagage:annulerImpression', uuid, motif),
@@ -61,6 +62,7 @@ const api = {
         finDeCaisse: (agenceId: number, date?: string) => ipcRenderer.invoke('bagage:finDeCaisse', agenceId, date),
     },
     courrier: {
+        preparerNumero: (agenceId: number) => ipcRenderer.invoke('courrier:preparerNumero', agenceId),
         enregistrer: (demande: unknown) => ipcRenderer.invoke('courrier:enregistrer', demande),
         confirmerImpression: (uuid: string) => ipcRenderer.invoke('courrier:confirmerImpression', uuid),
         annulerImpression: (uuid: string, motif: string) => ipcRenderer.invoke('courrier:annulerImpression', uuid, motif),

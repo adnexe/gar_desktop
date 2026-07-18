@@ -1,6 +1,6 @@
 import { getDb } from '../database/connection';
 import { nouvelUuid } from '../database/ids';
-import { genererNumeroBagage } from '../database/numero';
+import { genererNumeroBagage, prevoirNumeroBagage } from '../database/numero';
 import { queueManager } from '../sync/QueueManager';
 import { ConfigRepository } from './ConfigRepository';
 
@@ -17,6 +17,8 @@ export interface NouveauBagage {
     description: string | null;
     valeur: number | null;
     montant: number;
+    numeroBagage?: string | null;
+    createdAt?: string | null;
 }
 
 export interface BagageDuJour {
@@ -39,6 +41,10 @@ export class BagageRepository {
             .get(agenceId) as { code_ticket: string | null } | undefined;
 
         return ligne?.code_ticket ?? null;
+    }
+
+    prochainNumeroPrepare(agenceId: number): string | null {
+        return prevoirNumeroBagage(getDb(), this.config.obtenir('licence_code_poste'), this.codeAgenceTicket(agenceId));
     }
 
     duJour(agenceId: number, date?: string): BagageDuJour[] {
@@ -92,8 +98,13 @@ export class BagageRepository {
     creer(donnees: NouveauBagage): { id: number; uuid: string; numero_bagage: string } {
         const db = getDb();
         const uuid = nouvelUuid();
-        const numeroBagage = genererNumeroBagage(db, this.config.obtenir('licence_code_poste'), this.codeAgenceTicket(donnees.agenceId));
-        const maintenant = new Date().toISOString();
+        const numeroBagage = genererNumeroBagage(
+            db,
+            this.config.obtenir('licence_code_poste'),
+            this.codeAgenceTicket(donnees.agenceId),
+            donnees.numeroBagage,
+        );
+        const maintenant = donnees.createdAt || new Date().toISOString();
 
         const info = db
             .prepare(

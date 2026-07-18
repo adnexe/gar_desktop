@@ -1,6 +1,6 @@
 import { getDb } from '../database/connection';
 import { nouvelUuid } from '../database/ids';
-import { genererNumeroCourrier } from '../database/numero';
+import { genererNumeroCourrier, prevoirNumeroCourrier } from '../database/numero';
 import { queueManager } from '../sync/QueueManager';
 import { ConfigRepository } from './ConfigRepository';
 
@@ -23,6 +23,8 @@ export interface NouveauCourrier {
     agentId: number | null;
     prixExpedition: number;
     colis: LigneColis[];
+    numeroCourrier?: string | null;
+    createdAt?: string | null;
 }
 
 export interface CourrierDuJour {
@@ -43,6 +45,10 @@ export class CourrierRepository {
             .get(agenceId) as { code_ticket: string | null } | undefined;
 
         return ligne?.code_ticket ?? null;
+    }
+
+    prochainNumeroPrepare(agenceId: number): string | null {
+        return prevoirNumeroCourrier(getDb(), this.config.obtenir('licence_code_poste'), this.codeAgenceTicket(agenceId));
     }
 
     duJour(agenceId: number, date?: string): CourrierDuJour[] {
@@ -96,8 +102,13 @@ export class CourrierRepository {
     creer(donnees: NouveauCourrier): { id: number; uuid: string; numeroCourrier: string; montantColis: number; montantTotal: number } {
         const db = getDb();
         const uuid = nouvelUuid();
-        const numeroCourrier = genererNumeroCourrier(db, this.config.obtenir('licence_code_poste'), this.codeAgenceTicket(donnees.agenceDepartId));
-        const maintenant = new Date().toISOString();
+        const numeroCourrier = genererNumeroCourrier(
+            db,
+            this.config.obtenir('licence_code_poste'),
+            this.codeAgenceTicket(donnees.agenceDepartId),
+            donnees.numeroCourrier,
+        );
+        const maintenant = donnees.createdAt || new Date().toISOString();
 
         const montantColis = donnees.colis.reduce((total, ligne) => total + ligne.quantite * ligne.prix, 0);
         // Le client ne paie QUE les frais d'expédition. La valeur des colis

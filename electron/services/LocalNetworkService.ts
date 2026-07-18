@@ -4,6 +4,7 @@ import { networkInterfaces } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { getDb } from '../database/connection';
 import { migrer } from '../database/migrate';
+import { logger } from '../logger';
 import { ConfigRepository } from '../repositories/ConfigRepository';
 import { AgenceRepository } from '../repositories/AgenceRepository';
 import { CompagnieRepository, type CompagnieLocale } from '../repositories/CompagnieRepository';
@@ -164,6 +165,13 @@ export class LocalNetworkService {
             this.config.definir('reseau_client_serveur_url', serveurUrl);
             this.config.definir('reseau_client_secret', secret);
             await this.arreterServeur();
+
+            try {
+                const resultat = await this.actualiserVoyagesDepuisServeur(statut.agenceDetails.id);
+                logger.info(`Poste client initialisé depuis la caisse serveur : ${resultat.nombre} voyage(s), ${resultat.tickets} ticket(s).`);
+            } catch (erreur) {
+                logger.warn('Poste client configuré, mais la récupération initiale voyages/tickets a échoué.', erreur);
+            }
         } else {
             this.config.definir('reseau_mode', mode);
             this.config.supprimer('reseau_serveur_url');
@@ -213,16 +221,19 @@ export class LocalNetworkService {
         const { serveurUrl, secret } = this.configurationClientActive();
 
         const voyages = await this.appelerServeurLocal<VoyageServeur[]>(serveurUrl, secret, 'voyage:exporterPourClient', [agenceId, date ?? null]);
-        const nombre = this.voyages.importerDepuisServeur(voyages);
+        const synchroVoyages = this.voyages.remplacerDepuisCaisseClient(agenceId, voyages, date);
         const tickets = await this.appelerServeurLocal<TicketServeur[]>(serveurUrl, secret, 'vente:exporterTicketsPourClient', [agenceId, date ?? null]);
         const nombreTickets = this.importerTicketsDepuisServeur(tickets);
+        if (synchroVoyages.supprimes > 0) {
+            logger.info(`Poste client : ${synchroVoyages.supprimes} voyage(s) futur(s) orphelin(s) retiré(s) car absent(s) de la caisse serveur.`);
+        }
 
         return {
             ok: true,
-            nombre,
+            nombre: synchroVoyages.importes,
             tickets: nombreTickets,
-            message: nombre > 0 || nombreTickets > 0
-                ? `${nombre} voyage${nombre > 1 ? 's' : ''} et ${nombreTickets} ticket${nombreTickets > 1 ? 's' : ''} mis à jour depuis la caisse serveur.`
+            message: synchroVoyages.importes > 0 || nombreTickets > 0
+                ? `${synchroVoyages.importes} voyage${synchroVoyages.importes > 1 ? 's' : ''} et ${nombreTickets} ticket${nombreTickets > 1 ? 's' : ''} mis à jour depuis la caisse serveur.`
                 : 'Aucun nouveau voyage ou ticket à récupérer depuis la caisse serveur.',
         };
     }

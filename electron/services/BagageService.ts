@@ -15,6 +15,8 @@ export interface DemandeBagage {
     description: string | null;
     valeur: number | null;
     montant: number;
+    numeroBagage?: string | null;
+    createdAt?: string | null;
 }
 
 export class BagageService {
@@ -23,6 +25,10 @@ export class BagageService {
 
     rechercherTicket(code: string) {
         return this.tickets.parNumeroCourt(code);
+    }
+
+    preparerNumero(agenceId: number): string | null {
+        return this.bagages.prochainNumeroPrepare(agenceId);
     }
 
     // Le ticket est facultatif : un bagage peut être enregistré seul (avec
@@ -72,6 +78,8 @@ export class BagageService {
             description: demande.description,
             valeur: demande.valeur,
             montant: demande.montant,
+            numeroBagage: demande.numeroBagage,
+            createdAt: demande.createdAt,
         });
 
         return bagage;

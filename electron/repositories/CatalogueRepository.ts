@@ -1,4 +1,5 @@
 import { getDb } from '../database/connection';
+import { ConfigRepository } from './ConfigRepository';
 import type { BootstrapResponse, UserApi } from '../types/bootstrap';
 
 // Les tables de catalogue reprennent l'id auto-incrémenté du serveur tel
@@ -6,8 +7,11 @@ import type { BootstrapResponse, UserApi } from '../types/bootstrap';
 // lecture seule, il n'y a donc pas de risque de collision avec des id créés
 // localement (contrairement aux tables opérationnelles qui utilisent uuid).
 export class CatalogueRepository {
+    private readonly config = new ConfigRepository();
+
     seed(bootstrap: BootstrapResponse): void {
         const db = getDb();
+        const importerVoyagesAdmin = this.config.obtenir('reseau_mode') !== 'client';
 
         db.transaction(() => {
             // Les REPLACE suppriment puis réinsèrent des lignes référencées
@@ -105,21 +109,23 @@ export class CatalogueRepository {
             );
             for (const v of bootstrap.vehicules) vehiculeStmt.run(v);
 
-            const voyageStmt = db.prepare(
-                `INSERT INTO voyages (uuid, agence_depart_id, itineraire_id, vehicule_id, chauffeur_id, date_depart, heure_depart, numero_depart, statut, created_at, updated_at)
-                 VALUES (@uuid, @agence_depart_id, @itineraire_id, @vehicule_id, @chauffeur_id, @date_depart, @heure_depart, @numero_depart, @statut, @created_at, @updated_at)
-                 ON CONFLICT(uuid) DO UPDATE SET
-                    agence_depart_id = excluded.agence_depart_id,
-                    itineraire_id = excluded.itineraire_id,
-                    vehicule_id = excluded.vehicule_id,
-                    chauffeur_id = excluded.chauffeur_id,
-                    date_depart = excluded.date_depart,
-                    heure_depart = excluded.heure_depart,
-                    numero_depart = excluded.numero_depart,
-                    statut = excluded.statut,
-                    updated_at = excluded.updated_at`,
-            );
-            for (const v of bootstrap.voyages ?? []) voyageStmt.run(v);
+            if (importerVoyagesAdmin) {
+                const voyageStmt = db.prepare(
+                    `INSERT INTO voyages (uuid, agence_depart_id, itineraire_id, vehicule_id, chauffeur_id, date_depart, heure_depart, numero_depart, statut, created_at, updated_at)
+                     VALUES (@uuid, @agence_depart_id, @itineraire_id, @vehicule_id, @chauffeur_id, @date_depart, @heure_depart, @numero_depart, @statut, @created_at, @updated_at)
+                     ON CONFLICT(uuid) DO UPDATE SET
+                        agence_depart_id = excluded.agence_depart_id,
+                        itineraire_id = excluded.itineraire_id,
+                        vehicule_id = excluded.vehicule_id,
+                        chauffeur_id = excluded.chauffeur_id,
+                        date_depart = excluded.date_depart,
+                        heure_depart = excluded.heure_depart,
+                        numero_depart = excluded.numero_depart,
+                        statut = excluded.statut,
+                        updated_at = excluded.updated_at`,
+                );
+                for (const v of bootstrap.voyages ?? []) voyageStmt.run(v);
+            }
 
             const agentStmt = db.prepare(
                 `INSERT INTO agents (id, uuid, agence_id, nom, telephone, role, type_agent, actif, created_at, updated_at)

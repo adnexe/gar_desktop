@@ -6,6 +6,7 @@ import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
 import { useConfigStore } from '@/Stores/config';
+import { useSessionStore } from '@/Stores/session';
 
 type ModeReseau = 'autonome' | 'serveur' | 'client';
 type StatutConnexion = 'connecte' | 'deconnecte' | 'verification';
@@ -27,7 +28,9 @@ type ImprimanteLocale = {
 };
 
 const config = useConfigStore();
+const session = useSessionStore();
 const reseau = ref<ReseauLocal | null>(null);
+const roleMachine = ref<ModeReseau>('client');
 const imprimantes = ref<ImprimanteLocale[]>([]);
 const portServeur = ref(3750);
 const serveurUrl = ref('');
@@ -41,6 +44,7 @@ const erreur = ref('');
 const messageImpression = ref('');
 const erreurImpression = ref('');
 const statutConnexion = ref<StatutConnexion>('deconnecte');
+const estSuperAdmin = computed(() => session.role === 'super_admin');
 
 const libelleMode = computed(() => {
     if (reseau.value?.mode === 'serveur') return 'Caisse serveur';
@@ -196,6 +200,7 @@ async function chargerReseau() {
 
     try {
         reseau.value = await window.api.config.reseauLocal();
+        roleMachine.value = reseau.value.mode;
         portServeur.value = reseau.value.port;
         serveurUrl.value = reseau.value.serveurUrl ?? '';
         secretReseau.value = reseau.value.secret ?? '';
@@ -243,8 +248,14 @@ async function executer(action: () => Promise<void>) {
 }
 
 async function activerServeurLocal() {
+    if (!estSuperAdmin.value || !session.userId) {
+        erreur.value = 'Seul un super admin peut modifier le rôle réseau de cette machine.';
+        return;
+    }
+
     await executer(async () => {
-        reseau.value = await window.api.config.configurerReseauLocal({ mode: 'serveur', port: portServeur.value });
+        reseau.value = await window.api.config.configurerReseauLocal({ mode: 'serveur', port: portServeur.value, acteurUserId: session.userId });
+        roleMachine.value = reseau.value.mode;
         secretReseau.value = reseau.value.secret ?? '';
         statutConnexion.value = 'connecte';
         message.value = 'Cette machine est maintenant la caisse serveur locale.';
@@ -252,12 +263,19 @@ async function activerServeurLocal() {
 }
 
 async function activerClientLocal() {
+    if (!estSuperAdmin.value || !session.userId) {
+        erreur.value = 'Seul un super admin peut modifier le rôle réseau de cette machine.';
+        return;
+    }
+
     await executer(async () => {
         reseau.value = await window.api.config.configurerReseauLocal({
             mode: 'client',
             serveurUrl: serveurUrl.value,
             secret: secretReseau.value,
+            acteurUserId: session.userId,
         });
+        roleMachine.value = reseau.value.mode;
         await verifierConnexionLocale();
         message.value = 'Ce poste utilise maintenant la caisse serveur locale.';
     });
@@ -279,15 +297,30 @@ async function testerClientLocal() {
 }
 
 async function desactiverReseauLocal() {
+    if (!estSuperAdmin.value || !session.userId) {
+        erreur.value = 'Seul un super admin peut modifier le rôle réseau de cette machine.';
+        return;
+    }
+
     await executer(async () => {
         const etaitClient = clientOn.value;
-        reseau.value = await window.api.config.configurerReseauLocal({ mode: 'autonome' });
+        reseau.value = await window.api.config.configurerReseauLocal({ mode: 'autonome', acteurUserId: session.userId });
+        roleMachine.value = reseau.value.mode;
         serveurUrl.value = reseau.value.serveurUrl ?? '';
         secretReseau.value = reseau.value.secret ?? '';
         statutConnexion.value = 'deconnecte';
         message.value = etaitClient
             ? 'Ce poste est déconnecté de la caisse serveur locale.'
             : 'Mode autonome activé.';
+    });
+}
+
+async function actualiserVoyagesTicketsDepuisCaisse() {
+    if (!config.agence || !clientOn.value) return;
+
+    await executer(async () => {
+        const resultat = await window.api.config.actualiserVoyagesServeurLocal(config.agence!.id);
+        message.value = resultat.message;
     });
 }
 
@@ -453,20 +486,92 @@ async function testerImpression() {
                 <p v-if="erreurImpression" class="mt-3 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{{ erreurImpression }}</p>
             </section>
 
-            <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                <section class="space-y-4 rounded-lg border bg-card p-5 shadow-sm">
+            <section class="space-y-5 rounded-lg border bg-card p-5 shadow-sm">
+                <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <p class="text-sm text-muted-foreground">Rôle de cette machine</p>
+                        <h2 class="mt-1 text-base font-semibold">{{ libelleMode }}</h2>
+                    </div>
+                    <span :class="badgeConnexion(statutConnexion, reseauConnecte)">
+                        {{ libelleConnexion }}
+                    </span>
+                </div>
+
+                <div v-if="estSuperAdmin" class="grid gap-3 md:grid-cols-3">
+                    <button
+                        type="button"
+                        :class="[
+                            'rounded-lg border p-4 text-left transition',
+                            roleMachine === 'serveur' ? 'border-primary bg-primary/5 shadow-sm' : 'bg-background hover:bg-muted/30',
+                        ]"
+                        @click="roleMachine = 'serveur'"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <Server class="size-5 text-primary" />
+                            <span :class="badgeEtat(serveurOn)">{{ serveurOn ? 'ON' : 'OFF' }}</span>
+                        </div>
+                        <p class="mt-3 font-semibold">Machine serveur</p>
+                        <p class="mt-1 text-sm text-muted-foreground">Les postes clients demandent ici les tickets et voyages.</p>
+                    </button>
+
+                    <button
+                        type="button"
+                        :class="[
+                            'rounded-lg border p-4 text-left transition',
+                            roleMachine === 'client' ? 'border-primary bg-primary/5 shadow-sm' : 'bg-background hover:bg-muted/30',
+                        ]"
+                        @click="roleMachine = 'client'"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <Wifi class="size-5 text-primary" />
+                            <span :class="badgeConnexion(clientOn ? statutConnexion : 'deconnecte', clientConnecte)">{{ libelleClient }}</span>
+                        </div>
+                        <p class="mt-3 font-semibold">Machine cliente</p>
+                        <p class="mt-1 text-sm text-muted-foreground">Elle lit les tickets/voyages de la caisse serveur.</p>
+                    </button>
+
+                    <button
+                        type="button"
+                        :class="[
+                            'rounded-lg border p-4 text-left transition',
+                            roleMachine === 'autonome' ? 'border-primary bg-primary/5 shadow-sm' : 'bg-background hover:bg-muted/30',
+                        ]"
+                        @click="roleMachine = 'autonome'"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <Monitor class="size-5 text-primary" />
+                            <span :class="badgeEtat(autonomeOn)">{{ autonomeOn ? 'ON' : 'OFF' }}</span>
+                        </div>
+                        <p class="mt-3 font-semibold">Hors réseau local</p>
+                        <p class="mt-1 text-sm text-muted-foreground">Ce poste travaille sans caisse serveur locale.</p>
+                    </button>
+                </div>
+
+                <div v-else class="rounded-lg border bg-muted/20 p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="font-semibold">{{ libelleMode }}</p>
+                            <p class="text-sm text-muted-foreground">Seul un super admin peut changer le rôle réseau de cette machine.</p>
+                        </div>
+                        <span :class="badgeEtat(reseauLocalOn)">
+                            Réseau local {{ reseauLocalOn ? 'ON' : 'OFF' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div v-if="estSuperAdmin && roleMachine === 'serveur'" class="space-y-4 rounded-lg border bg-muted/20 p-4">
                     <div class="flex items-start gap-3">
-                        <div class="rounded-md bg-muted p-2">
+                        <div class="rounded-md bg-background p-2">
                             <Server class="size-5 text-muted-foreground" />
                         </div>
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center justify-between gap-3">
-                                <h2 class="text-base font-semibold">Caisse serveur</h2>
+                                <h3 class="text-base font-semibold">Machine serveur</h3>
                                 <span :class="badgeConnexion(serveurOn ? 'connecte' : 'deconnecte', serveurConnecte)">
                                     {{ serveurConnecte ? 'Connecté' : 'Non connecté' }}
                                 </span>
                             </div>
-                            <p class="text-sm text-muted-foreground">ON : les autres postes peuvent utiliser cette base pour les ventes et voyages.</p>
+                            <p class="text-sm text-muted-foreground">Cette machine ouvre l’accès local aux voyages et aux tickets.</p>
                         </div>
                     </div>
 
@@ -480,7 +585,7 @@ async function testerImpression() {
                         Activer comme serveur
                     </Button>
 
-                    <div v-if="reseau?.mode === 'serveur'" class="space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
+                    <div v-if="reseau?.mode === 'serveur'" class="space-y-2 rounded-md border bg-background p-3 text-sm">
                         <div class="flex items-center justify-between gap-3">
                             <span class="text-muted-foreground">Code réseau</span>
                             <span class="font-mono font-semibold">{{ reseau.secret }}</span>
@@ -492,21 +597,21 @@ async function testerImpression() {
                             </p>
                         </div>
                     </div>
-                </section>
+                </div>
 
-                <section class="space-y-4 rounded-lg border bg-card p-5 shadow-sm">
+                <div v-if="estSuperAdmin && roleMachine === 'client'" class="space-y-4 rounded-lg border bg-muted/20 p-4">
                     <div class="flex items-start gap-3">
-                        <div class="rounded-md bg-muted p-2">
+                        <div class="rounded-md bg-background p-2">
                             <Wifi class="size-5 text-muted-foreground" />
                         </div>
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center justify-between gap-3">
-                                <h2 class="text-base font-semibold">Poste client</h2>
+                                <h3 class="text-base font-semibold">Machine cliente</h3>
                                 <span :class="badgeConnexion(clientOn ? statutConnexion : 'deconnecte', clientConnecte)">
                                     {{ libelleClient }}
                                 </span>
                             </div>
-                            <p class="text-sm text-muted-foreground">ON : ce poste lit les tickets et voyages de la caisse serveur. Ses bagages/courriers restent locaux et se synchronisent vers admin.</p>
+                            <p class="text-sm text-muted-foreground">Ce poste demande les tickets et voyages à la caisse serveur.</p>
                         </div>
                     </div>
 
@@ -519,33 +624,48 @@ async function testerImpression() {
                         <Input id="secret-reseau" v-model="secretReseau" placeholder="Code affiché sur la caisse" class="h-10" />
                     </div>
 
-                    <div class="grid grid-cols-2 gap-2">
+                    <div class="grid gap-2 sm:grid-cols-3">
                         <Button type="button" variant="outline" :disabled="enCours || !serveurUrl || !secretReseau" @click="testerClientLocal">
                             Tester
                         </Button>
                         <Button type="button" :disabled="enCours || !serveurUrl || !secretReseau" @click="activerClientLocal">
                             Utiliser
                         </Button>
-                    </div>
-                </section>
-            </div>
-
-            <section class="flex flex-col gap-3 rounded-lg border bg-card p-5 shadow-sm md:flex-row md:items-center md:justify-between">
-                <div class="flex items-start gap-3">
-                    <div class="rounded-md bg-muted p-2">
-                        <Monitor class="size-5 text-muted-foreground" />
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-3">
-                            <h2 class="text-base font-semibold">Mode autonome</h2>
-                            <span :class="badgeEtat(autonomeOn)">{{ autonomeOn ? 'ON' : 'OFF' }}</span>
-                        </div>
-                        <p class="text-sm text-muted-foreground">Ce poste ne se connecte pas à une caisse serveur locale. Il utilise seulement ses propres données locales.</p>
+                        <Button type="button" variant="outline" :disabled="enCours || !clientOn" @click="actualiserVoyagesTicketsDepuisCaisse">
+                            <RefreshCw :class="['size-4', enCours ? 'icone-tourne text-primary' : '']" />
+                            Actualiser
+                        </Button>
                     </div>
                 </div>
-                <Button type="button" variant="outline" :disabled="enCours" @click="desactiverReseauLocal">
-                    {{ clientOn ? 'Déconnecter de la caisse serveur' : 'Activer le mode autonome' }}
-                </Button>
+
+                <div v-if="estSuperAdmin && roleMachine === 'autonome'" class="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex items-start gap-3">
+                        <div class="rounded-md bg-background p-2">
+                            <Monitor class="size-5 text-muted-foreground" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-3">
+                                <h3 class="text-base font-semibold">Hors réseau local</h3>
+                                <span :class="badgeEtat(autonomeOn)">{{ autonomeOn ? 'ON' : 'OFF' }}</span>
+                            </div>
+                            <p class="text-sm text-muted-foreground">Ce poste garde sa base locale et continue la synchronisation admin quand internet est disponible.</p>
+                        </div>
+                    </div>
+                    <Button type="button" variant="outline" :disabled="enCours" @click="desactiverReseauLocal">
+                        Activer hors réseau local
+                    </Button>
+                </div>
+
+                <div v-if="!estSuperAdmin && clientOn" class="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 md:flex-row md:items-center md:justify-between">
+                    <div class="min-w-0">
+                        <p class="font-semibold">Données caisse serveur</p>
+                        <p class="truncate text-sm text-muted-foreground">{{ serveurUrl || 'Adresse serveur non définie' }}</p>
+                    </div>
+                    <Button type="button" variant="outline" :disabled="enCours" @click="actualiserVoyagesTicketsDepuisCaisse">
+                        <RefreshCw :class="['size-4', enCours ? 'icone-tourne text-primary' : '']" />
+                        Actualiser voyages/tickets
+                    </Button>
+                </div>
             </section>
 
             <p v-if="message" class="rounded-md bg-muted/50 px-4 py-3 text-sm text-muted-foreground">{{ message }}</p>

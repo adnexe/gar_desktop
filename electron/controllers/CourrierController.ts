@@ -3,6 +3,7 @@ import { CourrierService, type DemandeCourrier } from '../services/CourrierServi
 const service = new CourrierService();
 
 export const CourrierController = {
+    preparerNumero: (agenceId: number) => service.preparerNumero(agenceId),
     // Enveloppé en { ok, erreur } comme vente/bagage : si le service échoue,
     // le renderer reçoit une réponse propre au lieu d'une promesse rejetée
     // qui laisserait le bouton bloqué sur « Enregistrement… ».

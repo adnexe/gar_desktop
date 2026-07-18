@@ -2,8 +2,10 @@ import axios from 'axios';
 import { apiBaseUrl } from '../apiClient';
 import { BootstrapService } from '../services/BootstrapService';
 import { localNetworkService, type ModeReseauLocal } from '../services/LocalNetworkService';
+import { UserRepository } from '../repositories/UserRepository';
 
 const service = new BootstrapService();
+const users = new UserRepository();
 
 function messageErreurActualisation(erreur: unknown): string {
     if (axios.isAxiosError(erreur)) {
@@ -61,8 +63,14 @@ export const ConfigController = {
         }
     },
     reseauLocal: () => localNetworkService.configuration(),
-    configurerReseauLocal: (params: { mode: ModeReseauLocal; serveurUrl?: string | null; port?: number | null; secret?: string | null }) =>
-        localNetworkService.configurer(params),
+    configurerReseauLocal: (params: { mode: ModeReseauLocal; serveurUrl?: string | null; port?: number | null; secret?: string | null; acteurUserId?: number | null }) => {
+        const acteur = params.acteurUserId ? users.gestionnaire(params.acteurUserId) : null;
+        if (acteur?.role !== 'super_admin') {
+            throw new Error('Seul un super admin peut modifier le rôle réseau de cette machine.');
+        }
+
+        return localNetworkService.configurer(params);
+    },
     testerReseauLocal: (serveurUrl: string, secret: string) => localNetworkService.testerClient(serveurUrl, secret),
     actualiserVoyagesServeurLocal: (agenceId: number, date?: string | null) => localNetworkService.actualiserVoyagesDepuisServeur(agenceId, date),
 };

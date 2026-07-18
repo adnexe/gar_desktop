@@ -67,6 +67,7 @@ declare global {
                     serveurUrl?: string | null;
                     port?: number | null;
                     secret?: string | null;
+                    acteurUserId?: number | null;
                 }) => Promise<{
                     mode: 'autonome' | 'serveur' | 'client';
                     serveurUrl: string | null;
@@ -169,6 +170,7 @@ declare global {
             };
             bagage: {
                 rechercherTicket: (code: string) => Promise<unknown>;
+                preparerNumero: (agenceId: number) => Promise<string | null>;
                 enregistrer: (demande: unknown) => Promise<{ ok: boolean; bagage?: unknown; erreur?: string }>;
                 confirmerImpression: (uuid: string) => Promise<{ ok: boolean; erreur?: string }>;
                 annulerImpression: (uuid: string, motif: string) => Promise<{ ok: boolean }>;
@@ -176,6 +178,7 @@ declare global {
                 finDeCaisse: (agenceId: number, date?: string) => Promise<unknown>;
             };
             courrier: {
+                preparerNumero: (agenceId: number) => Promise<string | null>;
                 enregistrer: (demande: unknown) => Promise<unknown>;
                 confirmerImpression: (uuid: string) => Promise<{ ok: boolean; erreur?: string }>;
                 annulerImpression: (uuid: string, motif: string) => Promise<{ ok: boolean }>;

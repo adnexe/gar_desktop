@@ -74,7 +74,7 @@ async function creer() {
             return;
         }
 
-        await window.api.voyage.creer({
+        const resultat = await window.api.voyage.creer({
             agenceId: config.agence.id,
             itineraireId: itineraireId.value,
             vehiculeId: vehiculeId.value,
@@ -82,7 +82,12 @@ async function creer() {
             dateDepart: dateDepart.value,
             heureDepart: heureDepart.value,
             numeroDepart: numeroDepart.value,
-        });
+        }) as { ok?: boolean; erreur?: string } | undefined;
+        if (resultat?.ok === false) {
+            erreur.value = resultat.erreur ?? 'La création du voyage a échoué.';
+            return;
+        }
+
         emit('cree');
         resetTout();
     } catch (e) {

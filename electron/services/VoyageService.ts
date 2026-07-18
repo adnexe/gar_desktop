@@ -1,9 +1,11 @@
 import { ReferentielRepository } from '../repositories/ReferentielRepository';
 import { VoyageRepository, type NouveauVoyage } from '../repositories/VoyageRepository';
+import { ConfigRepository } from '../repositories/ConfigRepository';
 
 export class VoyageService {
     private readonly referentiel = new ReferentielRepository();
     private readonly voyages = new VoyageRepository();
+    private readonly config = new ConfigRepository();
 
     formulaire(agenceId: number) {
         return {
@@ -14,6 +16,10 @@ export class VoyageService {
     }
 
     creer(donnees: NouveauVoyage) {
+        if (this.config.obtenir('reseau_mode') === 'client') {
+            throw new Error('VOYAGE_CREATION_POSTE_CLIENT');
+        }
+
         const aujourdHui = new Date().toISOString().slice(0, 10);
         if (donnees.dateDepart < aujourdHui) {
             throw new Error('DATE_VOYAGE_PASSEE');

@@ -235,4 +235,39 @@ export class VoyageRepository {
             return nombre;
         })();
     }
+
+    remplacerDepuisCaisseClient(agenceId: number, voyages: VoyageServeur[], date?: string | null): { importes: number; supprimes: number } {
+        const importes = this.importerDepuisServeur(voyages);
+        const uuidsServeur = voyages.map((voyage) => voyage.uuid).filter(Boolean);
+        const supprimes = this.supprimerVoyagesFutursOrphelinsAbsents(agenceId, uuidsServeur, date);
+
+        return { importes, supprimes };
+    }
+
+    private supprimerVoyagesFutursOrphelinsAbsents(agenceId: number, uuidsServeur: string[], date?: string | null): number {
+        const dateRecherche = date?.trim();
+        const filtreDate = dateRecherche
+            ? 'date(date_depart) = date(?)'
+            : "date(date_depart) >= date('now')";
+        const filtreUuids = uuidsServeur.length > 0
+            ? `AND uuid NOT IN (${uuidsServeur.map(() => '?').join(', ')})`
+            : '';
+        const params: unknown[] = dateRecherche
+            ? [agenceId, dateRecherche, ...uuidsServeur]
+            : [agenceId, ...uuidsServeur];
+
+        const info = getDb()
+            .prepare(
+                `DELETE FROM voyages
+                 WHERE agence_depart_id = ?
+                   AND ${filtreDate}
+                   ${filtreUuids}
+                   AND NOT EXISTS (SELECT 1 FROM tickets t WHERE t.voyage_id = voyages.id)
+                   AND NOT EXISTS (SELECT 1 FROM bagages b WHERE b.voyage_id = voyages.id)
+                   AND NOT EXISTS (SELECT 1 FROM courriers c WHERE c.voyage_id = voyages.id)`,
+            )
+            .run(...params);
+
+        return info.changes;
+    }
 }
