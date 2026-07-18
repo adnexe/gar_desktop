@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { CalendarDays, Monitor, Power, Printer, RefreshCw, Server, Trash2, Wifi } from '@lucide/vue';
+import { CalendarDays, LoaderCircle, Monitor, Power, Printer, RefreshCw, Server, Trash2, Wifi } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
@@ -10,6 +10,14 @@ import { useSessionStore } from '@/Stores/session';
 
 type ModeReseau = 'autonome' | 'serveur' | 'client';
 type StatutConnexion = 'connecte' | 'deconnecte' | 'verification';
+type ActionReseau =
+    | 'activer_serveur'
+    | 'relancer_serveur'
+    | 'activer_client'
+    | 'tester_client'
+    | 'reconnecter_client'
+    | 'desactiver'
+    | 'actualiser_voyages';
 type ReseauLocal = {
     mode: ModeReseau;
     serveurUrl: string | null;
@@ -36,6 +44,7 @@ const portServeur = ref(3750);
 const serveurUrl = ref('');
 const secretReseau = ref('');
 const enCours = ref(false);
+const actionReseau = ref<ActionReseau | null>(null);
 const actualisation = ref(false);
 const chargementImprimantes = ref(false);
 const testImpression = ref(false);
@@ -114,6 +123,8 @@ const resumeAbonnement = computed(() => {
 
     return `${jours.toLocaleString('fr-FR')} j`;
 });
+
+const chargementReseau = (action: ActionReseau) => actionReseau.value === action;
 
 function badgeEtat(on: boolean) {
     return [
@@ -234,8 +245,9 @@ async function verifierConnexionLocale() {
     statutConnexion.value = resultat.ok ? 'connecte' : 'deconnecte';
 }
 
-async function executer(action: () => Promise<void>) {
+async function executer(action: () => Promise<void>, actionKey: ActionReseau) {
     enCours.value = true;
+    actionReseau.value = actionKey;
     erreur.value = '';
     message.value = '';
 
@@ -245,6 +257,7 @@ async function executer(action: () => Promise<void>) {
         erreur.value = messageErreur(e, 'Action réseau impossible.');
     } finally {
         enCours.value = false;
+        actionReseau.value = null;
     }
 }
 
@@ -260,7 +273,7 @@ async function activerServeurLocal() {
         secretReseau.value = reseau.value.secret ?? '';
         statutConnexion.value = reseau.value.actif ? 'connecte' : 'deconnecte';
         message.value = 'Cette machine est maintenant la caisse serveur locale.';
-    });
+    }, 'activer_serveur');
 }
 
 async function relancerServeurLocal() {
@@ -278,7 +291,7 @@ async function relancerServeurLocal() {
         message.value = reseau.value.actif
             ? 'Serveur local relancé. Les postes clients peuvent se reconnecter.'
             : "Le serveur local n'a pas démarré.";
-    });
+    }, 'relancer_serveur');
 }
 
 async function activerClientLocal() {
@@ -297,7 +310,7 @@ async function activerClientLocal() {
         roleMachine.value = reseau.value.mode;
         await verifierConnexionLocale();
         message.value = 'Ce poste utilise maintenant la caisse serveur locale.';
-    });
+    }, 'activer_client');
 }
 
 async function testerClientLocal() {
@@ -312,7 +325,33 @@ async function testerClientLocal() {
         message.value = resultat.agence
             ? `${resultat.message} Agence : ${resultat.agence}.`
             : resultat.message;
-    });
+    }, 'tester_client');
+}
+
+async function reconnecterClientLocal() {
+    if (!clientOn.value || !serveurUrl.value || !secretReseau.value) {
+        erreur.value = "Ce poste client n'a pas encore de paramètres serveur enregistrés.";
+        return;
+    }
+
+    await executer(async () => {
+        statutConnexion.value = 'verification';
+        const test = await window.api.config.testerReseauLocal(serveurUrl.value, secretReseau.value);
+        if (!test.ok) {
+            statutConnexion.value = 'deconnecte';
+            throw new Error(test.message);
+        }
+
+        statutConnexion.value = 'connecte';
+        if (config.agence) {
+            const resultat = await window.api.config.actualiserVoyagesServeurLocal(config.agence.id);
+            message.value = `${test.message} ${resultat.message}`;
+        } else {
+            message.value = test.agence
+                ? `${test.message} Agence : ${test.agence}.`
+                : test.message;
+        }
+    }, 'reconnecter_client');
 }
 
 async function desactiverReseauLocal() {
@@ -331,7 +370,7 @@ async function desactiverReseauLocal() {
         message.value = etaitClient
             ? 'Ce poste est déconnecté de la caisse serveur locale.'
             : 'Mode autonome activé.';
-    });
+    }, 'desactiver');
 }
 
 async function actualiserVoyagesDepuisCaisse() {
@@ -340,7 +379,7 @@ async function actualiserVoyagesDepuisCaisse() {
     await executer(async () => {
         const resultat = await window.api.config.actualiserVoyagesServeurLocal(config.agence!.id);
         message.value = resultat.message;
-    });
+    }, 'actualiser_voyages');
 }
 
 async function chargerImprimantes() {
@@ -601,6 +640,9 @@ async function nettoyerDonneesTest() {
                                 <template v-if="reseau?.mode === 'serveur'">
                                     Cette machine démarre le serveur local quand l'application est ouverte.
                                 </template>
+                                <template v-else-if="reseau?.mode === 'client'">
+                                    Ce poste utilise les paramètres serveur enregistrés par le super admin.
+                                </template>
                                 <template v-else>
                                     Seul un super admin peut changer le rôle réseau de cette machine.
                                 </template>
@@ -612,12 +654,33 @@ async function nettoyerDonneesTest() {
                     </div>
                     <div v-if="reseau?.mode === 'serveur'" class="mt-4 flex flex-wrap items-center gap-2">
                         <Button type="button" variant="outline" :disabled="enCours" @click="relancerServeurLocal">
-                            <RefreshCw :class="['size-4', enCours ? 'animate-spin' : '']" />
-                            Relancer serveur local
+                            <RefreshCw :class="['size-4', chargementReseau('relancer_serveur') ? 'icone-tourne text-primary' : '']" />
+                            {{ chargementReseau('relancer_serveur') ? 'Relance...' : 'Relancer serveur local' }}
                         </Button>
                         <span :class="badgeConnexion(serveurOn ? 'connecte' : 'deconnecte', serveurConnecte)">
                             {{ serveurConnecte ? 'Serveur actif' : 'Serveur arrêté' }}
                         </span>
+                    </div>
+                    <div v-if="reseau?.mode === 'client'" class="mt-4 space-y-3 rounded-md border bg-background p-3">
+                        <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+                            <div class="min-w-0">
+                                <p class="font-semibold">Connexion caisse serveur</p>
+                                <p class="truncate text-muted-foreground">{{ serveurUrl || 'Adresse serveur non définie' }}</p>
+                            </div>
+                            <span :class="badgeConnexion(clientOn ? statutConnexion : 'deconnecte', clientConnecte)">
+                                {{ libelleClient }}
+                            </span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <Button type="button" variant="outline" :disabled="enCours || !serveurUrl || !secretReseau" @click="reconnecterClientLocal">
+                                <RefreshCw :class="['size-4', chargementReseau('reconnecter_client') ? 'icone-tourne text-primary' : '']" />
+                                {{ chargementReseau('reconnecter_client') ? 'Connexion...' : 'Reconnecter' }}
+                            </Button>
+                            <Button type="button" variant="outline" :disabled="enCours || !serveurUrl || !secretReseau" @click="testerClientLocal">
+                                <RefreshCw :class="['size-4', chargementReseau('tester_client') ? 'icone-tourne text-primary' : '']" />
+                                {{ chargementReseau('tester_client') ? 'Test...' : 'Tester' }}
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
@@ -644,12 +707,13 @@ async function nettoyerDonneesTest() {
 
                     <div class="grid gap-2 sm:grid-cols-2">
                         <Button type="button" :disabled="enCours" @click="activerServeurLocal">
-                            <Power class="size-4" />
-                            Activer comme serveur
+                            <LoaderCircle v-if="chargementReseau('activer_serveur')" class="icone-tourne size-4" />
+                            <Power v-else class="size-4" />
+                            {{ chargementReseau('activer_serveur') ? 'Activation...' : 'Activer comme serveur' }}
                         </Button>
                         <Button type="button" variant="outline" :disabled="enCours || reseau?.mode !== 'serveur'" @click="relancerServeurLocal">
-                            <RefreshCw :class="['size-4', enCours ? 'animate-spin' : '']" />
-                            Relancer serveur local
+                            <RefreshCw :class="['size-4', chargementReseau('relancer_serveur') ? 'icone-tourne text-primary' : '']" />
+                            {{ chargementReseau('relancer_serveur') ? 'Relance...' : 'Relancer serveur local' }}
                         </Button>
                     </div>
 
@@ -700,14 +764,17 @@ async function nettoyerDonneesTest() {
 
                     <div class="grid gap-2 sm:grid-cols-3">
                         <Button type="button" variant="outline" :disabled="enCours || !serveurUrl || !secretReseau" @click="testerClientLocal">
-                            Tester
+                            <RefreshCw :class="['size-4', chargementReseau('tester_client') ? 'icone-tourne text-primary' : '']" />
+                            {{ chargementReseau('tester_client') ? 'Test...' : 'Tester' }}
                         </Button>
                         <Button type="button" :disabled="enCours || !serveurUrl || !secretReseau" @click="activerClientLocal">
-                            Utiliser
+                            <LoaderCircle v-if="chargementReseau('activer_client')" class="icone-tourne size-4" />
+                            <Wifi v-else class="size-4" />
+                            {{ chargementReseau('activer_client') ? 'Connexion...' : 'Utiliser' }}
                         </Button>
-                        <Button type="button" variant="outline" :disabled="enCours || !clientOn" @click="actualiserVoyagesDepuisCaisse">
-                            <RefreshCw :class="['size-4', enCours ? 'icone-tourne text-primary' : '']" />
-                            Actualiser
+                        <Button type="button" variant="outline" :disabled="enCours || !clientOn || !serveurUrl || !secretReseau" @click="reconnecterClientLocal">
+                            <RefreshCw :class="['size-4', chargementReseau('reconnecter_client') ? 'icone-tourne text-primary' : '']" />
+                            {{ chargementReseau('reconnecter_client') ? 'Connexion...' : 'Reconnecter' }}
                         </Button>
                     </div>
                 </div>
@@ -726,7 +793,9 @@ async function nettoyerDonneesTest() {
                         </div>
                     </div>
                     <Button type="button" variant="outline" :disabled="enCours" @click="desactiverReseauLocal">
-                        Activer hors réseau local
+                        <LoaderCircle v-if="chargementReseau('desactiver')" class="icone-tourne size-4" />
+                        <Monitor v-else class="size-4" />
+                        {{ chargementReseau('desactiver') ? 'Activation...' : 'Activer hors réseau local' }}
                     </Button>
                 </div>
 
@@ -736,8 +805,8 @@ async function nettoyerDonneesTest() {
                         <p class="truncate text-sm text-muted-foreground">{{ serveurUrl || 'Adresse serveur non définie' }}</p>
                     </div>
                     <Button type="button" variant="outline" :disabled="enCours" @click="actualiserVoyagesDepuisCaisse">
-                        <RefreshCw :class="['size-4', enCours ? 'icone-tourne text-primary' : '']" />
-                        Actualiser voyages
+                        <RefreshCw :class="['size-4', chargementReseau('actualiser_voyages') ? 'icone-tourne text-primary' : '']" />
+                        {{ chargementReseau('actualiser_voyages') ? 'Actualisation...' : 'Actualiser voyages' }}
                     </Button>
                 </div>
             </section>
