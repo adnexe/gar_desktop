@@ -43,7 +43,8 @@ const api = {
         confirmerImpression: (uuid: string) => ipcRenderer.invoke('vente:confirmerImpression', uuid),
         annulerImpression: (uuid: string, motif: string) => ipcRenderer.invoke('vente:annulerImpression', uuid, motif),
         ventesDuJour: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('vente:ventesDuJour', agenceId, date, userId),
-        finDeCaisse: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('vente:finDeCaisse', agenceId, date, userId),
+        finDeCaisse: (agenceId: number, date?: string, userId?: number | null, voyageId?: number | null) => ipcRenderer.invoke('vente:finDeCaisse', agenceId, date, userId, voyageId),
+        voyagesFinDeCaisse: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('vente:voyagesFinDeCaisse', agenceId, date, userId),
     },
     impression: {
         imprimerTicket: (hauteurMm?: number) => ipcRenderer.invoke('impression:ticket', hauteurMm),

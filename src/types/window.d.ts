@@ -165,7 +165,8 @@ declare global {
                 confirmerImpression: (uuid: string) => Promise<{ ok: boolean; erreur?: string }>;
                 annulerImpression: (uuid: string, motif: string) => Promise<{ ok: boolean }>;
                 ventesDuJour: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown[]>;
-                finDeCaisse: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown>;
+                finDeCaisse: (agenceId: number, date?: string, userId?: number | null, voyageId?: number | null) => Promise<unknown>;
+                voyagesFinDeCaisse: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown[]>;
             };
             impression: {
                 imprimerTicket: (hauteurMm?: number) => Promise<{ ok: boolean; erreur?: string }>;

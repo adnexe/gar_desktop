@@ -14,6 +14,13 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/Components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/Components/ui/select';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import type { VenteDuJour } from '@/types/vente';
@@ -76,11 +83,34 @@ const finDeCaisseOuvert = ref(false);
 const rapportFinDeCaisse = ref<RapportFinDeCaisse | null>(null);
 const erreurImpression = ref('');
 
+// Fin de caisse ciblée : 0 = tous les voyages, sinon l'id du voyage choisi.
+interface VoyageFinDeCaisse { voyage_id: number; itineraire: string; heure_depart: string; numero_depart: number; nombre_tickets: number }
+const voyagesFinDeCaisse = ref<VoyageFinDeCaisse[]>([]);
+const voyageFinDeCaisseId = ref(0);
+const voyageFinDeCaisseLibelle = computed(() => {
+    const v = voyagesFinDeCaisse.value.find((x) => x.voyage_id === voyageFinDeCaisseId.value);
+    return v ? `${v.itineraire} — ${v.heure_depart} · Départ ${v.numero_depart}` : '';
+});
+
+async function chargerRapportFinDeCaisse() {
+    if (!session.agenceId) return;
+    rapportFinDeCaisse.value = (await window.api.vente.finDeCaisse(
+        session.agenceId,
+        dateFiltre.value,
+        userIdFinDeCaisse.value,
+        voyageFinDeCaisseId.value || null,
+    )) as RapportFinDeCaisse;
+}
+
 async function ouvrirFinDeCaisse() {
     if (!session.agenceId) return;
-    rapportFinDeCaisse.value = (await window.api.vente.finDeCaisse(session.agenceId, dateFiltre.value, userIdFinDeCaisse.value)) as RapportFinDeCaisse;
+    voyageFinDeCaisseId.value = 0;
+    voyagesFinDeCaisse.value = (await window.api.vente.voyagesFinDeCaisse(session.agenceId, dateFiltre.value, userIdFinDeCaisse.value)) as VoyageFinDeCaisse[];
+    await chargerRapportFinDeCaisse();
     finDeCaisseOuvert.value = true;
 }
+
+watch(voyageFinDeCaisseId, chargerRapportFinDeCaisse);
 
 async function imprimerFinDeCaisse() {
     erreurImpression.value = '';
@@ -195,6 +225,16 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     <DialogTitle class="flex items-center gap-2"><ClipboardList class="size-5" /> Fin de caisse — {{ dateFiltre }}</DialogTitle>
                 </DialogHeader>
 
+                <Select v-if="voyagesFinDeCaisse.length > 0" v-model="voyageFinDeCaisseId">
+                    <SelectTrigger class="w-full"><SelectValue placeholder="Tous les voyages" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem :value="0">Tous les voyages</SelectItem>
+                        <SelectItem v-for="v in voyagesFinDeCaisse" :key="v.voyage_id" :value="v.voyage_id">
+                            {{ v.itineraire }} — {{ v.heure_depart }} · Départ {{ v.numero_depart }} ({{ v.nombre_tickets }} ticket(s))
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+
                 <div v-if="rapportFinDeCaisse" class="space-y-2 text-sm">
                     <div v-for="v in rapportFinDeCaisse.voyages" :key="v.trajet_id" class="flex items-center justify-between rounded-md border px-3 py-2">
                         <div>
@@ -228,6 +268,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 :rapport="rapportFinDeCaisse"
                 :agence="config.agence ? `${config.agence.nom} — ${config.agence.ville_nom}` : ''"
                 :caissier="session.nom"
+                :voyage="voyageFinDeCaisseLibelle"
             />
         </div>
     </AppSidebarLayout>

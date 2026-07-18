@@ -178,3 +178,10 @@ Deux causes corrigées :
 - Après tests terrain, la prégénération de PDF (empreintes, numéros réservés, caches) n'apportait aucun gain perceptible : le temps est dominé par SumatraPDF + la mécanique de l'imprimante, et le contrôle PowerShell ajouté au passage (~0,5-1 s/vente) annulait le bénéfice.
 - **Revert chirurgical au commit `120c3ff` (16/07 17:12)** des 5 fichiers d'impression : `electron/ipc/index.ts`, `VenteForm.vue`, `BagageForm.vue`, `CourrierForm.vue`, `src/lib/impression.ts` — c'est la méthode directe : vente → PDF → SumatraPDF, deux jobs (ticket puis talon).
 - Canaux non-impression ajoutés après le 16/07 réinjectés dans `ipc/index.ts` : `config:relancerServeurLocal`, `config:nettoyerDonneesTest`, `diagnostic:log`. Tout le reste (licences, reset agence, sync...) est inchangé.
+
+## Fin de caisse par voyage (18/07/2026)
+
+- Écran Vente : le dialog « Fin de caisse » propose désormais un sélecteur « Tous les voyages » (comportement existant, inchangé) ou un voyage précis du jour — seuls les voyages ayant au moins un ticket valide sont listés (itinéraire, heure, n° de départ, nombre de tickets).
+- Quand un voyage est choisi, le rapport (affiché et imprimé) ne compte que les tickets de ce voyage ; le reçu porte le titre « FIN DE CAISSE — VOYAGE » avec le libellé du départ.
+- Chaîne : `TicketRepository.voyagesAvecVentes` + filtre `voyage_id` dans `rapportParVoyage` → `VenteService` → `VenteController` → canal IPC `vente:voyagesFinDeCaisse` + param `voyageId` sur `vente:finDeCaisse` → preload/types → `Vente.vue` + `FinDeCaisseRecu.vue`. Le filtre par caissier (non-admin = ses ventes seulement) s'applique aussi à la liste des voyages.
+- Vérifié : requêtes testées sur une copie de la base (2 voyages, 3 tickets → global 15 300 ; voyage A 10 200 ; voyage B 5 100), build + vue-tsc OK.

@@ -456,6 +456,7 @@ export function enregistrerIpc(): void {
     gerer('vente:annulerImpression', VenteController.annulerImpression);
     gerer('vente:ventesDuJour', VenteController.ventesDuJour);
     gerer('vente:finDeCaisse', VenteController.finDeCaisse);
+    gerer('vente:voyagesFinDeCaisse', VenteController.voyagesFinDeCaisse);
 
     const imprimerDepuisRenderer = async (event: IpcMainInvokeEvent, hauteurMm?: number) => {
         const fenetre = BrowserWindow.fromWebContents(event.sender);

@@ -228,8 +228,8 @@ export class VenteService {
         return this.tickets.ventesDuJour(agenceId, date, userId);
     }
 
-    rapportFinDeCaisse(agenceId: number, date?: string, userId?: number | null) {
-        const lignes = this.tickets.rapportParVoyage(agenceId, date, userId);
+    rapportFinDeCaisse(agenceId: number, date?: string, userId?: number | null, voyageId?: number | null) {
+        const lignes = this.tickets.rapportParVoyage(agenceId, date, userId, voyageId);
 
         return {
             date: date ?? new Date().toISOString().slice(0, 10),
@@ -237,5 +237,9 @@ export class VenteService {
             nombre_tickets_total: lignes.reduce((s, l) => s + l.nombre_tickets, 0),
             montant_total: lignes.reduce((s, l) => s + l.montant_total, 0),
         };
+    }
+
+    voyagesFinDeCaisse(agenceId: number, date?: string, userId?: number | null) {
+        return this.tickets.voyagesAvecVentes(agenceId, date, userId);
     }
 }

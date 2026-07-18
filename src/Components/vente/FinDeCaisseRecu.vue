@@ -10,6 +10,8 @@ defineProps<{
     rapport: RapportFinDeCaisse | null;
     agence: string;
     caissier: string;
+    /** Libellé du voyage quand la fin de caisse ne concerne qu'un seul départ. */
+    voyage?: string;
 }>();
 
 const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + ' FCFA';
@@ -18,7 +20,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 <template>
     <div v-if="rapport" class="ticket-recu" style="width: 72mm">
         <p class="text-center font-bold">{{ agence }}</p>
-        <p class="text-center font-bold">FIN DE CAISSE</p>
+        <p class="text-center font-bold">{{ voyage ? 'FIN DE CAISSE — VOYAGE' : 'FIN DE CAISSE' }}</p>
         <p style="border-top: 1px dashed #000; margin: 4px 0" />
 
         <div class="ligne" style="display:flex;justify-content:space-between">
@@ -29,6 +31,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             <span>Caissier</span>
             <span>{{ caissier }}</span>
         </div>
+        <p v-if="voyage" style="font-weight: 700">{{ voyage }}</p>
 
         <p style="border-top: 1px dashed #000; margin: 4px 0" />
 

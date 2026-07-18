@@ -448,7 +448,7 @@ export class TicketRepository {
     // Rapport « fin de caisse » : nombre de tickets et montant encaissé par
     // trajet. Un même voyage peut contenir plusieurs trajets, donc grouper
     // seulement par voyage mélangerait les destinations dans une seule ligne.
-    rapportParVoyage(agenceId: number, date?: string, userId?: number | null): {
+    rapportParVoyage(agenceId: number, date?: string, userId?: number | null, voyageId?: number | null): {
         trajet_id: number;
         trajet: string;
         date_depart: string;
@@ -475,8 +475,37 @@ export class TicketRepository {
                  WHERE v.agence_depart_id = ? AND date(t.created_at) = date(?)
                    AND t.statut_ticket = 'valide'
                    AND (? IS NULL OR t.user_id = ?)
+                   AND (? IS NULL OR t.voyage_id = ?)
                  GROUP BY t.trajet_id, tr.nom
                  ORDER BY MIN(v.heure_depart) ASC, tr.nom ASC`,
+            )
+            .all(agenceId, date ?? 'now', userId ?? null, userId ?? null, voyageId ?? null, voyageId ?? null) as never[];
+    }
+
+    // Liste des voyages ayant au moins un ticket valide sur la date, pour
+    // proposer une fin de caisse ciblée sur un seul départ.
+    voyagesAvecVentes(agenceId: number, date?: string, userId?: number | null): {
+        voyage_id: number;
+        itineraire: string;
+        heure_depart: string;
+        numero_depart: number;
+        nombre_tickets: number;
+    }[] {
+        return getDb()
+            .prepare(
+                `SELECT v.id AS voyage_id,
+                        i.nom AS itineraire,
+                        substr(v.heure_depart, 1, 5) AS heure_depart,
+                        v.numero_depart AS numero_depart,
+                        COUNT(t.id) AS nombre_tickets
+                 FROM tickets t
+                 JOIN voyages v ON v.id = t.voyage_id
+                 JOIN itineraires i ON i.id = v.itineraire_id
+                 WHERE v.agence_depart_id = ? AND date(t.created_at) = date(?)
+                   AND t.statut_ticket = 'valide'
+                   AND (? IS NULL OR t.user_id = ?)
+                 GROUP BY v.id, i.nom, v.heure_depart, v.numero_depart
+                 ORDER BY v.heure_depart ASC, v.numero_depart ASC`,
             )
             .all(agenceId, date ?? 'now', userId ?? null, userId ?? null) as never[];
     }
