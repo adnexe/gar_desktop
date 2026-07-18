@@ -509,6 +509,13 @@ async function envoyer() {
     const prixExpeditionActuel = prixExpedition.value ?? 0;
 
     try {
+        const imprimante = await window.api.impression.verifierDisponible();
+        if (!imprimante.ok) {
+            erreur.value = imprimante.erreur ?? "Aucune imprimante utilisable n'est disponible.";
+            confirmationOuverte.value = false;
+            return;
+        }
+
         const reponse = (await window.api.courrier.enregistrer({
             agenceId: agenceActuelle.id,
             villeArriveeId: villeArriveeIdActuelle,
@@ -595,7 +602,8 @@ async function envoyer() {
         }
 
         // Le reçu client est sorti : l'étiquette colis part en second job.
-        // Son échec n'annule pas l'envoi, on avertit simplement.
+        // L'envoi n'est validé qu'après les deux sorties.
+        let erreurEtiquette: string | null = null;
         try {
             logDiagnostic('info', 'Pause avant impression étiquette courrier', {
                 numero: reponse.courrier.numeroCourrier,
@@ -604,10 +612,25 @@ async function envoyer() {
             await new Promise((resolve) => setTimeout(resolve, PAUSE_AVANT_ETIQUETTE_MS));
             const etiquette = await imprimerDepuisCacheOuClassique('etiquette', cacheUtilisable?.etiquetteId);
             if (!etiquette.ok) {
-                erreur.value = `Le reçu est imprimé, mais l'étiquette colis n'est pas sortie : ${etiquette.erreur ?? 'erreur inconnue'}.`;
+                erreurEtiquette = etiquette.erreur ?? 'erreur inconnue';
+                logDiagnostic('warn', 'Impression étiquette courrier échouée', {
+                    numero: reponse.courrier.numeroCourrier,
+                    via_cache: !!cacheUtilisable,
+                    erreur: erreurEtiquette,
+                });
             }
         } catch (e) {
-            erreur.value = `Le reçu est imprimé, mais l'étiquette colis n'est pas sortie : ${messageErreurInconnue(e, 'erreur inconnue')}.`;
+            erreurEtiquette = messageErreurInconnue(e, 'erreur inconnue');
+            logDiagnostic('warn', 'Impression étiquette courrier interrompue', {
+                numero: reponse.courrier.numeroCourrier,
+                via_cache: !!cacheUtilisable,
+                erreur: erreurEtiquette,
+            });
+        }
+
+        if (erreurEtiquette) {
+            erreur.value = `Le reçu courrier ${reponse.courrier.numeroCourrier} est sorti, mais l'étiquette colis n'est pas sortie : ${erreurEtiquette}. La vente reste en attente et n'est pas comptabilisée.`;
+            return;
         }
 
         const confirmation = await window.api.courrier.confirmerImpression(reponse.courrier.uuid);

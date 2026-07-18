@@ -131,7 +131,7 @@ export class VoyageRepository {
                  JOIN itineraire_trajet it ON it.itineraire_id = v.itineraire_id AND it.trajet_id = ?
                  JOIN vehicules veh ON veh.id = v.vehicule_id
                  LEFT JOIN chauffeurs c ON c.id = v.chauffeur_id
-                 WHERE v.agence_depart_id = ? AND v.statut = 'programme'
+                 WHERE v.agence_depart_id = ? AND v.statut IN ('programme', 'embarquement')
                  ORDER BY v.date_depart ASC, v.heure_depart ASC, v.numero_depart ASC`,
             )
             .all(trajetId, agenceId) as Omit<VoyageDisponible, 'places_occupees'>[];

@@ -748,6 +748,13 @@ async function vendre() {
     const idVoyageCourant = voyageSelectionne.value.id;
 
     try {
+        const imprimante = await window.api.impression.verifierDisponible();
+        if (!imprimante.ok) {
+            erreur.value = imprimante.erreur ?? "Aucune imprimante ticket utilisable n'est disponible.";
+            confirmationOuverte.value = false;
+            return;
+        }
+
         const reponse = (await window.api.vente.vendre({
             agenceId: props.agenceId,
             voyageId: voyageSelectionne.value.id,
@@ -827,7 +834,8 @@ async function vendre() {
         }
 
         // Le ticket client est sorti : le talon part en second job (coupe entre
-        // les deux). Son échec n'annule pas la vente, on avertit simplement.
+        // les deux). La vente n'est validée qu'après les deux sorties.
+        let erreurTalon: string | null = null;
         try {
             logDiagnostic('info', 'Pause avant impression talon', {
                 numero: reponse.ticket.numero,
@@ -836,15 +844,26 @@ async function vendre() {
             await attendre(PAUSE_AVANT_TALON_MS);
             const talon = await imprimerDepuisCacheOuClassique('talon', cacheUtilisable?.talonId);
             if (!talon.ok) {
+                erreurTalon = talon.erreur ?? 'erreur inconnue';
                 logDiagnostic('warn', 'Impression talon échouée', {
                     numero: reponse.ticket.numero,
                     via_cache: !!cacheUtilisable,
-                    erreur: talon.erreur ?? 'erreur inconnue',
+                    erreur: erreurTalon,
                 });
-                erreur.value = `Le ticket est imprimé, mais le talon de contrôle n'est pas sorti : ${talon.erreur ?? 'erreur inconnue'}.`;
             }
         } catch (e) {
-            erreur.value = `Le ticket est imprimé, mais le talon de contrôle n'est pas sorti : ${messageErreurInconnue(e, 'erreur inconnue')}.`;
+            erreurTalon = messageErreurInconnue(e, 'erreur inconnue');
+            logDiagnostic('warn', 'Impression talon interrompue', {
+                numero: reponse.ticket.numero,
+                via_cache: !!cacheUtilisable,
+                erreur: erreurTalon,
+            });
+        }
+
+        if (erreurTalon) {
+            erreur.value = `Le ticket ${reponse.ticket.numero} est sorti, mais le talon de contrôle n'est pas sorti : ${erreurTalon}. La vente reste en attente et n'est pas comptabilisée.`;
+            await chargerVoyagesConservantSelection(idVoyageCourant);
+            return;
         }
 
         const confirmationImpression = await window.api.vente.confirmerImpression(reponse.ticket.uuid);

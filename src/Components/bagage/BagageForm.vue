@@ -418,6 +418,13 @@ async function enregistrer() {
     const montantActuel = montant.value;
 
     try {
+        const imprimante = await window.api.impression.verifierDisponible();
+        if (!imprimante.ok) {
+            erreur.value = imprimante.erreur ?? "Aucune imprimante utilisable n'est disponible.";
+            confirmationOuverte.value = false;
+            return;
+        }
+
         const reponse = (await window.api.bagage.enregistrer({
             agenceId: agenceActuelle.id,
             code: code.value.trim() || null,

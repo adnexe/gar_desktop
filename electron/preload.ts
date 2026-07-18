@@ -50,6 +50,7 @@ const api = {
         preparerPdf: (hauteurMm?: number) => ipcRenderer.invoke('impression:preparerPdf', hauteurMm),
         imprimerPdfPrepare: (id: string) => ipcRenderer.invoke('impression:imprimerPdfPrepare', id),
         supprimerPdfPrepare: (id: string) => ipcRenderer.invoke('impression:supprimerPdfPrepare', id),
+        verifierDisponible: () => ipcRenderer.invoke('impression:verifierDisponible'),
         listerImprimantes: () => ipcRenderer.invoke('impression:listerImprimantes'),
         tester: () => ipcRenderer.invoke('impression:tester'),
     },

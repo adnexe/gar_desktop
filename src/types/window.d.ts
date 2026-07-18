@@ -164,6 +164,7 @@ declare global {
                 preparerPdf: (hauteurMm?: number) => Promise<{ ok: true; id: string } | { ok: false; erreur: string }>;
                 imprimerPdfPrepare: (id: string) => Promise<{ ok: boolean; erreur?: string; imprimante?: string }>;
                 supprimerPdfPrepare: (id: string) => Promise<{ ok: boolean }>;
+                verifierDisponible: () => Promise<{ ok: boolean; erreur?: string; imprimante?: string }>;
                 listerImprimantes: () => Promise<{
                     name: string;
                     displayName: string;

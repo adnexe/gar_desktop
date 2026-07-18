@@ -122,6 +122,14 @@ if ($null -eq $printer) {
             logger.warn('Contrôle imprimante Windows refusé : aucune imprimante par défaut.', { duree_ms: dureeMs(debut) });
             return { ok: false, erreur: 'Aucune imprimante par défaut configurée. La vente est annulée.' };
         }
+        if (data.Name && estNomImprimanteVirtuelle(data.Name)) {
+            logger.warn('Contrôle imprimante Windows refusé : imprimante par défaut virtuelle.', {
+                imprimante: data.Name,
+                duree_ms: dureeMs(debut),
+            });
+
+            return { ok: false, erreur: `L'imprimante par défaut (${data.Name}) n'est pas l'imprimante ticket. Définissez la XPrinter comme imprimante par défaut.` };
+        }
 
         const etat: EtatImprimanteWindows = {
             name: data.Name,
@@ -296,7 +304,34 @@ function ordonnerImprimantes(imprimantes: ImprimanteRuntime[]): ImprimanteRuntim
 // Imprimantes virtuelles (OneNote, PDF, Fax...) : jamais utilisées comme
 // repli automatique — un ticket qui « s'imprime » dans OneNote est perdu.
 function estImprimanteVirtuelle(imprimante: ImprimanteRuntime): boolean {
-    return /onenote|fax|xps|print to pdf|pdf24|microsoft/i.test(`${imprimante.name} ${imprimante.displayName}`);
+    return estNomImprimanteVirtuelle(`${imprimante.name} ${imprimante.displayName}`);
+}
+
+function estNomImprimanteVirtuelle(nom: string): boolean {
+    return /onenote|fax|xps|print to pdf|pdf24|microsoft/i.test(nom);
+}
+
+async function verifierImprimanteDisponible(sender: WebContents): Promise<ResultatImpression> {
+    const controleWindows = await verifierImprimanteWindowsPrete();
+    if (controleWindows) return controleWindows;
+
+    const imprimantes = await listerImprimantes(sender);
+    const imprimanteDefaut = imprimantes.find(estImprimanteParDefaut);
+    if (!imprimanteDefaut) {
+        return {
+            ok: false,
+            erreur: "Aucune imprimante par défaut n'est configurée. Définissez l'imprimante ticket par défaut avant de vendre.",
+        };
+    }
+
+    if (estImprimanteVirtuelle(imprimanteDefaut)) {
+        return {
+            ok: false,
+            erreur: `L'imprimante par défaut (${nomImprimante(imprimanteDefaut)}) n'est pas une imprimante ticket. Définissez l'imprimante thermique par défaut.`,
+        };
+    }
+
+    return { ok: true, imprimante: nomImprimante(imprimanteDefaut) };
 }
 
 /**
@@ -909,6 +944,7 @@ export function enregistrerIpc(): void {
         await supprimerPdfPrepare(id);
         return { ok: true as const };
     });
+    ipcMain.handle('impression:verifierDisponible', async (event) => verifierImprimanteDisponible(event.sender));
     ipcMain.handle('impression:listerImprimantes', async (event) => (await listerImprimantes(event.sender)).map(exposerImprimante));
     ipcMain.handle('impression:tester', async () => imprimerTicketTest());
     ipcMain.handle('diagnostic:log', async (_event, niveau: 'info' | 'warn', message: string, contexte?: unknown) => {
