@@ -115,6 +115,9 @@ const preparationPdfEnCours = ref<Promise<void> | null>(null);
 let sequencePreparationPdf = 0;
 let minuteriePreparationPdf: ReturnType<typeof setTimeout> | null = null;
 const DUREE_VALIDITE_PDF_PREPARE_MS = 45_000;
+const DELAI_PREPARATION_APRES_VOYAGE_MS = 900;
+const DELAI_PREPARATION_APRES_MODIFICATION_MS = 1_400;
+type SourcePreparationPdf = 'selection_voyage' | 'selection_place' | 'modification_formulaire' | 'confirmation';
 
 const villesAffichables = computed(() => {
     const terme = rechercheVille.value.trim().toLowerCase();
@@ -506,36 +509,49 @@ async function preparerPdfPartie(recu: Recu, partie: 'ticket' | 'talon') {
     }
 }
 
-async function lancerPreparationPdfTicket() {
+async function lancerPreparationPdfTicket(source: SourcePreparationPdf) {
     if (!peutVendre.value || !voyageSelectionne.value || !trajetActuel.value) return;
 
     const sequence = ++sequencePreparationPdf;
     const empreinte = empreinteTicketCourant();
     const numero = await window.api.vente.preparerNumero();
     if (!numero) {
-        logDiagnostic('info', 'Préparation ticket ignorée : aucun numéro préparé disponible');
+        logDiagnostic('info', 'Préparation ticket ignorée : aucun numéro préparé disponible', { source });
         return;
     }
-    if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
+    if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) {
+        logDiagnostic('info', 'Préparation ticket abandonnée : données modifiées avant le reçu', { source, numero });
+        return;
+    }
 
     const createdAtIso = new Date().toISOString();
     const recu = await creerRecuPrepare(numero, createdAtIso);
-    if (!recu || sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
+    if (!recu || sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) {
+        logDiagnostic('info', 'Préparation ticket abandonnée : reçu devenu obsolète', { source, numero });
+        return;
+    }
 
     let ticketId: string | null = null;
     let talonId: string | null = null;
 
     try {
         logDiagnostic('info', 'Préparation ticket démarrée', {
+            source,
             numero,
             voyage_id: voyageSelectionne.value.id,
             place: placeSelectionnee.value,
         });
         ticketId = await preparerPdfPartie(recu, 'ticket');
-        if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
+        if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) {
+            logDiagnostic('info', 'Préparation ticket abandonnée : ticket PDF obsolète', { source, numero });
+            return;
+        }
 
         talonId = await preparerPdfPartie(recu, 'talon');
-        if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) return;
+        if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) {
+            logDiagnostic('info', 'Préparation ticket abandonnée : talon PDF obsolète', { source, numero });
+            return;
+        }
 
         cachePdfTicket.value = {
             empreinte,
@@ -546,6 +562,7 @@ async function lancerPreparationPdfTicket() {
             creeLe: Date.now(),
         };
         logDiagnostic('info', 'Préparation ticket prête', {
+            source,
             numero,
             voyage_id: voyageSelectionne.value.id,
             place: placeSelectionnee.value,
@@ -554,6 +571,7 @@ async function lancerPreparationPdfTicket() {
         talonId = null;
     } catch (e) {
         logDiagnostic('warn', 'Préparation PDF ticket ignorée', {
+            source,
             numero,
             erreur: messageErreurInconnue(e, 'Erreur inconnue'),
         });
@@ -564,20 +582,30 @@ async function lancerPreparationPdfTicket() {
     }
 }
 
-function programmerPreparationPdfTicket() {
+function programmerPreparationPdfTicket(source: SourcePreparationPdf, delaiMs: number) {
     void nettoyerCachePdfPrepare();
-    if (!peutVendre.value) return;
+    if (!peutVendre.value) {
+        logDiagnostic('info', 'Préparation ticket non programmée : formulaire incomplet', { source });
+        return;
+    }
 
     if (minuteriePreparationPdf) clearTimeout(minuteriePreparationPdf);
+    logDiagnostic('info', 'Préparation ticket programmée', {
+        source,
+        delai_ms: delaiMs,
+        voyage_id: voyageSelectionne.value?.id ?? null,
+        place: placeSelectionnee.value,
+    });
     minuteriePreparationPdf = setTimeout(() => {
-        preparationPdfEnCours.value = lancerPreparationPdfTicket()
+        preparationPdfEnCours.value = lancerPreparationPdfTicket(source)
             .catch((e) => logDiagnostic('warn', 'Préparation PDF ticket interrompue', {
+                source,
                 erreur: messageErreurInconnue(e, 'Erreur inconnue'),
             }))
             .finally(() => {
                 preparationPdfEnCours.value = null;
             });
-    }, 350);
+    }, delaiMs);
 }
 
 function demarrerPreparationPdfMaintenant() {
@@ -587,12 +615,19 @@ function demarrerPreparationPdfMaintenant() {
     }
 
     if (!peutVendre.value || preparationPdfEnCours.value || cachePdfPret()) {
+        logDiagnostic('info', 'Préparation ticket immédiate ignorée', {
+            source: 'confirmation',
+            formulaire_pret: peutVendre.value,
+            preparation_en_cours: !!preparationPdfEnCours.value,
+            cache_pret: !!cachePdfPret(),
+        });
         return preparationPdfEnCours.value;
     }
 
-    logDiagnostic('info', 'Préparation ticket lancée immédiatement');
-    preparationPdfEnCours.value = lancerPreparationPdfTicket()
+    logDiagnostic('info', 'Préparation ticket lancée immédiatement', { source: 'confirmation' });
+    preparationPdfEnCours.value = lancerPreparationPdfTicket('confirmation')
         .catch((e) => logDiagnostic('warn', 'Préparation PDF ticket interrompue', {
+            source: 'confirmation',
             erreur: messageErreurInconnue(e, 'Erreur inconnue'),
         }))
         .finally(() => {
@@ -614,8 +649,20 @@ async function assurerPreparationPdfAvantVente() {
 function cachePdfPret() {
     const cache = cachePdfTicket.value;
     if (!cache) return null;
-    if (Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_PREPARE_MS) return null;
-    if (cache.empreinte !== empreinteTicketCourant()) return null;
+    if (Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_PREPARE_MS) {
+        logDiagnostic('info', 'Cache ticket expiré', {
+            numero: cache.numero,
+            age_ms: Date.now() - cache.creeLe,
+        });
+        return null;
+    }
+    if (cache.empreinte !== empreinteTicketCourant()) {
+        logDiagnostic('info', 'Cache ticket obsolète : données modifiées', {
+            numero: cache.numero,
+            age_ms: Date.now() - cache.creeLe,
+        });
+        return null;
+    }
 
     return cache;
 }
@@ -655,7 +702,18 @@ watch(
         session.userId,
         session.agentId,
     ],
-    programmerPreparationPdfTicket,
+    (valeurs, anciennes) => {
+        const source: SourcePreparationPdf = valeurs[3] !== anciennes?.[3]
+            ? 'selection_voyage'
+            : valeurs[5] !== anciennes?.[5]
+                ? 'selection_place'
+                : 'modification_formulaire';
+        const delai = source === 'modification_formulaire'
+            ? DELAI_PREPARATION_APRES_MODIFICATION_MS
+            : DELAI_PREPARATION_APRES_VOYAGE_MS;
+
+        programmerPreparationPdfTicket(source, delai);
+    },
 );
 
 onBeforeUnmount(() => {
