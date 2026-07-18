@@ -637,13 +637,10 @@ function demarrerPreparationPdfMaintenant() {
     return preparationPdfEnCours.value;
 }
 
-async function attendrePreparationPdf(maxMs: number) {
+async function attendrePreparationPdf() {
     if (cachePdfPret() || !preparationPdfEnCours.value) return;
 
-    await Promise.race([
-        preparationPdfEnCours.value,
-        new Promise((resolve) => setTimeout(resolve, maxMs)),
-    ]);
+    await preparationPdfEnCours.value;
 }
 
 async function assurerPreparationPdfAvantVente() {
@@ -715,10 +712,12 @@ function ouvrirConfirmationVente() {
 async function vendre() {
     if (!peutVendre.value || !voyageSelectionne.value || !trajetActuel.value || !props.agenceId) return;
 
-    // Attente bornée : la préparation a été lancée à l'ouverture de la
-    // confirmation. Si elle n'aboutit pas dans le délai, on part en voie
-    // classique immédiatement — jamais plus lent que l'ancienne méthode.
-    await attendrePreparationPdf(800);
+    // La préparation a été lancée à l'ouverture de la confirmation (champs
+    // figés) : si elle tourne encore, on l'attend jusqu'au bout — elle est
+    // forcément la bonne et il ne lui reste que quelques centaines de ms.
+    // L'interrompre créerait une course sur la zone d'impression (préparation
+    // et voie classique en même temps → risque de ticket vide).
+    await attendrePreparationPdf();
     const cachePrepare = cachePdfPret();
     logDiagnostic(cachePrepare ? 'info' : 'warn', cachePrepare ? 'Cache ticket prêt avant vente' : 'Cache ticket absent avant vente, impression classique prévue', {
         numero: cachePrepare?.numero ?? null,

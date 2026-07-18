@@ -508,13 +508,10 @@ async function envoyer() {
     }
 
     if (preparationPdfCourrier.value) {
-        // Attente bornée : si la préparation (lancée à l'ouverture de la
-        // confirmation) n'aboutit pas vite, on part en voie classique —
-        // jamais plus lent que l'ancienne méthode directe.
-        await Promise.race([
-            preparationPdfCourrier.value,
-            new Promise((resolve) => setTimeout(resolve, 800)),
-        ]);
+        // Préparation lancée à l'ouverture de la confirmation : on l'attend
+        // jusqu'au bout (courte et forcément à jour). L'interrompre créerait
+        // une course sur la zone d'impression partagée.
+        await preparationPdfCourrier.value;
     }
     const cachePrepare = cachePdfCourrierPret();
     logDiagnostic(cachePrepare ? 'info' : 'warn', cachePrepare ? 'Cache courrier prêt avant enregistrement' : 'Cache courrier absent avant enregistrement, impression classique prévue', {

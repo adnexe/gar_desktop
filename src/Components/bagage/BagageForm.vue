@@ -404,13 +404,10 @@ async function enregistrer() {
     if (!config.agence || !session.userId || montant.value === null) return;
 
     if (preparationPdfBagage.value) {
-        // Attente bornée : si la préparation (lancée à l'ouverture de la
-        // confirmation) n'aboutit pas vite, on part en voie classique —
-        // jamais plus lent que l'ancienne méthode directe.
-        await Promise.race([
-            preparationPdfBagage.value,
-            new Promise((resolve) => setTimeout(resolve, 800)),
-        ]);
+        // Préparation lancée à l'ouverture de la confirmation : on l'attend
+        // jusqu'au bout (courte et forcément à jour). L'interrompre créerait
+        // une course sur la zone d'impression partagée.
+        await preparationPdfBagage.value;
     }
     const cachePrepare = cachePdfBagagePret();
     logDiagnostic(cachePrepare ? 'info' : 'warn', cachePrepare ? 'Cache bagage prêt avant enregistrement' : 'Cache bagage absent avant enregistrement, impression classique prévue', {
