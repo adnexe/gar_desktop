@@ -168,3 +168,13 @@ Deux causes corrigées :
 - La borne de 800 ms envisagée au clic « Vendre/Enregistrer » créait une course : préparation encore en cours + voie classique utilisant la même `.zone-impression` en parallèle (risque de ticket vide/mélangé). Règle finale, pour les trois modules : la préparation démarre à l'ouverture de la confirmation (champs figés, donc toujours pertinente) et, si elle tourne encore au clic, on **l'attend jusqu'au bout** — quelques centaines de ms au pire, généralement 0 (elle a fini pendant la lecture du dialog). Jamais deux impressions concurrentes.
 - Ce qui protège la vente : préparation uniquement sur champs figés, empreinte + séquence pour invalider tout cache obsolète, numéro réservé vérifié contre le numéro réellement vendu (cache jeté si différent), et voie classique en repli intégral.
 
+
+## Cache du contrôle imprimante (15/07/2026)
+
+- `verifierDisponible` (PowerShell Win32_Printer / lpstat CUPS, 0,3-1 s) était appelé à chaque clic de vente dans le chemin critique. Résultat POSITIF mis en cache 10 s (`ipc/index.ts`) ; un échec n'est jamais mis en cache. Si l'imprimante est débranchée dans l'intervalle, l'impression échoue proprement → ticket annulé (filet existant).
+
+## Impression : retour à la version simple (18/07/2026)
+
+- Après tests terrain, la prégénération de PDF (empreintes, numéros réservés, caches) n'apportait aucun gain perceptible : le temps est dominé par SumatraPDF + la mécanique de l'imprimante, et le contrôle PowerShell ajouté au passage (~0,5-1 s/vente) annulait le bénéfice.
+- **Revert chirurgical au commit `120c3ff` (16/07 17:12)** des 5 fichiers d'impression : `electron/ipc/index.ts`, `VenteForm.vue`, `BagageForm.vue`, `CourrierForm.vue`, `src/lib/impression.ts` — c'est la méthode directe : vente → PDF → SumatraPDF, deux jobs (ticket puis talon).
+- Canaux non-impression ajoutés après le 16/07 réinjectés dans `ipc/index.ts` : `config:relancerServeurLocal`, `config:nettoyerDonneesTest`, `diagnostic:log`. Tout le reste (licences, reset agence, sync...) est inchangé.

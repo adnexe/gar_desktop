@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watchDebounced } from '@vueuse/core';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
-import { Check, LoaderCircle, Mail, Package, Plus, Printer, Send, Trash2, UserRound, X } from '@lucide/vue';
+import { Check, Mail, Package, Plus, Send, Trash2, UserRound, X } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
@@ -65,7 +65,6 @@ const prixExpedition = ref<number | null>(null);
 const expeditionManuelle = ref(false);
 
 const enregistrement = ref(false);
-const impressionTalon = ref(false);
 const erreur = ref('');
 const recu = ref<{
     numero_courrier: string;
@@ -153,17 +152,6 @@ const peutEnvoyer = computed(() =>
     prixExpedition.value !== null &&
     !enregistrement.value,
 );
-type CachePdfCourrier = {
-    empreinte: string;
-    numero: string;
-    createdAt: string;
-    recuId: string;
-    creeLe: number;
-};
-const cachePdfCourrier = ref<CachePdfCourrier | null>(null);
-const preparationPdfCourrier = ref<Promise<void> | null>(null);
-let sequencePreparationPdfCourrier = 0;
-const DUREE_VALIDITE_PDF_COURRIER_MS = 45_000;
 
 async function chargerVoyagesAgence() {
     if (!config.agence) {
@@ -191,7 +179,6 @@ onUnmounted(() => {
     if (intervalleVoyages) {
         clearInterval(intervalleVoyages);
     }
-    void nettoyerCachePdfCourrier();
 });
 
 // Une ville peut contenir plusieurs agences (ex : Abidjan → Yopougon, Adjamé...).
@@ -233,22 +220,11 @@ function dateHeureRecu() {
     });
 }
 
-function formatDateHeureRecu(iso: string) {
-    return new Date(iso).toLocaleString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
-
 function nomComplet(personne: { nom: string; prenoms: string }) {
     return [personne.prenoms, personne.nom].filter(Boolean).join(' ').trim();
 }
 
-function resetSaisie() {
-    void nettoyerCachePdfCourrier();
+function resetTout() {
     villeArriveeId.value = null;
     agenceArriveeId.value = null;
     agencesDestination.value = [];
@@ -269,12 +245,8 @@ function resetSaisie() {
     expeditionManuelle.value = false;
     confirmationOuverte.value = false;
     erreur.value = '';
-    void chargerVoyagesAgence();
-}
-
-function resetTout() {
-    resetSaisie();
     recu.value = null;
+    void chargerVoyagesAgence();
 }
 
 defineExpose({ resetTout });
@@ -289,8 +261,8 @@ function messageErreurInconnue(e: unknown, defaut: string) {
         .replace(/^Error invoking remote method "[^"]+": Error: /, '');
 }
 
-// Le reçu sort automatiquement à la vente. L'étiquette/talon se lance ensuite
-// manuellement, tant que le dernier courrier reste affiché dans le formulaire.
+// Reçu et étiquette colis partent en deux jobs séparés : l'imprimante coupe
+// entre les deux, l'étiquette n'est plus collée au reçu du client.
 const partieImpression = ref<'tout' | 'recu' | 'etiquette'>('tout');
 
 async function imprimer(partie: 'recu' | 'etiquette'): Promise<ResultatImpression> {
@@ -303,220 +275,11 @@ async function imprimer(partie: 'recu' | 'etiquette'): Promise<ResultatImpressio
     }
 }
 
-function logDiagnostic(niveau: 'info' | 'warn', message: string, contexte?: Record<string, unknown>) {
-    void window.api.diagnostic.log(niveau, message, contexte).catch(() => undefined);
-}
-
-function empreinteCourrierCourante() {
-    return JSON.stringify({
-        agenceId: config.agence?.id ?? null,
-        villeArriveeId: villeArriveeId.value,
-        agenceArriveeId: agenceArriveeId.value,
-        voyageId: voyageId.value,
-        voyageUuid: voyageSelectionne.value?.uuid ?? null,
-        userId: session.userId,
-        agentId: session.agentId,
-        prixExpedition: prixExpedition.value ?? 0,
-        expediteur: { ...expediteur },
-        destinataire: { ...destinataire },
-        colis: colisListe.value.map((c) => ({ ...c })),
-    });
-}
-
-async function supprimerPdfPrepare(id: string | null | undefined) {
-    if (!id) return;
-
-    try {
-        await window.api.impression.supprimerPdfPrepare(id);
-    } catch {
-        // Le PDF a peut-être déjà été consommé par l'impression.
-    }
-}
-
-async function nettoyerCachePdfCourrier() {
-    sequencePreparationPdfCourrier++;
-    const cache = cachePdfCourrier.value;
-    cachePdfCourrier.value = null;
-    if (cache) {
-        logDiagnostic('info', 'Préparation courrier invalidée', {
-            numero: cache.numero,
-            age_ms: Date.now() - cache.creeLe,
-        });
-        await supprimerPdfPrepare(cache.recuId);
-    }
-}
-
-function creerRecuCourrier(numero: string, createdAt: string, montantColisActuel = montantColis.value, montantTotalActuel = montantTotal.value) {
-    if (!config.agence) return null;
-
-    return {
-        numero_courrier: numero,
-        destination: villeArriveeNom.value,
-        agence_arrivee: agenceArriveeNom.value || null,
-        voyage: voyageSelectionne.value ? libelleVoyage(voyageSelectionne.value) : null,
-        expediteur: `${nomComplet(expediteur)} (${expediteur.telephone})`.trim(),
-        expediteur_nom: nomComplet(expediteur),
-        expediteur_telephone: expediteur.telephone,
-        destinataire: `${nomComplet(destinataire)} (${destinataire.telephone})`.trim(),
-        destinataire_nom: nomComplet(destinataire),
-        destinataire_telephone: destinataire.telephone,
-        colis: colisListe.value.map((c) => ({
-            nom: c.nom,
-            type: typeLabel[c.type] ?? c.type,
-            quantite: c.quantite,
-            montant: c.quantite * c.prix,
-        })),
-        prix_expedition: prixExpedition.value ?? 0,
-        montant_colis: montantColisActuel,
-        montant_total: montantTotalActuel,
-        agence_depart: config.agence.nom,
-        agent: session.nom || null,
-        created_at: formatDateHeureRecu(createdAt),
-        compagnie: config.compagnie,
-    };
-}
-
-async function preparerPdfCourrierPartie(recuPrepare: NonNullable<typeof recu.value>, partie: 'recu' | 'etiquette') {
-    recu.value = recuPrepare;
-    partieImpression.value = partie;
-
-    try {
-        await nextTick();
-        const resultat = await window.api.impression.preparerPdf(hauteurZoneImpressionMm());
-        if (!resultat.ok) throw new Error(resultat.erreur);
-        return resultat.id;
-    } finally {
-        partieImpression.value = 'tout';
-    }
-}
-
-function cachePdfCourrierPret() {
-    const cache = cachePdfCourrier.value;
-    if (!cache) return null;
-    if (Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_COURRIER_MS) {
-        logDiagnostic('info', 'Cache courrier expiré', { numero: cache.numero, age_ms: Date.now() - cache.creeLe });
-        return null;
-    }
-    if (cache.empreinte !== empreinteCourrierCourante()) {
-        logDiagnostic('info', 'Cache courrier obsolète : données modifiées', { numero: cache.numero });
-        return null;
-    }
-
-    return cache;
-}
-
-async function preparerPdfCourrier() {
-    if (!config.agence || !peutEnvoyer.value) return;
-
-    const sequence = ++sequencePreparationPdfCourrier;
-    const empreinte = empreinteCourrierCourante();
-    const numero = await window.api.courrier.preparerNumero(config.agence.id);
-    if (!numero) {
-        logDiagnostic('info', 'Préparation courrier ignorée : aucun numéro préparé disponible');
-        return;
-    }
-
-    const createdAt = new Date().toISOString();
-    const recuPrepare = creerRecuCourrier(numero, createdAt);
-    if (!recuPrepare || sequence !== sequencePreparationPdfCourrier || empreinte !== empreinteCourrierCourante()) return;
-
-    let recuId: string | null = null;
-
-    try {
-        logDiagnostic('info', 'Préparation courrier démarrée', { numero });
-        recuId = await preparerPdfCourrierPartie(recuPrepare, 'recu');
-        if (sequence !== sequencePreparationPdfCourrier || empreinte !== empreinteCourrierCourante()) {
-            logDiagnostic('info', 'Préparation courrier abandonnée : reçu PDF obsolète', { numero });
-            return;
-        }
-
-        cachePdfCourrier.value = { empreinte, numero, createdAt, recuId, creeLe: Date.now() };
-        logDiagnostic('info', 'Préparation courrier prête', { numero, recu_pdf: recuId });
-        recuId = null;
-    } catch (e) {
-        logDiagnostic('warn', 'Préparation PDF courrier ignorée', {
-            numero,
-            erreur: messageErreurInconnue(e, 'Erreur inconnue'),
-        });
-    } finally {
-        partieImpression.value = 'tout';
-        if (recuId) await supprimerPdfPrepare(recuId);
-    }
-}
-
-function ouvrirConfirmation() {
-    confirmationOuverte.value = true;
-    void nettoyerCachePdfCourrier().then(() => {
-        preparationPdfCourrier.value = preparerPdfCourrier()
-            .catch((e) => logDiagnostic('warn', 'Préparation PDF courrier interrompue', {
-                erreur: messageErreurInconnue(e, 'Erreur inconnue'),
-            }))
-            .finally(() => {
-                preparationPdfCourrier.value = null;
-            });
-    });
-}
-
-async function fermerConfirmation() {
-    confirmationOuverte.value = false;
-    await nettoyerCachePdfCourrier();
-}
-
-async function imprimerDepuisCacheOuClassique(partie: 'recu' | 'etiquette', idPrepare?: string | null): Promise<ResultatImpression> {
-    if (!idPrepare) {
-        return await imprimer(partie);
-    }
-
-    try {
-        return await window.api.impression.imprimerPdfPrepare(idPrepare);
-    } catch (e) {
-        return {
-            ok: false,
-            erreur: messageErreurInconnue(e, "L'impression préparée n'a pas pu être lancée."),
-        };
-    }
-}
-
-async function imprimerTalon() {
-    if (!recu.value || impressionTalon.value) return;
-
-    erreur.value = '';
-    impressionTalon.value = true;
-
-    try {
-        const imprimante = await window.api.impression.verifierDisponible();
-        if (!imprimante.ok) {
-            erreur.value = imprimante.erreur ?? "Aucune imprimante utilisable n'est disponible.";
-            return;
-        }
-
-        const impression = await imprimer('etiquette');
-        if (!impression.ok) {
-            erreur.value = `Talon non imprimé : ${impression.erreur ?? 'Impression non confirmée par le système.'}`;
-        }
-    } catch (e) {
-        erreur.value = `Talon non imprimé : ${messageErreurInconnue(e, "L'impression n'a pas pu être lancée.")}`;
-    } finally {
-        impressionTalon.value = false;
-    }
-}
-
 async function envoyer() {
     if (!config.agence || !villeArriveeId.value || !agenceArriveeId.value || !session.userId) {
         erreur.value = "Choisissez la ville et l'agence de destination.";
         return;
     }
-
-    if (preparationPdfCourrier.value) {
-        // Préparation lancée à l'ouverture de la confirmation : on l'attend
-        // jusqu'au bout (courte et forcément à jour). L'interrompre créerait
-        // une course sur la zone d'impression partagée.
-        await preparationPdfCourrier.value;
-    }
-    const cachePrepare = cachePdfCourrierPret();
-    logDiagnostic(cachePrepare ? 'info' : 'warn', cachePrepare ? 'Cache courrier prêt avant enregistrement' : 'Cache courrier absent avant enregistrement, impression classique prévue', {
-        numero: cachePrepare?.numero ?? null,
-    });
 
     enregistrement.value = true;
     erreur.value = '';
@@ -527,13 +290,6 @@ async function envoyer() {
     const prixExpeditionActuel = prixExpedition.value ?? 0;
 
     try {
-        const imprimante = await window.api.impression.verifierDisponible();
-        if (!imprimante.ok) {
-            erreur.value = imprimante.erreur ?? "Aucune imprimante utilisable n'est disponible.";
-            confirmationOuverte.value = false;
-            return;
-        }
-
         const reponse = (await window.api.courrier.enregistrer({
             agenceId: agenceActuelle.id,
             villeArriveeId: villeArriveeIdActuelle,
@@ -548,8 +304,6 @@ async function envoyer() {
             // Objets simples (non réactifs) : un proxy Vue casse la sérialisation
             // structured-clone d'Electron (« An object could not be cloned »).
             colis: colisListe.value.map((c) => ({ nom: c.nom, type: c.type, quantite: c.quantite, prix: c.prix })),
-            numeroCourrier: cachePrepare?.numero ?? null,
-            createdAt: cachePrepare?.createdAt ?? null,
         })) as {
             ok: boolean;
             courrier?: { uuid: string; numeroCourrier: string; montantColis: number; montantTotal: number };
@@ -565,35 +319,39 @@ async function envoyer() {
         confirmationOuverte.value = false;
 
         const destination = villes.value.find((v) => v.id === villeArriveeIdActuelle)?.nom ?? '';
-        const dernierRecu = creerRecuCourrier(
-            reponse.courrier.numeroCourrier,
-            cachePrepare?.createdAt ?? new Date().toISOString(),
-            reponse.courrier.montantColis,
-            reponse.courrier.montantTotal,
-        );
-        if (!dernierRecu) {
-            erreur.value = "Le reçu courrier n'a pas pu être préparé.";
-            return;
-        }
+        const agenceNom = agencesDestination.value.find((a) => a.id === agenceArriveeIdActuelle)?.nom ?? null;
+        const voyageLabel = voyageSelectionne.value ? libelleVoyage(voyageSelectionne.value) : null;
+
+        const dernierRecu = {
+            numero_courrier: reponse.courrier.numeroCourrier,
+            destination,
+            agence_arrivee: agenceNom,
+            voyage: voyageLabel,
+            expediteur: `${nomComplet(expediteur)} (${expediteur.telephone})`.trim(),
+            expediteur_nom: nomComplet(expediteur),
+            expediteur_telephone: expediteur.telephone,
+            destinataire: `${nomComplet(destinataire)} (${destinataire.telephone})`.trim(),
+            destinataire_nom: nomComplet(destinataire),
+            destinataire_telephone: destinataire.telephone,
+            colis: colisListe.value.map((c) => ({
+                nom: c.nom,
+                type: typeLabel[c.type] ?? c.type,
+                quantite: c.quantite,
+                montant: c.quantite * c.prix,
+            })),
+            prix_expedition: prixExpeditionActuel,
+            montant_colis: reponse.courrier.montantColis,
+            montant_total: reponse.courrier.montantTotal,
+            agence_depart: agenceActuelle.nom,
+            agent: session.nom || null,
+            created_at: dateHeureRecu(),
+            compagnie: config.compagnie,
+        };
         recu.value = dernierRecu;
-        const cacheUtilisable = cachePrepare && reponse.courrier.numeroCourrier === cachePrepare.numero ? cachePrepare : null;
-        if (cachePrepare && !cacheUtilisable) {
-            logDiagnostic('warn', 'Cache courrier refusé : numéro final différent', {
-                numero_prepare: cachePrepare.numero,
-                numero_final: reponse.courrier.numeroCourrier,
-            });
-            void nettoyerCachePdfCourrier();
-        } else if (cacheUtilisable) {
-            logDiagnostic('info', 'Cache courrier utilisé pour impression', {
-                numero: cacheUtilisable.numero,
-                recu_pdf: cacheUtilisable.recuId,
-            });
-            cachePdfCourrier.value = null;
-        }
 
         let impression: ResultatImpression;
         try {
-            impression = await imprimerDepuisCacheOuClassique('recu', cacheUtilisable?.recuId);
+            impression = await imprimer('recu');
         } catch (e) {
             impression = {
                 ok: false,
@@ -612,10 +370,18 @@ async function envoyer() {
                 erreur.value = `Impression non confirmée pour le courrier ${reponse.courrier.numeroCourrier}, mais l'annulation automatique a échoué : ${messageErreurInconnue(e, motif)}. Vérifiez avant de continuer.`;
             }
 
-            if (cacheUtilisable) {
-                await nettoyerCachePdfCourrier();
-            }
             return;
+        }
+
+        // Le reçu client est sorti : l'étiquette colis part en second job.
+        // Son échec n'annule pas l'envoi, on avertit simplement.
+        try {
+            const etiquette = await imprimer('etiquette');
+            if (!etiquette.ok) {
+                erreur.value = `Le reçu est imprimé, mais l'étiquette colis n'est pas sortie : ${etiquette.erreur ?? 'erreur inconnue'}.`;
+            }
+        } catch (e) {
+            erreur.value = `Le reçu est imprimé, mais l'étiquette colis n'est pas sortie : ${messageErreurInconnue(e, 'erreur inconnue')}.`;
         }
 
         const confirmation = await window.api.courrier.confirmerImpression(reponse.courrier.uuid);
@@ -634,15 +400,11 @@ async function envoyer() {
             montant_total: reponse.courrier.montantTotal,
         });
 
-        resetSaisie();
+        resetTout();
     } catch (e) {
         erreur.value = messageErreurInconnue(e, "Une erreur est survenue lors de l'enregistrement.");
         confirmationOuverte.value = false;
     } finally {
-        const cache = cachePdfCourrier.value;
-        if (cache && Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_COURRIER_MS) {
-            void nettoyerCachePdfCourrier();
-        }
         enregistrement.value = false;
     }
 }
@@ -839,24 +601,11 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
         </div>
 
         <!-- Barre d'actions fixe : hors de la zone qui défile. -->
-        <div class="shrink-0 flex flex-wrap items-center justify-end gap-2 border-t bg-background px-6 py-3">
-            <div v-if="recu" class="mr-auto min-w-0 text-sm">
-                <p class="truncate font-semibold">Dernier courrier : {{ recu.numero_courrier }}</p>
-                <p class="truncate text-muted-foreground">
-                    {{ recu.destination }}
-                    <span v-if="recu.destinataire_nom"> · {{ recu.destinataire_nom }}</span>
-                </p>
-            </div>
-            <Button v-if="recu" variant="outline" :disabled="impressionTalon || enregistrement" @click="imprimerTalon">
-                <LoaderCircle v-if="impressionTalon" class="animate-spin" />
-                <Printer v-else />
-                {{ impressionTalon ? 'Impression talon…' : 'Imprimer talon' }}
-            </Button>
-            <Button variant="outline" @click="() => { void nettoyerCachePdfCourrier(); emit('fermer'); }">Fermer</Button>
-            <Button :disabled="!peutEnvoyer" @click="ouvrirConfirmation">
-                <LoaderCircle v-if="enregistrement" class="animate-spin" />
-                <Send v-else />
-                {{ enregistrement ? 'Impression en cours…' : 'Enregistrer et imprimer' }}
+        <div class="shrink-0 flex items-center justify-end gap-2 border-t bg-background px-6 py-3">
+            <Button variant="outline" @click="emit('fermer')">Fermer</Button>
+            <Button :disabled="!peutEnvoyer" @click="confirmationOuverte = true">
+                <Send />
+                {{ enregistrement ? 'Enregistrement…' : 'Enregistrer et imprimer' }}
             </Button>
         </div>
 
@@ -891,14 +640,13 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 </div>
 
                 <div class="mt-4 flex items-center justify-end gap-2">
-                    <Button variant="outline" @click="fermerConfirmation">
+                    <Button variant="outline" @click="confirmationOuverte = false">
                         <X />
                         Fermer
                     </Button>
                     <Button :disabled="enregistrement" @click="envoyer">
-                        <LoaderCircle v-if="enregistrement" class="animate-spin" />
-                        <Check v-else />
-                        {{ enregistrement ? 'Impression…' : 'Confirmer' }}
+                        <Check />
+                        {{ enregistrement ? 'Enregistrement…' : 'Confirmer' }}
                     </Button>
                 </div>
             </div>

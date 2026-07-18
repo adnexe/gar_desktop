@@ -1,14 +1,11 @@
 import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
-import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 // pdf-to-printer est en CommonJS : import par défaut obligatoire (main en ESM).
 import pdfToPrinter from 'pdf-to-printer';
 
 const { print: imprimerFichierPdf } = pdfToPrinter;
-const execFileAsync = promisify(execFile);
 import { ConfigController } from '../controllers/ConfigController';
 import { AuthController } from '../controllers/AuthController';
 import { AgentController } from '../controllers/AgentController';
@@ -35,241 +32,9 @@ type ImprimanteExposee = {
 };
 
 type ResultatImpression = { ok: true; imprimante: string } | { ok: false; erreur: string };
-type CibleImpression = { printer?: string; libelle: string };
-type EtatImprimanteWindows = {
-    name?: string;
-    workOffline?: boolean;
-    printerStatus?: number | null;
-    detectedErrorState?: number | null;
-    extendedPrinterStatus?: number | null;
-};
-type PdfPrepare = {
-    fichier: string;
-    hauteurMm?: number;
-    hauteurPouces: number;
-    hauteurPapierMm: number;
-    creeLe: number;
-};
-
-const pdfPrepares = new Map<string, PdfPrepare>();
 
 function dureeMs(debut: number): number {
     return Math.round(performance.now() - debut);
-}
-
-function hauteurPagePouces(hauteurMm?: number): number {
-    return hauteurMm
-        ? Math.min(Math.max(hauteurMm / 25.4 + 0.2, 1.5), 40)
-        : 11.7;
-}
-
-function messageEtatImprimanteWindows(etat: EtatImprimanteWindows): string | null {
-    if (etat.workOffline) {
-        return `L'imprimante par défaut ${etat.name ?? ''} est hors ligne. Allumez-la avant de vendre.`.trim();
-    }
-
-    if ([6, 7].includes(Number(etat.printerStatus ?? 0))) {
-        return `L'imprimante par défaut ${etat.name ?? ''} n'est pas prête (statut ${etat.printerStatus}).`.trim();
-    }
-
-    const erreursBloquantes: Record<number, string> = {
-        4: 'papier absent',
-        7: 'capot ouvert',
-        8: 'papier bloqué',
-        9: 'hors ligne',
-        10: 'intervention requise',
-        11: 'bac de sortie plein',
-    };
-    const erreur = erreursBloquantes[Number(etat.detectedErrorState ?? 0)];
-    if (erreur) {
-        return `L'imprimante par défaut ${etat.name ?? ''} signale : ${erreur}.`.trim();
-    }
-
-    return null;
-}
-
-function echapperPowerShellSingleQuote(valeur: string): string {
-    return valeur.replace(/'/g, "''");
-}
-
-async function verifierImprimanteWindowsPrete(printerName?: string): Promise<ResultatImpression | null> {
-    if (process.platform !== 'win32') return null;
-
-    const debut = performance.now();
-    const filtre = printerName
-        ? `$target = '${echapperPowerShellSingleQuote(printerName)}'
-$printer = Get-CimInstance Win32_Printer | Where-Object { $_.Name -eq $target } | Select-Object -First 1 Name,WorkOffline,PrinterStatus,DetectedErrorState,ExtendedPrinterStatus`
-        : "$printer = Get-CimInstance Win32_Printer | Where-Object { $_.Default -eq $true } | Select-Object -First 1 Name,WorkOffline,PrinterStatus,DetectedErrorState,ExtendedPrinterStatus";
-    const script = `
-${filtre}
-if ($null -eq $printer) {
-  Write-Output '{"absent":true}'
-} else {
-  $printer | ConvertTo-Json -Compress
-}
-`;
-
-    try {
-        const { stdout } = await execFileAsync('powershell.exe', [
-            '-NoProfile',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-Command',
-            script,
-        ], { timeout: 3_000 });
-        const brut = String(stdout).trim();
-        const data = JSON.parse(brut) as {
-            absent?: boolean;
-            Name?: string;
-            WorkOffline?: boolean;
-            PrinterStatus?: number | null;
-            DetectedErrorState?: number | null;
-            ExtendedPrinterStatus?: number | null;
-        };
-
-        if (data.absent) {
-            logger.warn('Contrôle imprimante Windows : imprimante introuvable, contrôle détaillé ignoré.', {
-                imprimante: printerName ?? 'par défaut',
-                duree_ms: dureeMs(debut),
-            });
-
-            return printerName
-                ? { ok: false, erreur: `L'imprimante ${printerName} est introuvable dans Windows.` }
-                : null;
-        }
-        if (data.Name && estNomImprimanteVirtuelle(data.Name)) {
-            logger.warn('Contrôle imprimante Windows : imprimante virtuelle détectée.', {
-                imprimante: data.Name,
-                duree_ms: dureeMs(debut),
-            });
-
-            return printerName
-                ? { ok: false, erreur: `L'imprimante sélectionnée (${data.Name}) n'est pas une imprimante ticket.` }
-                : null;
-        }
-
-        const etat: EtatImprimanteWindows = {
-            name: data.Name,
-            workOffline: data.WorkOffline,
-            printerStatus: data.PrinterStatus,
-            detectedErrorState: data.DetectedErrorState,
-            extendedPrinterStatus: data.ExtendedPrinterStatus,
-        };
-        const blocage = messageEtatImprimanteWindows(etat);
-        logger.info('Contrôle imprimante Windows avant impression', {
-            ...etat,
-            ok: blocage === null,
-            duree_ms: dureeMs(debut),
-        });
-
-        return blocage ? { ok: false, erreur: blocage } : null;
-    } catch (erreur) {
-        logger.warn('Contrôle imprimante Windows indisponible, impression tentée.', {
-            duree_ms: dureeMs(debut),
-            erreur: erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur),
-        });
-        return null;
-    }
-}
-
-async function verifierImprimanteMacosPrete(printerName?: string): Promise<ResultatImpression | null> {
-    if (process.platform !== 'darwin' || !printerName) return null;
-
-    const debut = performance.now();
-
-    try {
-        const { stdout, stderr } = await execFileAsync('/usr/bin/lpstat', ['-p', printerName], { timeout: 3_000 });
-        const sortie = `${stdout}\n${stderr}`.trim();
-        const bloque = /disabled|offline|not connected|unable to connect|paused|stopped|not responding/i.test(sortie);
-
-        logger.info('Contrôle imprimante macOS/CUPS avant impression', {
-            imprimante: printerName,
-            ok: !bloque,
-            duree_ms: dureeMs(debut),
-            statut: sortie.split('\n')[0] ?? '',
-        });
-
-        if (bloque) {
-            return {
-                ok: false,
-                erreur: `L'imprimante ${printerName} n'est pas prête selon macOS. Vérifiez qu'elle est allumée et connectée.`,
-            };
-        }
-
-        return null;
-    } catch (erreur) {
-        logger.warn('Contrôle imprimante macOS/CUPS indisponible, impression tentée.', {
-            imprimante: printerName,
-            duree_ms: dureeMs(debut),
-            erreur: erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur),
-        });
-
-        return null;
-    }
-}
-
-async function supprimerPdfPrepare(id: string): Promise<void> {
-    const prepare = pdfPrepares.get(id);
-    if (!prepare) return;
-
-    pdfPrepares.delete(id);
-    await unlink(prepare.fichier).catch(() => undefined);
-}
-
-async function preparerPdfDepuisRenderer(sender: WebContents, hauteurMm?: number): Promise<{ ok: true; id: string } | { ok: false; erreur: string }> {
-    if (sender.isDestroyed()) {
-        return { ok: false, erreur: 'Fenêtre d’impression introuvable.' };
-    }
-
-    const debutTotal = performance.now();
-    const hauteurPouces = hauteurPagePouces(hauteurMm);
-    const id = randomUUID();
-    const fichier = join(app.getPath('temp'), `adnexe-ticket-prepared-${id}.pdf`);
-
-    try {
-        const debutPdf = performance.now();
-        const pdf = await sender.printToPDF({
-            printBackground: true,
-            preferCSSPageSize: true,
-            margins: { top: 0, bottom: 0, left: 0, right: 0 },
-            pageSize: { width: 3.15, height: hauteurPouces },
-        });
-        const printToPdfMs = dureeMs(debutPdf);
-
-        const debutEcriture = performance.now();
-        await writeFile(fichier, pdf);
-
-        pdfPrepares.set(id, {
-            fichier,
-            hauteurMm,
-            hauteurPouces,
-            hauteurPapierMm: Math.round(hauteurPouces * 25.4),
-            creeLe: Date.now(),
-        });
-
-        logger.info('Chrono impression PDF préparé', {
-            id,
-            hauteur_mesuree_mm: hauteurMm ?? null,
-            hauteur_page_pouces: Number(hauteurPouces.toFixed(2)),
-            hauteur_papier_mm: Math.round(hauteurPouces * 25.4),
-            pdf_octets: pdf.length,
-            print_to_pdf_ms: printToPdfMs,
-            ecriture_pdf_ms: dureeMs(debutEcriture),
-            total_ms: dureeMs(debutTotal),
-        });
-
-        return { ok: true, id };
-    } catch (erreur) {
-        await unlink(fichier).catch(() => undefined);
-        const message = erreur instanceof Error ? erreur.message : String(erreur);
-        logger.warn('Préparation PDF impossible.', {
-            hauteur_mesuree_mm: hauteurMm ?? null,
-            total_ms: dureeMs(debutTotal),
-            erreur: message,
-        });
-
-        return { ok: false, erreur: message };
-    }
 }
 
 function nomImprimante(imprimante: ImprimanteRuntime): string {
@@ -357,52 +122,7 @@ function ordonnerImprimantes(imprimantes: ImprimanteRuntime[]): ImprimanteRuntim
 // Imprimantes virtuelles (OneNote, PDF, Fax...) : jamais utilisées comme
 // repli automatique — un ticket qui « s'imprime » dans OneNote est perdu.
 function estImprimanteVirtuelle(imprimante: ImprimanteRuntime): boolean {
-    return estNomImprimanteVirtuelle(`${imprimante.name} ${imprimante.displayName}`);
-}
-
-function estNomImprimanteVirtuelle(nom: string): boolean {
-    return /onenote|fax|xps|print to pdf|pdf24|microsoft/i.test(nom);
-}
-
-function imprimantesPhysiques(imprimantes: ImprimanteRuntime[]): ImprimanteRuntime[] {
-    return ordonnerImprimantes(imprimantes).filter((imprimante) => imprimante.name && !estImprimanteVirtuelle(imprimante));
-}
-
-async function choisirCibleImpression(sender: WebContents): Promise<{ ok: true; cible: CibleImpression } | { ok: false; erreur: string }> {
-    const imprimantes = await listerImprimantes(sender);
-    const physiques = imprimantesPhysiques(imprimantes);
-    const cible = physiques.find(estImprimanteParDefaut) ?? physiques[0];
-
-    if (!cible) {
-        logger.warn('Aucune imprimante physique détectée pour impression.', {
-            imprimantes: imprimantes.map(nomImprimante),
-        });
-
-        return {
-            ok: false,
-            erreur: "Aucune imprimante ticket utilisable n'est détectée. Vérifiez que l'imprimante est allumée et installée.",
-        };
-    }
-
-    const libelle = nomImprimante(cible);
-    if (!estImprimanteParDefaut(cible)) {
-        logger.warn('Aucune imprimante par défaut détectée, première imprimante physique utilisée.', { imprimante: libelle });
-    }
-
-    const controleWindows = await verifierImprimanteWindowsPrete(cible.name);
-    if (controleWindows) return controleWindows;
-
-    const controleMacos = await verifierImprimanteMacosPrete(cible.name);
-    if (controleMacos) return controleMacos;
-
-    return { ok: true, cible: { printer: cible.name, libelle } };
-}
-
-async function verifierImprimanteDisponible(sender: WebContents): Promise<ResultatImpression> {
-    const cible = await choisirCibleImpression(sender);
-    if (!cible.ok) return cible;
-
-    return { ok: true, imprimante: cible.cible.libelle };
+    return /onenote|fax|xps|print to pdf|pdf24|microsoft/i.test(`${imprimante.name} ${imprimante.displayName}`);
 }
 
 /**
@@ -462,10 +182,11 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
 
         // Imprimante par défaut d'abord (sans nom), puis les imprimantes
         // physiques (défaut en tête) — jamais les virtuelles en repli.
-        const physiques = imprimantesPhysiques(imprimantes);
-        const cibles: CibleImpression[] = [
-            ...(imprimantes.length === 0 || physiques.some(estImprimanteParDefaut) ? [{ libelle: 'imprimante par défaut' }] : []),
-            ...physiques.map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
+        const cibles: { printer?: string; libelle: string }[] = [
+            { libelle: 'imprimante par défaut' },
+            ...ordonnerImprimantes(imprimantes)
+                .filter((imprimante) => imprimante.name && !estImprimanteVirtuelle(imprimante))
+                .map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
         ];
 
         // Papier personnalisé à la taille exacte du reçu (paper=80mm x Hmm) :
@@ -533,251 +254,6 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
     }
 }
 
-async function envoyerCoupeMacos(printer?: string): Promise<{ ok: true; duree_ms: number } | { ok: false; duree_ms: number; erreur: string }> {
-    const debut = performance.now();
-    let fichier: string | null = null;
-
-    try {
-        fichier = join(app.getPath('temp'), `adnexe-cut-${randomUUID()}.bin`);
-        // ESC/POS : avance légèrement le papier puis coupe complète.
-        await writeFile(fichier, Buffer.from([0x1b, 0x64, 0x03, 0x1d, 0x56, 0x00]));
-
-        try {
-            await execFileAsync('/usr/bin/lp', [
-                ...(printer ? ['-d', printer] : []),
-                '-o',
-                'raw',
-                fichier,
-            ], { timeout: 5_000 });
-
-            return { ok: true, duree_ms: dureeMs(debut) };
-        } catch (erreurLp) {
-            const messageLp = erreurLp instanceof Error ? erreurLp.message.split('\n')[0] : String(erreurLp);
-
-            try {
-                await execFileAsync('/usr/bin/lpr', [
-                    ...(printer ? ['-P', printer] : []),
-                    '-l',
-                    fichier,
-                ], { timeout: 5_000 });
-
-                return { ok: true, duree_ms: dureeMs(debut) };
-            } catch (erreurLpr) {
-                const messageLpr = erreurLpr instanceof Error ? erreurLpr.message.split('\n')[0] : String(erreurLpr);
-                return { ok: false, duree_ms: dureeMs(debut), erreur: `${messageLp} | ${messageLpr}` };
-            }
-        }
-    } finally {
-        if (fichier) await unlink(fichier).catch(() => undefined);
-    }
-}
-
-/**
- * Voie principale sous macOS : Chromium/Electron peut détecter l'imprimante
- * mais refuser les réglages silencieux avec « Invalid printer settings ».
- * On rend donc le reçu en PDF puis on confie le fichier à CUPS (`lp`), le
- * système d'impression natif macOS.
- */
-async function imprimerViaPdfMacos(sender: WebContents, imprimantes: ImprimanteRuntime[], tentatives: string[], hauteurMm?: number): Promise<ResultatImpression> {
-    const debutTotal = performance.now();
-    const chrono = {
-        hauteur_mesuree_mm: hauteurMm ?? null,
-        hauteur_page_pouces: 0,
-        hauteur_papier_mm: 0,
-        pdf_octets: 0,
-        print_to_pdf_ms: 0,
-        ecriture_pdf_ms: 0,
-        suppression_pdf_ms: 0,
-        total_ms: 0,
-        tentatives_cups: [] as {
-            cible: string;
-            format: string;
-            ok: boolean;
-            duree_ms: number;
-            erreur?: string;
-            coupe_ok?: boolean;
-            coupe_ms?: number;
-            coupe_erreur?: string;
-        }[],
-        resultat: 'succes' as 'succes' | 'echec',
-        imprimante: null as string | null,
-    };
-    const hauteurPouces = hauteurMm
-        ? Math.min(Math.max(hauteurMm / 25.4 + 0.2, 1.5), 40)
-        : 11.7;
-    chrono.hauteur_page_pouces = Number(hauteurPouces.toFixed(2));
-    let fichier: string | null = null;
-    let resultat: ResultatImpression | null = null;
-
-    try {
-        const debutPdf = performance.now();
-        const pdf = await sender.printToPDF({
-            printBackground: true,
-            preferCSSPageSize: true,
-            margins: { top: 0, bottom: 0, left: 0, right: 0 },
-            pageSize: { width: 3.15, height: hauteurPouces },
-        });
-        chrono.print_to_pdf_ms = dureeMs(debutPdf);
-        chrono.pdf_octets = pdf.length;
-
-        fichier = join(app.getPath('temp'), `adnexe-ticket-${randomUUID()}.pdf`);
-        const debutEcriture = performance.now();
-        await writeFile(fichier, pdf);
-        chrono.ecriture_pdf_ms = dureeMs(debutEcriture);
-
-        const physiques = imprimantesPhysiques(imprimantes);
-        const cibles: CibleImpression[] = [
-            ...(imprimantes.length === 0 || physiques.some(estImprimanteParDefaut) ? [{ libelle: 'imprimante par défaut' }] : []),
-            ...physiques.map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
-        ];
-        const hauteurPapierMm = Math.round(hauteurPouces * 25.4);
-        chrono.hauteur_papier_mm = hauteurPapierMm;
-        const formats: { options: string[]; libelle: string }[] = [
-            { options: ['-o', `media=Custom.80x${hauteurPapierMm}mm`, '-o', 'fit-to-page'], libelle: `80x${hauteurPapierMm}` },
-            { options: ['-o', 'fit-to-page'], libelle: 'papier pilote' },
-            { options: [], libelle: 'défaut CUPS' },
-        ];
-
-        for (const cible of cibles) {
-            for (const format of formats) {
-                const args = [
-                    ...(cible.printer ? ['-d', cible.printer] : []),
-                    ...format.options,
-                    fichier,
-                ];
-                const debutCups = performance.now();
-
-                try {
-                    await execFileAsync('/usr/bin/lp', args, { timeout: 15_000 });
-
-                    const imprimante = `${cible.libelle} (CUPS ${format.libelle})`;
-                    const coupe = await envoyerCoupeMacos(cible.printer);
-                    chrono.tentatives_cups.push({
-                        cible: cible.libelle,
-                        format: format.libelle,
-                        ok: true,
-                        duree_ms: dureeMs(debutCups),
-                        coupe_ok: coupe.ok,
-                        coupe_ms: coupe.duree_ms,
-                        ...(coupe.ok ? {} : { coupe_erreur: coupe.erreur }),
-                    });
-                    if (!coupe.ok) {
-                        logger.warn('Coupe macOS/CUPS non confirmée.', {
-                            cible: cible.libelle,
-                            imprimante,
-                            erreur: coupe.erreur,
-                        });
-                    }
-                    chrono.imprimante = imprimante;
-                    resultat = { ok: true, imprimante };
-
-                    return resultat;
-                } catch (erreur) {
-                    const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
-                    chrono.tentatives_cups.push({
-                        cible: cible.libelle,
-                        format: format.libelle,
-                        ok: false,
-                        duree_ms: dureeMs(debutCups),
-                        erreur: message,
-                    });
-                    tentatives.push(`${cible.libelle} [CUPS ${format.libelle}] : ${message}`);
-                }
-            }
-        }
-
-        chrono.resultat = 'echec';
-        resultat = { ok: false, erreur: tentatives.join(' | ') };
-
-        return resultat;
-    } finally {
-        if (fichier) {
-            const debutSuppression = performance.now();
-            await unlink(fichier).catch(() => undefined);
-            chrono.suppression_pdf_ms = dureeMs(debutSuppression);
-        }
-
-        chrono.total_ms = dureeMs(debutTotal);
-        chrono.resultat = resultat?.ok ? 'succes' : 'echec';
-
-        logger[chrono.resultat === 'succes' ? 'info' : 'warn']('Chrono impression PDF/CUPS', chrono);
-    }
-}
-
-async function imprimerPdfPrepare(sender: WebContents, id: string): Promise<ResultatImpression> {
-    const debutTotal = performance.now();
-    const prepare = pdfPrepares.get(id);
-    if (!prepare) {
-        return { ok: false, erreur: 'PDF préparé introuvable ou déjà utilisé.' };
-    }
-
-    const chrono = {
-        id,
-        age_ms: Date.now() - prepare.creeLe,
-        hauteur_mesuree_mm: prepare.hauteurMm ?? null,
-        hauteur_page_pouces: Number(prepare.hauteurPouces.toFixed(2)),
-        hauteur_papier_mm: prepare.hauteurPapierMm,
-        sortie_ms: 0,
-        suppression_pdf_ms: 0,
-        total_ms: 0,
-        resultat: 'echec' as 'succes' | 'echec',
-        imprimante: null as string | null,
-        erreur: null as string | null,
-    };
-
-    try {
-        const cible = await choisirCibleImpression(sender);
-        if (!cible.ok) {
-            chrono.erreur = cible.erreur;
-            return cible;
-        }
-
-        if (process.platform === 'darwin') {
-            const debutCups = performance.now();
-            await execFileAsync('/usr/bin/lp', [
-                ...(cible.cible.printer ? ['-d', cible.cible.printer] : []),
-                '-o',
-                `media=Custom.80x${prepare.hauteurPapierMm}mm`,
-                '-o',
-                'fit-to-page',
-                prepare.fichier,
-            ], { timeout: 15_000 });
-
-            const coupe = await envoyerCoupeMacos();
-            chrono.sortie_ms = dureeMs(debutCups);
-            chrono.resultat = 'succes';
-            chrono.imprimante = `${cible.cible.libelle} (PDF préparé CUPS 80x${prepare.hauteurPapierMm})`;
-            if (!coupe.ok) {
-                logger.warn('Coupe macOS/CUPS non confirmée sur PDF préparé.', { id, erreur: coupe.erreur });
-            }
-
-            return { ok: true, imprimante: chrono.imprimante };
-        }
-
-        const debutSumatra = performance.now();
-        await imprimerFichierPdf(prepare.fichier, {
-            ...(cible.cible.printer ? { printer: cible.cible.printer } : {}),
-            paperSize: `80mm x ${prepare.hauteurPapierMm}mm`,
-            scale: 'noscale',
-        });
-        chrono.sortie_ms = dureeMs(debutSumatra);
-        chrono.resultat = 'succes';
-        chrono.imprimante = `${cible.cible.libelle} (PDF préparé 80x${prepare.hauteurPapierMm})`;
-
-        return { ok: true, imprimante: chrono.imprimante };
-    } catch (erreur) {
-        const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
-        chrono.erreur = message;
-        return { ok: false, erreur: message };
-    } finally {
-        const debutSuppression = performance.now();
-        await supprimerPdfPrepare(id);
-        chrono.suppression_pdf_ms = dureeMs(debutSuppression);
-        chrono.total_ms = dureeMs(debutTotal);
-        logger[chrono.resultat === 'succes' ? 'info' : 'warn']('Chrono impression PDF préparé sortie', chrono);
-    }
-}
-
 // Chromium (Windows) rejette l'impression silencieuse avec « Invalid printer
 // settings » quand les réglages sont incomplets : il faut fournir explicitement
 // dpi + pageSize. On essaie donc plusieurs formats connus, du plus adapté
@@ -817,9 +293,6 @@ async function imprimerDirect(sender: WebContents, hauteurMm?: number): Promise<
     // sans lister toutes les imprimantes. Si ce chemin échoue, on retombe sur
     // le repli complet historique (liste imprimantes + imprimantes physiques).
     if (process.platform === 'win32') {
-        const controleWindows = await verifierImprimanteWindowsPrete();
-        if (controleWindows) return controleWindows;
-
         try {
             const viaPdfDefaut = await imprimerViaPdf(sender, [], tentatives, hauteurMm);
             if (viaPdfDefaut.ok) return viaPdfDefaut;
@@ -840,16 +313,6 @@ async function imprimerDirect(sender: WebContents, hauteurMm?: number): Promise<
     }
 
     imprimantes ??= await listerImprimantes(sender);
-
-    if (process.platform === 'darwin') {
-        try {
-            const viaPdfMacos = await imprimerViaPdfMacos(sender, imprimantes, tentatives, hauteurMm);
-            if (viaPdfMacos.ok) return viaPdfMacos;
-        } catch (erreur) {
-            const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
-            tentatives.push(`PDF macOS/CUPS : ${message}`);
-        }
-    }
 
     // Cibles dans l'ordre : imprimante par défaut (deviceName absent), puis
     // chaque imprimante physique nommée (défaut en tête).
@@ -965,10 +428,10 @@ export function enregistrerIpc(): void {
     gerer('config:configurer', ConfigController.configurer);
     gerer('config:actualiser', ConfigController.actualiser);
     gerer('config:reseauLocal', ConfigController.reseauLocal);
-    gerer('config:relancerServeurLocal', ConfigController.relancerServeurLocal);
     gerer('config:configurerReseauLocal', ConfigController.configurerReseauLocal);
     gerer('config:testerReseauLocal', ConfigController.testerReseauLocal);
     gerer('config:actualiserVoyagesServeurLocal', ConfigController.actualiserVoyagesServeurLocal);
+    gerer('config:relancerServeurLocal', ConfigController.relancerServeurLocal);
     gerer('config:nettoyerDonneesTest', ConfigController.nettoyerDonneesTest);
 
     gerer('auth:connecter', AuthController.connecter);
@@ -988,7 +451,6 @@ export function enregistrerIpc(): void {
 
     gerer('vente:rechercherVoyages', VenteController.rechercherVoyages);
     gerer('vente:rechercherClient', VenteController.rechercherClient);
-    gerer('vente:preparerNumero', VenteController.preparerNumero);
     gerer('vente:vendre', VenteController.vendre);
     gerer('vente:confirmerImpression', VenteController.confirmerImpression);
     gerer('vente:annulerImpression', VenteController.annulerImpression);
@@ -1010,13 +472,6 @@ export function enregistrerIpc(): void {
 
     ipcMain.handle('impression:ticket', imprimerDepuisRenderer);
     ipcMain.handle('impression:recu', imprimerDepuisRenderer);
-    ipcMain.handle('impression:preparerPdf', async (event, hauteurMm?: number) => preparerPdfDepuisRenderer(event.sender, hauteurMm));
-    ipcMain.handle('impression:imprimerPdfPrepare', async (event, id: string) => imprimerPdfPrepare(event.sender, id));
-    ipcMain.handle('impression:supprimerPdfPrepare', async (_event, id: string) => {
-        await supprimerPdfPrepare(id);
-        return { ok: true as const };
-    });
-    ipcMain.handle('impression:verifierDisponible', async (event) => verifierImprimanteDisponible(event.sender));
     ipcMain.handle('impression:listerImprimantes', async (event) => (await listerImprimantes(event.sender)).map(exposerImprimante));
     ipcMain.handle('impression:tester', async () => imprimerTicketTest());
     ipcMain.handle('diagnostic:log', async (_event, niveau: 'info' | 'warn', message: string, contexte?: unknown) => {
@@ -1026,19 +481,16 @@ export function enregistrerIpc(): void {
         } else {
             logger.info(message, details);
         }
-
         return { ok: true as const };
     });
 
     gerer('bagage:rechercherTicket', BagageController.rechercherTicket);
-    gerer('bagage:preparerNumero', BagageController.preparerNumero);
     gerer('bagage:enregistrer', BagageController.enregistrer);
     gerer('bagage:confirmerImpression', BagageController.confirmerImpression);
     gerer('bagage:annulerImpression', BagageController.annulerImpression);
     gerer('bagage:duJour', BagageController.duJour);
     gerer('bagage:finDeCaisse', BagageController.finDeCaisse);
 
-    gerer('courrier:preparerNumero', CourrierController.preparerNumero);
     gerer('courrier:enregistrer', CourrierController.enregistrer);
     gerer('courrier:confirmerImpression', CourrierController.confirmerImpression);
     gerer('courrier:annulerImpression', CourrierController.annulerImpression);

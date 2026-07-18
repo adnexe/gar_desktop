@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watchDebounced } from '@vueuse/core';
-import { Armchair, Banknote, Check, LoaderCircle, MapPin, RotateCcw, Ticket, User, X } from '@lucide/vue';
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { Armchair, Banknote, Check, MapPin, RotateCcw, Ticket, User, X } from '@lucide/vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import SeatMap from '@/Components/vente/SeatMap.vue';
 import TicketRecu, { type Recu } from '@/Components/vente/TicketRecu.vue';
 import { Badge } from '@/Components/ui/badge';
@@ -100,24 +100,6 @@ let sequenceRechercheClient = 0;
 const enVente = ref(false);
 const erreur = ref<string | null>(null);
 const recus = ref<Recu[]>([]);
-
-type CachePdfTicket = {
-    empreinte: string;
-    numero: string;
-    createdAtIso: string;
-    ticketId: string;
-    talonId: string;
-    creeLe: number;
-};
-
-const cachePdfTicket = ref<CachePdfTicket | null>(null);
-const preparationPdfEnCours = ref<Promise<void> | null>(null);
-let sequencePreparationPdf = 0;
-let minuteriePreparationPdf: ReturnType<typeof setTimeout> | null = null;
-const DUREE_VALIDITE_PDF_PREPARE_MS = 45_000;
-const DELAI_PREPARATION_APRES_VOYAGE_MS = 900;
-const PAUSE_AVANT_TALON_MS = 100;
-type SourcePreparationPdf = 'selection_voyage' | 'selection_place' | 'modification_formulaire' | 'confirmation';
 
 const villesAffichables = computed(() => {
     const terme = rechercheVille.value.trim().toLowerCase();
@@ -319,7 +301,6 @@ const libelleVoyage = (voyage: VoyageDisponible) =>
     `${formatDateAffichee(voyage.date_depart)} · ${voyage.heure_depart} · ${numeroDepartLabel(voyage.numero_depart)} · ${voyage.itineraire ?? ''} · ${voyage.vehicule_immatriculation} · ${voyage.places_occupees.length}/${voyage.nombre_places} places`;
 
 function resetTout() {
-    void nettoyerCachePdfPrepare();
     villeArriveeId.value = null;
     rechercheVille.value = '';
     voyagesDisponibles.value = [];
@@ -360,347 +341,18 @@ function messageErreurInconnue(erreur: unknown, defaut: string) {
         .replace(/^Error invoking remote method "[^"]+": Error: /, '');
 }
 
-// La zone d'impression ne contient qu'une seule partie à la fois. C'est
-// important pour éviter qu'un PDF capture le ticket + le talon ensemble.
-const partieImpression = ref<'ticket' | 'talon' | null>(null);
-
-function attendre(ms: number) {
-    return new Promise<void>((resolve) => {
-        setTimeout(resolve, ms);
-    });
-}
-
-function attendreRenduImpression() {
-    return new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => resolve());
-        });
-    });
-}
+// Ticket et talon partent en deux jobs séparés : l'imprimante coupe entre
+// les deux, le talon de contrôle n'est plus collé au ticket du client.
+const partieImpression = ref<'tout' | 'ticket' | 'talon'>('tout');
 
 async function imprimer(partie: 'ticket' | 'talon'): Promise<ResultatImpression> {
     partieImpression.value = partie;
     try {
         await nextTick();
-        await attendreRenduImpression();
         return await window.api.impression.imprimerTicket(hauteurZoneImpressionMm());
     } finally {
-        partieImpression.value = null;
+        partieImpression.value = 'tout';
     }
-}
-
-function empreinteTicketCourant() {
-    return JSON.stringify({
-        agenceId: props.agenceId,
-        villeDepartId: props.villeDepartId,
-        villeArriveeId: villeArriveeId.value,
-        voyageId: voyageSelectionne.value?.id ?? null,
-        trajetId: trajetActuel.value?.id ?? null,
-        place: placeSelectionnee.value,
-        typeBillet: typeBillet.value,
-        tarification: tarification.value,
-        prix: prixAffiche.value,
-        timbre: timbre.value || 0,
-        total: totalAPayer.value,
-        client: {
-            telephone: client.telephone.trim(),
-            nom: client.nom.trim(),
-            prenoms: client.prenoms.trim(),
-            cni: client.cni.trim(),
-        },
-        vendeur: session.nom,
-        userId: session.userId,
-        agentId: session.agentId,
-    });
-}
-
-function formatDateHeureLocale(iso: string) {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-
-    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-async function supprimerPdfPrepare(id: string | null | undefined) {
-    if (!id) return;
-
-    try {
-        await window.api.impression.supprimerPdfPrepare(id);
-    } catch {
-        // Le PDF a peut-être déjà été consommé par l'impression.
-    }
-}
-
-function logDiagnostic(niveau: 'info' | 'warn', message: string, contexte?: Record<string, unknown>) {
-    void window.api.diagnostic.log(niveau, message, contexte).catch(() => undefined);
-}
-
-async function nettoyerCachePdfPrepare() {
-    sequencePreparationPdf++;
-    if (minuteriePreparationPdf) {
-        clearTimeout(minuteriePreparationPdf);
-        minuteriePreparationPdf = null;
-    }
-
-    const cache = cachePdfTicket.value;
-    cachePdfTicket.value = null;
-    if (cache) {
-        logDiagnostic('info', 'Préparation ticket invalidée', {
-            numero: cache.numero,
-            age_ms: Date.now() - cache.creeLe,
-        });
-        await Promise.all([
-            supprimerPdfPrepare(cache.ticketId),
-            supprimerPdfPrepare(cache.talonId),
-        ]);
-    }
-}
-
-async function creerRecuPrepare(numero: string, createdAtIso: string): Promise<Recu | null> {
-    if (!props.agenceId || !voyageSelectionne.value || !trajetActuel.value || !placeSelectionnee.value) {
-        return null;
-    }
-
-    const [agence, compagnie] = await Promise.all([
-        window.api.config.agenceActuelle(),
-        window.api.config.compagnieActuelle(),
-    ]);
-    const villeArrivee = props.villes.find((v) => v.id === villeArriveeId.value)?.nom ?? '';
-    const villeDepart = agence?.ville_nom ?? props.villes.find((v) => v.id === props.villeDepartId)?.nom ?? '';
-    const nomClient = [client.prenoms.trim(), client.nom.trim()].filter(Boolean).join(' ') || client.telephone.trim() || null;
-
-    return {
-        uuid: '',
-        numero,
-        numero_place: placeSelectionnee.value,
-        type_billet: typeBillet.value,
-        tarification: tarification.value,
-        montant: prixAffiche.value,
-        timbre: timbre.value || 0,
-        total: totalAPayer.value,
-        created_at: formatDateHeureLocale(createdAtIso),
-        agence: agence?.nom ?? '',
-        ville_depart: villeDepart,
-        ville_arrivee: villeArrivee,
-        date_depart: formatDateAffichee(voyageSelectionne.value.date_depart),
-        heure_depart: voyageSelectionne.value.heure_depart,
-        vehicule: voyageSelectionne.value.vehicule_immatriculation,
-        client: nomClient,
-        vendeur: session.nom || 'Caisse',
-        compagnie,
-    };
-}
-
-async function preparerPdfPartie(recu: Recu, partie: 'ticket' | 'talon') {
-    recus.value = [recu];
-    partieImpression.value = partie;
-
-    try {
-        await nextTick();
-        await attendreRenduImpression();
-        const resultat = await window.api.impression.preparerPdf(hauteurZoneImpressionMm());
-        if (!resultat.ok) {
-            throw new Error(resultat.erreur);
-        }
-
-        return resultat.id;
-    } finally {
-        partieImpression.value = null;
-    }
-}
-
-async function lancerPreparationPdfTicket(source: SourcePreparationPdf) {
-    if (!peutVendre.value || !voyageSelectionne.value || !trajetActuel.value) return;
-
-    const sequence = ++sequencePreparationPdf;
-    const empreinte = empreinteTicketCourant();
-    const numero = await window.api.vente.preparerNumero();
-    if (!numero) {
-        logDiagnostic('info', 'Préparation ticket ignorée : aucun numéro préparé disponible', { source });
-        return;
-    }
-    if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) {
-        logDiagnostic('info', 'Préparation ticket abandonnée : données modifiées avant le reçu', { source, numero });
-        return;
-    }
-
-    const createdAtIso = new Date().toISOString();
-    const recu = await creerRecuPrepare(numero, createdAtIso);
-    if (!recu || sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) {
-        logDiagnostic('info', 'Préparation ticket abandonnée : reçu devenu obsolète', { source, numero });
-        return;
-    }
-
-    let ticketId: string | null = null;
-    let talonId: string | null = null;
-
-    try {
-        logDiagnostic('info', 'Préparation ticket démarrée', {
-            source,
-            numero,
-            voyage_id: voyageSelectionne.value.id,
-            place: placeSelectionnee.value,
-        });
-        ticketId = await preparerPdfPartie(recu, 'ticket');
-        if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) {
-            logDiagnostic('info', 'Préparation ticket abandonnée : ticket PDF obsolète', { source, numero });
-            return;
-        }
-
-        talonId = await preparerPdfPartie(recu, 'talon');
-        if (sequence !== sequencePreparationPdf || empreinte !== empreinteTicketCourant()) {
-            logDiagnostic('info', 'Préparation ticket abandonnée : talon PDF obsolète', { source, numero });
-            return;
-        }
-
-        cachePdfTicket.value = {
-            empreinte,
-            numero,
-            createdAtIso,
-            ticketId,
-            talonId,
-            creeLe: Date.now(),
-        };
-        logDiagnostic('info', 'Préparation ticket prête', {
-            source,
-            numero,
-            voyage_id: voyageSelectionne.value.id,
-            place: placeSelectionnee.value,
-        });
-        ticketId = null;
-        talonId = null;
-    } catch (e) {
-        logDiagnostic('warn', 'Préparation PDF ticket ignorée', {
-            source,
-            numero,
-            erreur: messageErreurInconnue(e, 'Erreur inconnue'),
-        });
-    } finally {
-        partieImpression.value = null;
-        if (ticketId) await supprimerPdfPrepare(ticketId);
-        if (talonId) await supprimerPdfPrepare(talonId);
-    }
-}
-
-function programmerPreparationPdfTicket(source: SourcePreparationPdf, delaiMs: number) {
-    void nettoyerCachePdfPrepare();
-    if (!peutVendre.value) {
-        logDiagnostic('info', 'Préparation ticket non programmée : formulaire incomplet', { source });
-        return;
-    }
-
-    if (minuteriePreparationPdf) clearTimeout(minuteriePreparationPdf);
-    logDiagnostic('info', 'Préparation ticket programmée', {
-        source,
-        delai_ms: delaiMs,
-        voyage_id: voyageSelectionne.value?.id ?? null,
-        place: placeSelectionnee.value,
-    });
-    minuteriePreparationPdf = setTimeout(() => {
-        preparationPdfEnCours.value = lancerPreparationPdfTicket(source)
-            .catch((e) => logDiagnostic('warn', 'Préparation PDF ticket interrompue', {
-                source,
-                erreur: messageErreurInconnue(e, 'Erreur inconnue'),
-            }))
-            .finally(() => {
-                preparationPdfEnCours.value = null;
-            });
-    }, delaiMs);
-}
-
-function demarrerPreparationPdfMaintenant() {
-    if (minuteriePreparationPdf) {
-        clearTimeout(minuteriePreparationPdf);
-        minuteriePreparationPdf = null;
-    }
-
-    if (!peutVendre.value || preparationPdfEnCours.value || cachePdfPret()) {
-        logDiagnostic('info', 'Préparation ticket immédiate ignorée', {
-            source: 'confirmation',
-            formulaire_pret: peutVendre.value,
-            preparation_en_cours: !!preparationPdfEnCours.value,
-            cache_pret: !!cachePdfPret(),
-        });
-        return preparationPdfEnCours.value;
-    }
-
-    logDiagnostic('info', 'Préparation ticket lancée immédiatement', { source: 'confirmation' });
-    preparationPdfEnCours.value = lancerPreparationPdfTicket('confirmation')
-        .catch((e) => logDiagnostic('warn', 'Préparation PDF ticket interrompue', {
-            source: 'confirmation',
-            erreur: messageErreurInconnue(e, 'Erreur inconnue'),
-        }))
-        .finally(() => {
-            preparationPdfEnCours.value = null;
-        });
-
-    return preparationPdfEnCours.value;
-}
-
-async function attendrePreparationPdf() {
-    if (cachePdfPret() || !preparationPdfEnCours.value) return;
-
-    await preparationPdfEnCours.value;
-}
-
-async function assurerPreparationPdfAvantVente() {
-    if (cachePdfPret()) return;
-
-    demarrerPreparationPdfMaintenant();
-    if (preparationPdfEnCours.value) {
-        await preparationPdfEnCours.value;
-    }
-}
-
-function cachePdfPret() {
-    const cache = cachePdfTicket.value;
-    if (!cache) return null;
-    if (Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_PREPARE_MS) {
-        logDiagnostic('info', 'Cache ticket expiré', {
-            numero: cache.numero,
-            age_ms: Date.now() - cache.creeLe,
-        });
-        return null;
-    }
-    if (cache.empreinte !== empreinteTicketCourant()) {
-        logDiagnostic('info', 'Cache ticket obsolète : données modifiées', {
-            numero: cache.numero,
-            age_ms: Date.now() - cache.creeLe,
-        });
-        return null;
-    }
-
-    return cache;
-}
-
-async function imprimerDepuisCacheOuClassique(partie: 'ticket' | 'talon', idPrepare?: string | null) {
-    if (!idPrepare) {
-        return await imprimer(partie);
-    }
-
-    try {
-        return await window.api.impression.imprimerPdfPrepare(idPrepare);
-    } catch (e) {
-        return {
-            ok: false,
-            erreur: messageErreurInconnue(e, "L'impression préparée n'a pas pu être lancée."),
-        };
-    }
-}
-
-// NOTE : plus de préparation à chaque modification du formulaire — la saisie
-// du client (dernier champ rempli) invalidait le cache en permanence et le
-// clic « Vendre » retombait sur une attente complète, plus lente que la
-// méthode directe. La préparation se lance à l'ouverture de la confirmation
-// (champs figés) et après une vente pour « Vendre à nouveau ».
-
-onBeforeUnmount(() => {
-    void nettoyerCachePdfPrepare();
-});
-
-function ouvrirConfirmationVente() {
-    confirmationOuverte.value = true;
-    void assurerPreparationPdfAvantVente();
 }
 
 /**
@@ -712,31 +364,11 @@ function ouvrirConfirmationVente() {
 async function vendre() {
     if (!peutVendre.value || !voyageSelectionne.value || !trajetActuel.value || !props.agenceId) return;
 
-    // La préparation a été lancée à l'ouverture de la confirmation (champs
-    // figés) : si elle tourne encore, on l'attend jusqu'au bout — elle est
-    // forcément la bonne et il ne lui reste que quelques centaines de ms.
-    // L'interrompre créerait une course sur la zone d'impression (préparation
-    // et voie classique en même temps → risque de ticket vide).
-    await attendrePreparationPdf();
-    const cachePrepare = cachePdfPret();
-    logDiagnostic(cachePrepare ? 'info' : 'warn', cachePrepare ? 'Cache ticket prêt avant vente' : 'Cache ticket absent avant vente, impression classique prévue', {
-        numero: cachePrepare?.numero ?? null,
-        voyage_id: voyageSelectionne.value.id,
-        place: placeSelectionnee.value,
-    });
-
     enVente.value = true;
     erreur.value = null;
     const idVoyageCourant = voyageSelectionne.value.id;
 
     try {
-        const imprimante = await window.api.impression.verifierDisponible();
-        if (!imprimante.ok) {
-            erreur.value = imprimante.erreur ?? "Aucune imprimante ticket utilisable n'est disponible.";
-            confirmationOuverte.value = false;
-            return;
-        }
-
         const reponse = (await window.api.vente.vendre({
             agenceId: props.agenceId,
             voyageId: voyageSelectionne.value.id,
@@ -748,43 +380,20 @@ async function vendre() {
             numeroPlace: placeSelectionnee.value,
             timbre: timbre.value || 0,
             client: { telephone: client.telephone || null, nom: client.nom || null, prenoms: client.prenoms || null, cni: client.cni || null },
-            numeroTicket: cachePrepare?.numero ?? null,
-            createdAt: cachePrepare?.createdAtIso ?? null,
         })) as { ok: boolean; ticket?: Recu; erreur?: string };
 
         if (!reponse.ok || !reponse.ticket) {
             erreur.value = reponse.erreur ?? 'Une erreur est survenue.';
             confirmationOuverte.value = false;
-            await nettoyerCachePdfPrepare();
-            if (venteRefuseePourPlace(erreur.value)) {
-                await chargerVoyagesEtDemanderReselection();
-            } else {
-                await chargerVoyagesConservantSelection(idVoyageCourant);
-            }
             return;
         }
 
         confirmationOuverte.value = false;
         recus.value = [reponse.ticket];
-        const cacheUtilisable = cachePrepare && reponse.ticket.numero === cachePrepare.numero ? cachePrepare : null;
-        if (cachePrepare && !cacheUtilisable) {
-            logDiagnostic('warn', 'Cache ticket refusé : numéro final différent', {
-                numero_prepare: cachePrepare.numero,
-                numero_final: reponse.ticket.numero,
-            });
-            void nettoyerCachePdfPrepare();
-        } else if (cacheUtilisable) {
-            logDiagnostic('info', 'Cache ticket utilisé pour impression', {
-                numero: cacheUtilisable.numero,
-                ticket_pdf: cacheUtilisable.ticketId,
-                talon_pdf: cacheUtilisable.talonId,
-            });
-            cachePdfTicket.value = null;
-        }
 
         let impression: ResultatImpression;
         try {
-            impression = await imprimerDepuisCacheOuClassique('ticket', cacheUtilisable?.ticketId);
+            impression = await imprimer('ticket');
         } catch (e) {
             impression = {
                 ok: false,
@@ -795,11 +404,6 @@ async function vendre() {
         if (!impression.ok) {
             const motif = impression.erreur ?? 'Impression non confirmée par le système.';
             recus.value = [];
-            logDiagnostic('warn', 'Impression ticket échouée, annulation demandée', {
-                numero: reponse.ticket.numero,
-                via_cache: !!cacheUtilisable,
-                motif,
-            });
 
             try {
                 await window.api.vente.annulerImpression(reponse.ticket.uuid, motif);
@@ -808,44 +412,19 @@ async function vendre() {
                 erreur.value = `Impression non confirmée pour le ticket ${reponse.ticket.numero}, mais l'annulation automatique a échoué : ${messageErreurInconnue(e, motif)}. Vérifiez avant de revendre la place.`;
             }
 
-            if (cacheUtilisable) {
-                await supprimerPdfPrepare(cacheUtilisable.talonId);
-            }
             await chargerVoyagesConservantSelection(idVoyageCourant);
             return;
         }
 
         // Le ticket client est sorti : le talon part en second job (coupe entre
-        // les deux). La vente n'est validée qu'après les deux sorties.
-        let erreurTalon: string | null = null;
+        // les deux). Son échec n'annule pas la vente, on avertit simplement.
         try {
-            logDiagnostic('info', 'Pause avant impression talon', {
-                numero: reponse.ticket.numero,
-                pause_ms: PAUSE_AVANT_TALON_MS,
-            });
-            await attendre(PAUSE_AVANT_TALON_MS);
-            const talon = await imprimerDepuisCacheOuClassique('talon', cacheUtilisable?.talonId);
+            const talon = await imprimer('talon');
             if (!talon.ok) {
-                erreurTalon = talon.erreur ?? 'erreur inconnue';
-                logDiagnostic('warn', 'Impression talon échouée', {
-                    numero: reponse.ticket.numero,
-                    via_cache: !!cacheUtilisable,
-                    erreur: erreurTalon,
-                });
+                erreur.value = `Le ticket est imprimé, mais le talon de contrôle n'est pas sorti : ${talon.erreur ?? 'erreur inconnue'}.`;
             }
         } catch (e) {
-            erreurTalon = messageErreurInconnue(e, 'erreur inconnue');
-            logDiagnostic('warn', 'Impression talon interrompue', {
-                numero: reponse.ticket.numero,
-                via_cache: !!cacheUtilisable,
-                erreur: erreurTalon,
-            });
-        }
-
-        if (erreurTalon) {
-            erreur.value = `Le ticket ${reponse.ticket.numero} est sorti, mais le talon de contrôle n'est pas sorti : ${erreurTalon}. La vente reste en attente et n'est pas comptabilisée.`;
-            await chargerVoyagesConservantSelection(idVoyageCourant);
-            return;
+            erreur.value = `Le ticket est imprimé, mais le talon de contrôle n'est pas sorti : ${messageErreurInconnue(e, 'erreur inconnue')}.`;
         }
 
         const confirmationImpression = await window.api.vente.confirmerImpression(reponse.ticket.uuid);
@@ -879,19 +458,7 @@ async function vendre() {
     } catch (e) {
         erreur.value = messageErreurInconnue(e, 'Une erreur est survenue pendant la vente.');
     } finally {
-        const cache = cachePdfTicket.value;
-        if (cache && Date.now() - cache.creeLe > DUREE_VALIDITE_PDF_PREPARE_MS) {
-            void nettoyerCachePdfPrepare();
-        }
         enVente.value = false;
-
-        if (venteEffectuee.value && peutVendre.value) {
-            logDiagnostic('info', 'Préparation ticket relancée après vente pour Vendre à nouveau', {
-                voyage_id: voyageSelectionne.value?.id ?? null,
-                place: placeSelectionnee.value,
-            });
-            programmerPreparationPdfTicket('selection_place', DELAI_PREPARATION_APRES_VOYAGE_MS);
-        }
     }
 }
 
@@ -911,25 +478,6 @@ async function chargerVoyagesConservantSelection(voyageId: number) {
     const voyage = voyagesNonPasses.find((v) => v.id === voyageId) ?? null;
     voyageSelectionne.value = voyage;
     placeSelectionnee.value = voyage?.premiere_place_libre ?? null;
-}
-
-async function chargerVoyagesEtDemanderReselection() {
-    if (!props.agenceId || !props.villeDepartId || !villeArriveeId.value) return;
-
-    const data = (await window.api.vente.rechercherVoyages({
-        agenceId: props.agenceId,
-        villeDepartId: props.villeDepartId,
-        villeArriveeId: villeArriveeId.value,
-    })) as { voyages: VoyageDisponible[] };
-
-    voyagesDisponibles.value = data.voyages.filter(voyageNonPasse);
-    voyageSelectionne.value = null;
-    placeSelectionnee.value = null;
-    venteEffectuee.value = false;
-}
-
-function venteRefuseePourPlace(message: string | null) {
-    return !!message && /place/i.test(message);
 }
 
 /** Remet le formulaire à zéro pour un nouveau client (la fenêtre reste ouverte). */
@@ -1223,10 +771,9 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 <RotateCcw />
                 Nouveau ticket
             </Button>
-            <Button :disabled="!peutVendre || enVente" @click="ouvrirConfirmationVente">
-                <LoaderCircle v-if="enVente" class="animate-spin" />
-                <Ticket v-else />
-                {{ enVente ? 'Impression en cours…' : venteEffectuee ? 'Vendre à nouveau' : 'Vendre' }}
+            <Button :disabled="!peutVendre" @click="confirmationOuverte = true">
+                <Ticket />
+                {{ venteEffectuee ? 'Vendre à nouveau' : 'Vendre' }}
             </Button>
         </div>
     </div>
@@ -1279,16 +826,15 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     Fermer
                 </Button>
                 <Button :disabled="enVente" @click="vendre">
-                    <LoaderCircle v-if="enVente" class="animate-spin" />
-                    <Check v-else />
-                    {{ enVente ? 'Impression…' : 'Confirmer' }}
+                    <Check />
+                    Confirmer
                 </Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
 
     <!-- Zone d'impression : invisible à l'écran, seule visible à l'impression. -->
-    <div v-if="partieImpression" class="zone-impression hidden print:block">
+    <div class="zone-impression hidden print:block">
         <TicketRecu v-for="(r, index) in recus" :key="index" :recu="r" :partie="partieImpression" />
     </div>
 </template>
