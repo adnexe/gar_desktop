@@ -116,7 +116,6 @@ let sequencePreparationPdf = 0;
 let minuteriePreparationPdf: ReturnType<typeof setTimeout> | null = null;
 const DUREE_VALIDITE_PDF_PREPARE_MS = 45_000;
 const DELAI_PREPARATION_APRES_VOYAGE_MS = 900;
-const DELAI_PREPARATION_APRES_MODIFICATION_MS = 1_400;
 const PAUSE_AVANT_TALON_MS = 100;
 type SourcePreparationPdf = 'selection_voyage' | 'selection_place' | 'modification_formulaire' | 'confirmation';
 
@@ -638,6 +637,15 @@ function demarrerPreparationPdfMaintenant() {
     return preparationPdfEnCours.value;
 }
 
+async function attendrePreparationPdf(maxMs: number) {
+    if (cachePdfPret() || !preparationPdfEnCours.value) return;
+
+    await Promise.race([
+        preparationPdfEnCours.value,
+        new Promise((resolve) => setTimeout(resolve, maxMs)),
+    ]);
+}
+
 async function assurerPreparationPdfAvantVente() {
     if (cachePdfPret()) return;
 
@@ -683,39 +691,11 @@ async function imprimerDepuisCacheOuClassique(partie: 'ticket' | 'talon', idPrep
     }
 }
 
-watch(
-    () => [
-        props.agenceId,
-        props.villeDepartId,
-        villeArriveeId.value,
-        voyageSelectionne.value?.id ?? null,
-        trajetActuel.value?.id ?? null,
-        placeSelectionnee.value,
-        typeBillet.value,
-        tarification.value,
-        prixAffiche.value,
-        timbre.value || 0,
-        totalAPayer.value,
-        client.telephone,
-        client.nom,
-        client.prenoms,
-        client.cni,
-        session.userId,
-        session.agentId,
-    ],
-    (valeurs, anciennes) => {
-        const source: SourcePreparationPdf = valeurs[3] !== anciennes?.[3]
-            ? 'selection_voyage'
-            : valeurs[5] !== anciennes?.[5]
-                ? 'selection_place'
-                : 'modification_formulaire';
-        const delai = source === 'modification_formulaire'
-            ? DELAI_PREPARATION_APRES_MODIFICATION_MS
-            : DELAI_PREPARATION_APRES_VOYAGE_MS;
-
-        programmerPreparationPdfTicket(source, delai);
-    },
-);
+// NOTE : plus de préparation à chaque modification du formulaire — la saisie
+// du client (dernier champ rempli) invalidait le cache en permanence et le
+// clic « Vendre » retombait sur une attente complète, plus lente que la
+// méthode directe. La préparation se lance à l'ouverture de la confirmation
+// (champs figés) et après une vente pour « Vendre à nouveau ».
 
 onBeforeUnmount(() => {
     void nettoyerCachePdfPrepare();
@@ -735,7 +715,10 @@ function ouvrirConfirmationVente() {
 async function vendre() {
     if (!peutVendre.value || !voyageSelectionne.value || !trajetActuel.value || !props.agenceId) return;
 
-    await assurerPreparationPdfAvantVente();
+    // Attente bornée : la préparation a été lancée à l'ouverture de la
+    // confirmation. Si elle n'aboutit pas dans le délai, on part en voie
+    // classique immédiatement — jamais plus lent que l'ancienne méthode.
+    await attendrePreparationPdf(800);
     const cachePrepare = cachePdfPret();
     logDiagnostic(cachePrepare ? 'info' : 'warn', cachePrepare ? 'Cache ticket prêt avant vente' : 'Cache ticket absent avant vente, impression classique prévue', {
         numero: cachePrepare?.numero ?? null,

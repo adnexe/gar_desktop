@@ -157,3 +157,13 @@ Deux causes corrigées :
 - **Agence désactivée** → poste bloqué sur l'écran licence (les données locales restent, réactivable côté admin).
 - **Agence supprimée** → `reinitialiserPoste()` vide toute la base locale (schéma conservé) et le poste revient à l'écran de configuration initiale (saisie de la référence agence). Déclenché uniquement sur réponse ferme du serveur, jamais sur panne réseau. La garde de navigation relit `configuree` + licence à chaque écran.
 - Vérifié en réel : agence inconnue du serveur → base vidée (0 lignes partout) + log « poste réinitialisé ».
+
+## Pré-génération PDF : correction de vitesse (15/07/2026)
+
+- Le cache PDF prégénéré (préparé à chaque modification du formulaire) était en pratique PLUS LENT que la méthode directe : la saisie du client (dernier champ rempli) invalidait l'empreinte en permanence, et `vendre()` attendait alors la préparation complète des 2 PDF avant d'enregistrer.
+- Corrigé dans `VenteForm.vue` : plus de préparation pendant la saisie (watch supprimé) — elle se lance à l'**ouverture de la confirmation** (champs figés, 1-3 s avant le clic, comme bagage/courrier qui faisaient déjà comme ça) et après une vente pour « Vendre à nouveau ». Au clic « Vendre » : **attente bornée à 800 ms** (`attendrePreparationPdf`), sinon voie classique immédiate — jamais plus lent que l'ancienne méthode.
+
+## Attente bornée généralisée (15/07/2026)
+
+- Bagage (`enregistrer`) et courrier (`envoyer`) attendaient la préparation PDF **sans limite** (même défaut que la vente) : clic rapide = attente de toute la génération. Alignés sur la vente : `Promise.race` borné à 800 ms, sinon voie classique immédiate.
+- Talon bagage et étiquette courrier : impression via leur bouton dédié en voie classique (pas de cache nécessaire, action après enregistrement).
