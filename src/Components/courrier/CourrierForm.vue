@@ -65,6 +65,7 @@ const prixExpedition = ref<number | null>(null);
 const expeditionManuelle = ref(false);
 
 const enregistrement = ref(false);
+const impressionTalon = ref(false);
 const erreur = ref('');
 const recu = ref<{
     numero_courrier: string;
@@ -477,9 +478,10 @@ async function imprimerDepuisCacheOuClassique(partie: 'recu' | 'etiquette', idPr
 }
 
 async function imprimerTalon() {
-    if (!recu.value) return;
+    if (!recu.value || impressionTalon.value) return;
 
     erreur.value = '';
+    impressionTalon.value = true;
 
     try {
         const imprimante = await window.api.impression.verifierDisponible();
@@ -494,6 +496,8 @@ async function imprimerTalon() {
         }
     } catch (e) {
         erreur.value = `Talon non imprimé : ${messageErreurInconnue(e, "L'impression n'a pas pu être lancée.")}`;
+    } finally {
+        impressionTalon.value = false;
     }
 }
 
@@ -649,20 +653,6 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
             <p v-if="erreur" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {{ erreur }}
             </p>
-
-            <div v-if="recu" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
-                <div>
-                    <p class="text-sm font-semibold">Dernier courrier enregistré : {{ recu.numero_courrier }}</p>
-                    <p class="text-sm text-muted-foreground">
-                        {{ recu.destination }}
-                        <span v-if="recu.destinataire_nom"> · {{ recu.destinataire_nom }}</span>
-                    </p>
-                </div>
-                <Button variant="outline" @click="imprimerTalon">
-                    <Printer />
-                    Imprimer talon
-                </Button>
-            </div>
 
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div class="space-y-1.5">
@@ -846,7 +836,19 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
         </div>
 
         <!-- Barre d'actions fixe : hors de la zone qui défile. -->
-        <div class="shrink-0 flex items-center justify-end gap-2 border-t bg-background px-6 py-3">
+        <div class="shrink-0 flex flex-wrap items-center justify-end gap-2 border-t bg-background px-6 py-3">
+            <div v-if="recu" class="mr-auto min-w-0 text-sm">
+                <p class="truncate font-semibold">Dernier courrier : {{ recu.numero_courrier }}</p>
+                <p class="truncate text-muted-foreground">
+                    {{ recu.destination }}
+                    <span v-if="recu.destinataire_nom"> · {{ recu.destinataire_nom }}</span>
+                </p>
+            </div>
+            <Button v-if="recu" variant="outline" :disabled="impressionTalon || enregistrement" @click="imprimerTalon">
+                <LoaderCircle v-if="impressionTalon" class="animate-spin" />
+                <Printer v-else />
+                {{ impressionTalon ? 'Impression talon…' : 'Imprimer talon' }}
+            </Button>
             <Button variant="outline" @click="() => { void nettoyerCachePdfCourrier(); emit('fermer'); }">Fermer</Button>
             <Button :disabled="!peutEnvoyer" @click="ouvrirConfirmation">
                 <LoaderCircle v-if="enregistrement" class="animate-spin" />

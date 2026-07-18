@@ -172,6 +172,42 @@ if ($null -eq $printer) {
     }
 }
 
+async function verifierImprimanteMacosPrete(printerName?: string): Promise<ResultatImpression | null> {
+    if (process.platform !== 'darwin' || !printerName) return null;
+
+    const debut = performance.now();
+
+    try {
+        const { stdout, stderr } = await execFileAsync('/usr/bin/lpstat', ['-p', printerName], { timeout: 3_000 });
+        const sortie = `${stdout}\n${stderr}`.trim();
+        const bloque = /disabled|offline|not connected|unable to connect|paused|stopped|not responding/i.test(sortie);
+
+        logger.info('Contrôle imprimante macOS/CUPS avant impression', {
+            imprimante: printerName,
+            ok: !bloque,
+            duree_ms: dureeMs(debut),
+            statut: sortie.split('\n')[0] ?? '',
+        });
+
+        if (bloque) {
+            return {
+                ok: false,
+                erreur: `L'imprimante ${printerName} n'est pas prête selon macOS. Vérifiez qu'elle est allumée et connectée.`,
+            };
+        }
+
+        return null;
+    } catch (erreur) {
+        logger.warn('Contrôle imprimante macOS/CUPS indisponible, impression tentée.', {
+            imprimante: printerName,
+            duree_ms: dureeMs(debut),
+            erreur: erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur),
+        });
+
+        return null;
+    }
+}
+
 async function supprimerPdfPrepare(id: string): Promise<void> {
     const prepare = pdfPrepares.get(id);
     if (!prepare) return;
@@ -355,6 +391,9 @@ async function choisirCibleImpression(sender: WebContents): Promise<{ ok: true; 
 
     const controleWindows = await verifierImprimanteWindowsPrete(cible.name);
     if (controleWindows) return controleWindows;
+
+    const controleMacos = await verifierImprimanteMacosPrete(cible.name);
+    if (controleMacos) return controleMacos;
 
     return { ok: true, cible: { printer: cible.name, libelle } };
 }
