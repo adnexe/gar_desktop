@@ -5,6 +5,7 @@ import { TicketRepository } from '../repositories/TicketRepository';
 import { TrajetRepository } from '../repositories/TrajetRepository';
 import { VoyageRepository } from '../repositories/VoyageRepository';
 import { formatDate, formatDateHeure } from '../database/dates';
+import { getDb } from '../database/connection';
 
 export interface RechercheVoyages {
     agenceId: number;
@@ -89,6 +90,8 @@ export class VenteService {
     // Le prix n'est JAMAIS accepté depuis le frontend : il est toujours
     // recalculé ici à partir de agenceId + trajetId + typeBillet + tarification.
     vendre(demande: DemandeVente) {
+        this.verifierDroitVenteTicket(demande);
+
         const montant = this.tarifs.montant(demande.agenceId, demande.trajetId, demande.typeBillet, demande.tarification);
         if (montant === null) {
             throw new Error('TARIF_NON_CONFIGURE');
@@ -155,6 +158,64 @@ export class VenteService {
         };
     }
 
+    private verifierDroitVenteTicket(demande: DemandeVente): void {
+        const utilisateur = getDb()
+            .prepare(
+                `SELECT u.id, u.role, u.agent_id,
+                        ag.agence_id, ag.type_agent, ag.actif AS agent_actif,
+                        COALESCE(ag.desactive_localement, 0) AS agent_desactive_localement,
+                        COALESCE(ag.supprime_localement, 0) AS agent_supprime_localement,
+                        agence.actif AS agence_actif
+                 FROM users u
+                 LEFT JOIN agents ag ON ag.id = u.agent_id
+                 LEFT JOIN agences agence ON agence.id = ag.agence_id
+                 WHERE u.id = ?
+                   AND u.actif = 1
+                   AND COALESCE(u.desactive_localement, 0) = 0
+                   AND COALESCE(u.supprime_localement, 0) = 0
+                 LIMIT 1`,
+            )
+            .get(demande.userId) as
+            | {
+                  id: number;
+                  role: string;
+                  agent_id: number | null;
+                  agence_id: number | null;
+                  type_agent: string | null;
+                  agent_actif: number | null;
+                  agent_desactive_localement: number | null;
+                  agent_supprime_localement: number | null;
+                  agence_actif: number | null;
+              }
+            | undefined;
+
+        if (!utilisateur) {
+            throw new Error('COMPTE_NON_AUTORISE_TICKET');
+        }
+
+        const roleAutorise = ['super_admin', 'admin', 'chef_gare'].includes(utilisateur.role);
+        const modules = (utilisateur.type_agent ?? '').split(',').filter(Boolean);
+        const moduleAutorise = modules.includes('ticket');
+        if (!roleAutorise && !moduleAutorise) {
+            throw new Error('COMPTE_NON_AUTORISE_TICKET');
+        }
+
+        if (utilisateur.agent_id !== null) {
+            if (utilisateur.agent_id !== demande.agentId || utilisateur.agence_id !== demande.agenceId) {
+                throw new Error('COMPTE_NON_AUTORISE_TICKET');
+            }
+
+            if (
+                utilisateur.agent_actif !== 1 ||
+                utilisateur.agent_desactive_localement === 1 ||
+                utilisateur.agent_supprime_localement === 1 ||
+                utilisateur.agence_actif !== 1
+            ) {
+                throw new Error('COMPTE_NON_AUTORISE_TICKET');
+            }
+        }
+    }
+
     confirmerImpression(uuid: string): boolean {
         return this.tickets.confirmerImpression(uuid);
     }
@@ -163,12 +224,12 @@ export class VenteService {
         return this.tickets.annulerImpression(uuid, motif);
     }
 
-    ventesDuJour(agenceId: number, date?: string) {
-        return this.tickets.ventesDuJour(agenceId, date);
+    ventesDuJour(agenceId: number, date?: string, userId?: number | null) {
+        return this.tickets.ventesDuJour(agenceId, date, userId);
     }
 
-    rapportFinDeCaisse(agenceId: number, date?: string) {
-        const lignes = this.tickets.rapportParVoyage(agenceId, date);
+    rapportFinDeCaisse(agenceId: number, date?: string, userId?: number | null) {
+        const lignes = this.tickets.rapportParVoyage(agenceId, date, userId);
 
         return {
             date: date ?? new Date().toISOString().slice(0, 10),

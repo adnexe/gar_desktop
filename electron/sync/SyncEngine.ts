@@ -167,7 +167,7 @@ export class SyncEngine {
     private operationIgnoreeSurPosteClient(entite: string): boolean {
         if (this.config.obtenir('reseau_mode') !== 'client') return false;
 
-        return ['clients', 'voyages', 'tickets'].includes(entite);
+        return ['voyages', 'tickets'].includes(entite);
     }
 
     private payloadPour(ligne: LigneSync): Record<string, unknown> | null {

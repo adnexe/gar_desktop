@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { CalendarDays, Monitor, Power, Printer, RefreshCw, Server, Wifi } from '@lucide/vue';
+import { CalendarDays, Monitor, Power, Printer, RefreshCw, Server, Trash2, Wifi } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
@@ -39,6 +39,7 @@ const enCours = ref(false);
 const actualisation = ref(false);
 const chargementImprimantes = ref(false);
 const testImpression = ref(false);
+const nettoyageDonnees = ref(false);
 const message = ref('');
 const erreur = ref('');
 const messageImpression = ref('');
@@ -315,7 +316,7 @@ async function desactiverReseauLocal() {
     });
 }
 
-async function actualiserVoyagesTicketsDepuisCaisse() {
+async function actualiserVoyagesDepuisCaisse() {
     if (!config.agence || !clientOn.value) return;
 
     await executer(async () => {
@@ -358,6 +359,33 @@ async function testerImpression() {
         erreurImpression.value = messageErreur(e, "Impossible de lancer l'impression test.");
     } finally {
         testImpression.value = false;
+    }
+}
+
+async function nettoyerDonneesTest() {
+    if (!estSuperAdmin.value || !session.userId) {
+        erreur.value = 'Seul un super admin peut nettoyer les données de cette machine.';
+        return;
+    }
+
+    const confirmer = window.confirm(
+        'Supprimer les données de test de cette machine ? Les voyages, tickets, bagages, courriers, clients et éléments en attente de synchronisation seront supprimés. La licence, la configuration, les agents, les utilisateurs et le catalogue seront conservés.',
+    );
+    if (!confirmer) return;
+
+    nettoyageDonnees.value = true;
+    erreur.value = '';
+    message.value = '';
+
+    try {
+        const resultat = await window.api.config.nettoyerDonneesTest(session.userId);
+        const total = Object.values(resultat.suppressions).reduce((somme, valeur) => somme + valeur, 0);
+        message.value = `${resultat.message} ${total.toLocaleString('fr-FR')} ligne${total > 1 ? 's' : ''} supprimée${total > 1 ? 's' : ''}.`;
+        await chargerReseau();
+    } catch (e) {
+        erreur.value = messageErreur(e, 'Impossible de nettoyer les données de test.');
+    } finally {
+        nettoyageDonnees.value = false;
     }
 }
 </script>
@@ -511,7 +539,7 @@ async function testerImpression() {
                             <span :class="badgeEtat(serveurOn)">{{ serveurOn ? 'ON' : 'OFF' }}</span>
                         </div>
                         <p class="mt-3 font-semibold">Machine serveur</p>
-                        <p class="mt-1 text-sm text-muted-foreground">Les postes clients demandent ici les tickets et voyages.</p>
+                        <p class="mt-1 text-sm text-muted-foreground">Les postes clients récupèrent ici les voyages.</p>
                     </button>
 
                     <button
@@ -527,7 +555,7 @@ async function testerImpression() {
                             <span :class="badgeConnexion(clientOn ? statutConnexion : 'deconnecte', clientConnecte)">{{ libelleClient }}</span>
                         </div>
                         <p class="mt-3 font-semibold">Machine cliente</p>
-                        <p class="mt-1 text-sm text-muted-foreground">Elle lit les tickets/voyages de la caisse serveur.</p>
+                        <p class="mt-1 text-sm text-muted-foreground">Elle lit les voyages de la caisse serveur.</p>
                     </button>
 
                     <button
@@ -571,7 +599,7 @@ async function testerImpression() {
                                     {{ serveurConnecte ? 'Connecté' : 'Non connecté' }}
                                 </span>
                             </div>
-                            <p class="text-sm text-muted-foreground">Cette machine ouvre l’accès local aux voyages et aux tickets.</p>
+                            <p class="text-sm text-muted-foreground">Cette machine ouvre l’accès local aux voyages.</p>
                         </div>
                     </div>
 
@@ -611,7 +639,7 @@ async function testerImpression() {
                                     {{ libelleClient }}
                                 </span>
                             </div>
-                            <p class="text-sm text-muted-foreground">Ce poste demande les tickets et voyages à la caisse serveur.</p>
+                            <p class="text-sm text-muted-foreground">Ce poste demande les voyages à la caisse serveur.</p>
                         </div>
                     </div>
 
@@ -631,7 +659,7 @@ async function testerImpression() {
                         <Button type="button" :disabled="enCours || !serveurUrl || !secretReseau" @click="activerClientLocal">
                             Utiliser
                         </Button>
-                        <Button type="button" variant="outline" :disabled="enCours || !clientOn" @click="actualiserVoyagesTicketsDepuisCaisse">
+                        <Button type="button" variant="outline" :disabled="enCours || !clientOn" @click="actualiserVoyagesDepuisCaisse">
                             <RefreshCw :class="['size-4', enCours ? 'icone-tourne text-primary' : '']" />
                             Actualiser
                         </Button>
@@ -661,9 +689,31 @@ async function testerImpression() {
                         <p class="font-semibold">Données caisse serveur</p>
                         <p class="truncate text-sm text-muted-foreground">{{ serveurUrl || 'Adresse serveur non définie' }}</p>
                     </div>
-                    <Button type="button" variant="outline" :disabled="enCours" @click="actualiserVoyagesTicketsDepuisCaisse">
+                    <Button type="button" variant="outline" :disabled="enCours" @click="actualiserVoyagesDepuisCaisse">
                         <RefreshCw :class="['size-4', enCours ? 'icone-tourne text-primary' : '']" />
-                        Actualiser voyages/tickets
+                        Actualiser voyages
+                    </Button>
+                </div>
+            </section>
+
+            <section v-if="estSuperAdmin" class="rounded-lg border border-destructive/20 bg-card p-5 shadow-sm">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex min-w-0 items-start gap-3">
+                        <div class="rounded-md bg-destructive/10 p-2">
+                            <Trash2 class="size-5 text-destructive" />
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-base font-semibold">Nettoyage local</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                Supprime les anciennes données de test de cette machine sans toucher à la licence, aux accès et au catalogue.
+                            </p>
+                        </div>
+                    </div>
+
+                    <Button type="button" variant="destructive" :disabled="nettoyageDonnees" @click="nettoyerDonneesTest">
+                        <RefreshCw v-if="nettoyageDonnees" class="icone-tourne size-4" />
+                        <Trash2 v-else class="size-4" />
+                        {{ nettoyageDonnees ? 'Nettoyage...' : 'Nettoyer les données de test' }}
                     </Button>
                 </div>
             </section>

@@ -1,6 +1,6 @@
 import { getDb } from '../database/connection';
 import { nouvelUuid } from '../database/ids';
-import { genererNumeroTicket, prevoirNumeroTicket } from '../database/numero';
+import { genererNumeroTicket, marquerNumeroTicketUtilise, prevoirNumeroTicket } from '../database/numero';
 import { queueManager } from '../sync/QueueManager';
 import { ConfigRepository } from './ConfigRepository';
 import type { ClientServeur } from './ClientRepository';
@@ -103,6 +103,11 @@ export class TicketRepository {
 
     prochainNumeroPrepare(): string | null {
         return prevoirNumeroTicket(getDb(), this.config.obtenir('licence_code_poste'), this.codeAgenceTicket());
+    }
+
+    marquerNumeroPrepareUtilise(numero: string | null | undefined): void {
+        if (!numero) return;
+        marquerNumeroTicketUtilise(getDb(), this.config.obtenir('licence_code_poste'), this.codeAgenceTicket(), numero);
     }
 
     creer(donnees: NouveauTicket): TicketRow {
@@ -422,7 +427,7 @@ export class TicketRepository {
         return { ...ticket, client: client ?? null, voyage: voyage ?? null };
     }
 
-    ventesDuJour(agenceId: number, date?: string): VenteDuJour[] {
+    ventesDuJour(agenceId: number, date?: string, userId?: number | null): VenteDuJour[] {
         return getDb()
             .prepare(
                 `SELECT t.uuid, t.numero_ticket, time(t.created_at) AS heure, tr.nom AS trajet, t.numero_place,
@@ -434,15 +439,16 @@ export class TicketRepository {
                  LEFT JOIN clients c ON c.id = t.client_id
                  WHERE v.agence_depart_id = ? AND date(t.created_at) = date(?)
                    AND t.statut_ticket = 'valide'
+                   AND (? IS NULL OR t.user_id = ?)
                  ORDER BY t.created_at DESC`,
             )
-            .all(agenceId, date ?? 'now') as VenteDuJour[];
+            .all(agenceId, date ?? 'now', userId ?? null, userId ?? null) as VenteDuJour[];
     }
 
     // Rapport « fin de caisse » : nombre de tickets et montant encaissé par
     // trajet. Un même voyage peut contenir plusieurs trajets, donc grouper
     // seulement par voyage mélangerait les destinations dans une seule ligne.
-    rapportParVoyage(agenceId: number, date?: string): {
+    rapportParVoyage(agenceId: number, date?: string, userId?: number | null): {
         trajet_id: number;
         trajet: string;
         date_depart: string;
@@ -468,9 +474,10 @@ export class TicketRepository {
                  JOIN trajets tr ON tr.id = t.trajet_id
                  WHERE v.agence_depart_id = ? AND date(t.created_at) = date(?)
                    AND t.statut_ticket = 'valide'
+                   AND (? IS NULL OR t.user_id = ?)
                  GROUP BY t.trajet_id, tr.nom
                  ORDER BY MIN(v.heure_depart) ASC, tr.nom ASC`,
             )
-            .all(agenceId, date ?? 'now') as never[];
+            .all(agenceId, date ?? 'now', userId ?? null, userId ?? null) as never[];
     }
 }

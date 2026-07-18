@@ -37,6 +37,7 @@ const dateFiltre = ref(aujourdhui());
 
 const ventesDuJour = ref<VenteDuJour[]>([]);
 const recherche = ref('');
+const userIdFinDeCaisse = computed(() => ['super_admin', 'admin', 'chef_gare'].includes(session.role) ? null : session.userId);
 // Filtre local : numéro de ticket, nom/prénoms ou téléphone du client.
 const ventesAffichees = computed(() => {
     const t = recherche.value.trim().toLowerCase();
@@ -55,7 +56,7 @@ async function chargerVentes() {
         return;
     }
 
-    ventesDuJour.value = (await window.api.vente.ventesDuJour(session.agenceId, dateFiltre.value)) as VenteDuJour[];
+    ventesDuJour.value = (await window.api.vente.ventesDuJour(session.agenceId, dateFiltre.value, userIdFinDeCaisse.value)) as VenteDuJour[];
 }
 
 function onVendu(vente: VenteDuJour) {
@@ -77,7 +78,7 @@ const erreurImpression = ref('');
 
 async function ouvrirFinDeCaisse() {
     if (!session.agenceId) return;
-    rapportFinDeCaisse.value = (await window.api.vente.finDeCaisse(session.agenceId, dateFiltre.value)) as RapportFinDeCaisse;
+    rapportFinDeCaisse.value = (await window.api.vente.finDeCaisse(session.agenceId, dateFiltre.value, userIdFinDeCaisse.value)) as RapportFinDeCaisse;
     finDeCaisseOuvert.value = true;
 }
 

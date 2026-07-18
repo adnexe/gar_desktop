@@ -79,6 +79,11 @@ declare global {
                 }>;
                 testerReseauLocal: (serveurUrl: string, secret: string) => Promise<{ ok: boolean; message: string; agence?: string | null }>;
                 actualiserVoyagesServeurLocal: (agenceId: number, date?: string | null) => Promise<{ ok: boolean; nombre: number; tickets: number; message: string }>;
+                nettoyerDonneesTest: (acteurUserId: number) => Promise<{
+                    ok: boolean;
+                    suppressions: Record<string, number>;
+                    message: string;
+                }>;
             };
             auth: {
                 connecter: (identifiant: string, motDePasse: string) => Promise<{
@@ -150,8 +155,8 @@ declare global {
                 vendre: (demande: unknown) => Promise<{ ok: boolean; ticket?: unknown; erreur?: string }>;
                 confirmerImpression: (uuid: string) => Promise<{ ok: boolean; erreur?: string }>;
                 annulerImpression: (uuid: string, motif: string) => Promise<{ ok: boolean }>;
-                ventesDuJour: (agenceId: number, date?: string) => Promise<unknown[]>;
-                finDeCaisse: (agenceId: number, date?: string) => Promise<unknown>;
+                ventesDuJour: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown[]>;
+                finDeCaisse: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown>;
             };
             impression: {
                 imprimerTicket: (hauteurMm?: number) => Promise<{ ok: boolean; erreur?: string }>;

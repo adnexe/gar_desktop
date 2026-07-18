@@ -16,8 +16,7 @@ import { CourrierController } from '../controllers/CourrierController';
 import { VoyageController } from '../controllers/VoyageController';
 import { HistoriqueController } from '../controllers/HistoriqueController';
 import { VoyageRepository, type VoyageServeur } from '../repositories/VoyageRepository';
-import { ClientRepository, type ClientServeur } from '../repositories/ClientRepository';
-import { TicketRepository, type TicketServeur } from '../repositories/TicketRepository';
+import { TicketRepository } from '../repositories/TicketRepository';
 
 export type ModeReseauLocal = 'autonome' | 'serveur' | 'client';
 
@@ -91,14 +90,20 @@ const handlers: Record<string, (...args: never[]) => unknown> = {
     'historique:duJour': HistoriqueController.duJour,
 };
 
-const canauxLectureDepuisServeur = new Set<string>();
+const canauxClientVersServeur = new Set<string>([
+    'vente:rechercherVoyages',
+    'vente:vendre',
+    'vente:confirmerImpression',
+    'vente:annulerImpression',
+    'vente:ventesDuJour',
+    'vente:finDeCaisse',
+]);
 
 export class LocalNetworkService {
     private readonly config = new ConfigRepository();
     private readonly agences = new AgenceRepository();
     private readonly compagnie = new CompagnieRepository();
     private readonly voyages = new VoyageRepository();
-    private readonly clients = new ClientRepository();
     private readonly tickets = new TicketRepository();
     private serveur: Server | null = null;
     private portActif: number | null = null;
@@ -168,9 +173,9 @@ export class LocalNetworkService {
 
             try {
                 const resultat = await this.actualiserVoyagesDepuisServeur(statut.agenceDetails.id);
-                logger.info(`Poste client initialisé depuis la caisse serveur : ${resultat.nombre} voyage(s), ${resultat.tickets} ticket(s).`);
+                logger.info(`Poste client initialisé depuis la caisse serveur : ${resultat.nombre} voyage(s).`);
             } catch (erreur) {
-                logger.warn('Poste client configuré, mais la récupération initiale voyages/tickets a échoué.', erreur);
+                logger.warn('Poste client configuré, mais la récupération initiale des voyages a échoué.', erreur);
             }
         } else {
             this.config.definir('reseau_mode', mode);
@@ -222,8 +227,6 @@ export class LocalNetworkService {
 
         const voyages = await this.appelerServeurLocal<VoyageServeur[]>(serveurUrl, secret, 'voyage:exporterPourClient', [agenceId, date ?? null]);
         const synchroVoyages = this.voyages.remplacerDepuisCaisseClient(agenceId, voyages, date);
-        const tickets = await this.appelerServeurLocal<TicketServeur[]>(serveurUrl, secret, 'vente:exporterTicketsPourClient', [agenceId, date ?? null]);
-        const nombreTickets = this.importerTicketsDepuisServeur(tickets);
         if (synchroVoyages.supprimes > 0) {
             logger.info(`Poste client : ${synchroVoyages.supprimes} voyage(s) futur(s) orphelin(s) retiré(s) car absent(s) de la caisse serveur.`);
         }
@@ -231,10 +234,10 @@ export class LocalNetworkService {
         return {
             ok: true,
             nombre: synchroVoyages.importes,
-            tickets: nombreTickets,
-            message: synchroVoyages.importes > 0 || nombreTickets > 0
-                ? `${synchroVoyages.importes} voyage${synchroVoyages.importes > 1 ? 's' : ''} et ${nombreTickets} ticket${nombreTickets > 1 ? 's' : ''} mis à jour depuis la caisse serveur.`
-                : 'Aucun nouveau voyage ou ticket à récupérer depuis la caisse serveur.',
+            tickets: 0,
+            message: synchroVoyages.importes > 0
+                ? `${synchroVoyages.importes} voyage${synchroVoyages.importes > 1 ? 's' : ''} mis à jour depuis la caisse serveur.`
+                : 'Aucun nouveau voyage à récupérer depuis la caisse serveur.',
         };
     }
 
@@ -244,68 +247,43 @@ export class LocalNetworkService {
         }
 
         if (canal === 'bagage:rechercherTicket') {
-            const code = typeof args[0] === 'string' ? args[0] : '';
-            const local = BagageController.rechercherTicket(code);
+            const local = BagageController.rechercherTicket(typeof args[0] === 'string' ? args[0] : '');
             if (local) return { proxied: true, resultat: local };
 
-            await this.actualiserTicketDepuisServeur(code);
+            const { serveurUrl, secret } = this.configurationClientActive();
+            const data = await this.appelerServeurLocal(serveurUrl, secret, canal, args);
 
-            return { proxied: true, resultat: BagageController.rechercherTicket(code) };
+            return { proxied: true, resultat: data };
         }
 
         if (canal === 'vente:rechercherClient') {
-            const telephone = typeof args[0] === 'string' ? args[0] : '';
-            const local = VenteController.rechercherClient(telephone);
-            if (local) return { proxied: true, resultat: local };
+            const { serveurUrl, secret } = this.configurationClientActive();
+            const data = await this.appelerServeurLocal(serveurUrl, secret, canal, args);
 
-            await this.actualiserClientDepuisServeur(telephone);
-
-            return { proxied: true, resultat: VenteController.rechercherClient(telephone) };
+            return { proxied: true, resultat: data };
         }
 
-        if (!canauxLectureDepuisServeur.has(canal) || !(canal in handlers)) {
+        if (!canauxClientVersServeur.has(canal) || !(canal in handlers)) {
             return { proxied: false };
         }
 
         const { serveurUrl, secret } = this.configurationClientActive();
         const data = await this.appelerServeurLocal(serveurUrl, secret, canal, args);
+        if (canal === 'vente:vendre') {
+            this.marquerNumeroTicketClientUtilise(args[0], data);
+        }
 
         return { proxied: true, resultat: data };
     }
 
-    private async actualiserTicketDepuisServeur(code: string): Promise<void> {
-        const codeNettoye = code.trim();
-        if (!codeNettoye) return;
+    private marquerNumeroTicketClientUtilise(demande: unknown, resultat: unknown): void {
+        const reponse = resultat as { ok?: boolean; ticket?: { numero?: string | null } } | null;
+        if (!reponse?.ok) return;
 
-        const { serveurUrl, secret } = this.configurationClientActive();
-        const ticket = await this.appelerServeurLocal<TicketServeur | null>(serveurUrl, secret, 'vente:exporterTicketPourClient', [codeNettoye]);
-        if (!ticket) return;
-
-        this.importerTicketsDepuisServeur([ticket]);
-    }
-
-    private async actualiserClientDepuisServeur(telephone: string): Promise<void> {
-        const telephoneNettoye = telephone.trim();
-        if (!telephoneNettoye || telephoneNettoye.length < 3) return;
-
-        const { serveurUrl, secret } = this.configurationClientActive();
-        const client = await this.appelerServeurLocal<ClientServeur | null>(serveurUrl, secret, 'vente:exporterClientPourClient', [telephoneNettoye]);
-        this.clients.importerDepuisServeur(client);
-    }
-
-    private importerTicketsDepuisServeur(tickets: TicketServeur[]): number {
-        if (!Array.isArray(tickets) || tickets.length === 0) return 0;
-
-        for (const ticket of tickets) {
-            if (ticket.voyage) {
-                this.voyages.importerDepuisServeur([ticket.voyage]);
-            }
-            if (ticket.client) {
-                this.clients.importerDepuisServeur(ticket.client);
-            }
-        }
-
-        return this.tickets.importerDepuisServeur(tickets);
+        const numeroDemande = demande && typeof demande === 'object' && 'numeroTicket' in demande
+            ? String((demande as { numeroTicket?: unknown }).numeroTicket ?? '')
+            : '';
+        this.tickets.marquerNumeroPrepareUtilise(numeroDemande || reponse.ticket?.numero);
     }
 
     private configurationClientActive(): { serveurUrl: string; secret: string } {

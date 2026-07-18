@@ -1,5 +1,9 @@
 import axios from 'axios';
+import type Database from 'better-sqlite3';
 import { apiBaseUrl } from '../apiClient';
+import { getDb } from '../database/connection';
+import { migrer } from '../database/migrate';
+import { logger } from '../logger';
 import { BootstrapService } from '../services/BootstrapService';
 import { localNetworkService, type ModeReseauLocal } from '../services/LocalNetworkService';
 import { UserRepository } from '../repositories/UserRepository';
@@ -42,6 +46,21 @@ function messageErreurActualisation(erreur: unknown): string {
     return "Impossible d'actualiser depuis admin. Les données locales restent disponibles.";
 }
 
+function tableExiste(db: Database.Database, nom: string): boolean {
+    const ligne = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1`)
+        .get(nom) as { name: string } | undefined;
+
+    return Boolean(ligne);
+}
+
+function verifierSuperAdmin(acteurUserId?: number | null): void {
+    const acteur = acteurUserId ? users.gestionnaire(acteurUserId) : null;
+    if (acteur?.role !== 'super_admin') {
+        throw new Error('Seul un super admin peut effectuer cette action.');
+    }
+}
+
 export const ConfigController = {
     estConfiguree: () => service.estConfiguree(),
     agenceActuelle: () => service.agenceActuelle(),
@@ -64,13 +83,55 @@ export const ConfigController = {
     },
     reseauLocal: () => localNetworkService.configuration(),
     configurerReseauLocal: (params: { mode: ModeReseauLocal; serveurUrl?: string | null; port?: number | null; secret?: string | null; acteurUserId?: number | null }) => {
-        const acteur = params.acteurUserId ? users.gestionnaire(params.acteurUserId) : null;
-        if (acteur?.role !== 'super_admin') {
-            throw new Error('Seul un super admin peut modifier le rôle réseau de cette machine.');
-        }
+        verifierSuperAdmin(params.acteurUserId);
 
         return localNetworkService.configurer(params);
     },
     testerReseauLocal: (serveurUrl: string, secret: string) => localNetworkService.testerClient(serveurUrl, secret),
     actualiserVoyagesServeurLocal: (agenceId: number, date?: string | null) => localNetworkService.actualiserVoyagesDepuisServeur(agenceId, date),
+    nettoyerDonneesTest: (acteurUserId?: number | null) => {
+        verifierSuperAdmin(acteurUserId);
+
+        const db = getDb();
+        migrer(db);
+
+        const tablesOperations = ['colis', 'bagages', 'courriers', 'tickets', 'clients', 'voyages', 'sync_queue'];
+        const suppressions: Record<string, number> = {};
+
+        db.pragma('foreign_keys = OFF');
+        try {
+            db.transaction(() => {
+                for (const table of tablesOperations) {
+                    if (!tableExiste(db, table)) continue;
+
+                    const resultat = db.prepare(`DELETE FROM ${table}`).run();
+                    suppressions[table] = resultat.changes;
+                }
+
+                db.prepare(
+                    `DELETE FROM config
+                      WHERE cle LIKE 'ticket_sequence_%'
+                         OR cle LIKE 'bagage_sequence_%'
+                         OR cle LIKE 'courrier_sequence_%'`,
+                ).run();
+
+                if (tableExiste(db, 'sqlite_sequence')) {
+                    db.prepare(
+                        `DELETE FROM sqlite_sequence
+                          WHERE name IN ('voyages', 'clients', 'tickets', 'bagages', 'courriers', 'colis', 'sync_queue')`,
+                    ).run();
+                }
+            })();
+        } finally {
+            db.pragma('foreign_keys = ON');
+        }
+
+        logger.info('Données de test nettoyées sur la machine locale', { acteur_user_id: acteurUserId ?? null, suppressions });
+
+        return {
+            ok: true as const,
+            suppressions,
+            message: 'Données de test supprimées sur cette machine.',
+        };
+    },
 };

@@ -328,9 +328,9 @@ export const migrations: { nom: string; sql: string }[] = [
     {
         nom: '0009_references_distantes_bagages_courriers',
         sql: `
-            -- En mode poste client, les voyages/tickets peuvent venir de la
-            -- caisse serveur. On garde leurs UUID pour la synchronisation admin
-            -- sans utiliser leurs IDs numériques dans la base locale.
+            -- En mode poste client, les voyages peuvent venir de la caisse
+            -- serveur. Les UUID distants restent utiles pour rattacher les
+            -- opérations sans dépendre des IDs numériques locaux.
             ALTER TABLE bagages ADD COLUMN ticket_uuid TEXT;
             ALTER TABLE bagages ADD COLUMN ticket_numero TEXT;
             ALTER TABLE bagages ADD COLUMN voyage_uuid TEXT;

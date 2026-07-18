@@ -54,6 +54,8 @@ export class BagageService {
                 villeArriveeId ??= ticket.ville_arrivee_id;
                 voyageId = ticket.voyage_id;
                 voyageUuid = ticket.voyage_uuid;
+            } else if (voyageUuid) {
+                voyageId = this.voyageIdLocalParUuid(voyageUuid);
             }
         }
 

@@ -108,6 +108,16 @@ function utiliserNumeroPrepare(
     return numero;
 }
 
+function utiliserNumeroPrepareExterne(db: Database.Database, table: string, colonne: string, numeroPrepare?: string | null): string | null {
+    const numero = (numeroPrepare ?? '').trim().toUpperCase();
+    if (!/^(?:[A-Z0-9]{3}\d{9}|\d{9})$/.test(numero)) {
+        return null;
+    }
+
+    const dejaPris = db.prepare(`SELECT 1 FROM ${table} WHERE ${colonne} = ? LIMIT 1`).get(numero);
+    return dejaPris ? null : numero;
+}
+
 function genererNumeroPrefixe(
     db: Database.Database,
     table: string,
@@ -156,8 +166,13 @@ export function prevoirNumeroCourrier(db: Database.Database, codePoste?: string 
 
 export function genererNumeroTicket(db: Database.Database, codePoste?: string | null, codeAgence?: string | null, numeroPrepare?: string | null): string {
     return utiliserNumeroPrepare(db, 'tickets', 'numero_ticket', 'ticket_sequence', codePoste, codeAgence, numeroPrepare)
+        ?? utiliserNumeroPrepareExterne(db, 'tickets', 'numero_ticket', numeroPrepare)
         ?? genererNumeroPrefixe(db, 'tickets', 'numero_ticket', 'ticket_sequence', codePoste, codeAgence)
         ?? genererNumeroUnique(db, 'tickets', 'numero_ticket');
+}
+
+export function marquerNumeroTicketUtilise(db: Database.Database, codePoste?: string | null, codeAgence?: string | null, numero?: string | null): boolean {
+    return utiliserNumeroPrepare(db, 'tickets', 'numero_ticket', 'ticket_sequence', codePoste, codeAgence, numero) !== null;
 }
 
 export function genererNumeroBagage(db: Database.Database, codePoste?: string | null, codeAgence?: string | null, numeroPrepare?: string | null): string {

@@ -14,6 +14,7 @@ const api = {
         configurerReseauLocal: (params: unknown) => ipcRenderer.invoke('config:configurerReseauLocal', params),
         testerReseauLocal: (serveurUrl: string, secret: string) => ipcRenderer.invoke('config:testerReseauLocal', serveurUrl, secret),
         actualiserVoyagesServeurLocal: (agenceId: number, date?: string | null) => ipcRenderer.invoke('config:actualiserVoyagesServeurLocal', agenceId, date),
+        nettoyerDonneesTest: (acteurUserId: number) => ipcRenderer.invoke('config:nettoyerDonneesTest', acteurUserId),
     },
     auth: {
         connecter: (identifiant: string, motDePasse: string) => ipcRenderer.invoke('auth:connecter', identifiant, motDePasse),
@@ -40,8 +41,8 @@ const api = {
         vendre: (demande: unknown) => ipcRenderer.invoke('vente:vendre', demande),
         confirmerImpression: (uuid: string) => ipcRenderer.invoke('vente:confirmerImpression', uuid),
         annulerImpression: (uuid: string, motif: string) => ipcRenderer.invoke('vente:annulerImpression', uuid, motif),
-        ventesDuJour: (agenceId: number, date?: string) => ipcRenderer.invoke('vente:ventesDuJour', agenceId, date),
-        finDeCaisse: (agenceId: number, date?: string) => ipcRenderer.invoke('vente:finDeCaisse', agenceId, date),
+        ventesDuJour: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('vente:ventesDuJour', agenceId, date, userId),
+        finDeCaisse: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('vente:finDeCaisse', agenceId, date, userId),
     },
     impression: {
         imprimerTicket: (hauteurMm?: number) => ipcRenderer.invoke('impression:ticket', hauteurMm),

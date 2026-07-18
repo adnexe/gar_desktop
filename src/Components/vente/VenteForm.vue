@@ -766,6 +766,12 @@ async function vendre() {
         if (!reponse.ok || !reponse.ticket) {
             erreur.value = reponse.erreur ?? 'Une erreur est survenue.';
             confirmationOuverte.value = false;
+            await nettoyerCachePdfPrepare();
+            if (venteRefuseePourPlace(erreur.value)) {
+                await chargerVoyagesEtDemanderReselection();
+            } else {
+                await chargerVoyagesConservantSelection(idVoyageCourant);
+            }
             return;
         }
 
@@ -896,6 +902,25 @@ async function chargerVoyagesConservantSelection(voyageId: number) {
     const voyage = voyagesNonPasses.find((v) => v.id === voyageId) ?? null;
     voyageSelectionne.value = voyage;
     placeSelectionnee.value = voyage?.premiere_place_libre ?? null;
+}
+
+async function chargerVoyagesEtDemanderReselection() {
+    if (!props.agenceId || !props.villeDepartId || !villeArriveeId.value) return;
+
+    const data = (await window.api.vente.rechercherVoyages({
+        agenceId: props.agenceId,
+        villeDepartId: props.villeDepartId,
+        villeArriveeId: villeArriveeId.value,
+    })) as { voyages: VoyageDisponible[] };
+
+    voyagesDisponibles.value = data.voyages.filter(voyageNonPasse);
+    voyageSelectionne.value = null;
+    placeSelectionnee.value = null;
+    venteEffectuee.value = false;
+}
+
+function venteRefuseePourPlace(message: string | null) {
+    return !!message && /place/i.test(message);
 }
 
 /** Remet le formulaire à zéro pour un nouveau client (la fenêtre reste ouverte). */

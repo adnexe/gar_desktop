@@ -146,7 +146,7 @@ async function rechercher() {
     try {
         ticket.value = (await window.api.bagage.rechercherTicket(code.value.trim())) as TicketTrouve | null;
     } catch (e) {
-        erreur.value = messageErreurInconnue(e, 'Impossible de synchroniser les tickets avec la caisse serveur.');
+        erreur.value = messageErreurInconnue(e, 'Impossible de synchroniser les voyages avec la caisse serveur.');
         return;
     }
 
