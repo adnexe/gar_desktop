@@ -99,6 +99,18 @@ const canauxClientVersServeur = new Set<string>([
     'vente:finDeCaisse',
 ]);
 
+const canauxServeurLocalAutorises = new Set<string>([
+    'vente:rechercherVoyages',
+    'vente:rechercherClient',
+    'vente:vendre',
+    'vente:confirmerImpression',
+    'vente:annulerImpression',
+    'vente:ventesDuJour',
+    'vente:finDeCaisse',
+    'bagage:rechercherTicket',
+    'voyage:exporterPourClient',
+]);
+
 export class LocalNetworkService {
     private readonly config = new ConfigRepository();
     private readonly agences = new AgenceRepository();
@@ -377,7 +389,7 @@ export class LocalNetworkService {
                 const args = Array.isArray(body.args) ? body.args : [];
                 const handler = handlers[canal];
 
-                if (!handler) {
+                if (!handler || !canauxServeurLocalAutorises.has(canal)) {
                     this.json(res, 404, { ok: false, erreur: 'Action locale inconnue.' });
                     return;
                 }
@@ -535,6 +547,7 @@ export class LocalNetworkService {
                         a.adresse, a.telephone
                  FROM agences a
                  JOIN villes v ON v.id = a.ville_id
+                 WHERE a.reference = (SELECT valeur FROM config WHERE cle = 'agence_reference')
                  LIMIT 1`,
             )
             .get() as AgenceServeurLocal | undefined;

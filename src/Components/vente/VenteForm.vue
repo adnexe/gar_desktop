@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { watchDebounced } from '@vueuse/core';
-import { Armchair, Banknote, Check, MapPin, RotateCcw, Ticket, User, X } from '@lucide/vue';
+import { Armchair, Banknote, Check, LoaderCircle, MapPin, RotateCcw, Ticket, User, X } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import SeatMap from '@/Components/vente/SeatMap.vue';
 import TicketRecu, { type Recu } from '@/Components/vente/TicketRecu.vue';
@@ -902,6 +902,14 @@ async function vendre() {
             void nettoyerCachePdfPrepare();
         }
         enVente.value = false;
+
+        if (venteEffectuee.value && peutVendre.value) {
+            logDiagnostic('info', 'Préparation ticket relancée après vente pour Vendre à nouveau', {
+                voyage_id: voyageSelectionne.value?.id ?? null,
+                place: placeSelectionnee.value,
+            });
+            programmerPreparationPdfTicket('selection_place', DELAI_PREPARATION_APRES_VOYAGE_MS);
+        }
     }
 }
 
@@ -1233,9 +1241,10 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 <RotateCcw />
                 Nouveau ticket
             </Button>
-            <Button :disabled="!peutVendre" @click="ouvrirConfirmationVente">
-                <Ticket />
-                {{ venteEffectuee ? 'Vendre à nouveau' : 'Vendre' }}
+            <Button :disabled="!peutVendre || enVente" @click="ouvrirConfirmationVente">
+                <LoaderCircle v-if="enVente" class="animate-spin" />
+                <Ticket v-else />
+                {{ enVente ? 'Impression en cours…' : venteEffectuee ? 'Vendre à nouveau' : 'Vendre' }}
             </Button>
         </div>
     </div>
@@ -1288,8 +1297,9 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     Fermer
                 </Button>
                 <Button :disabled="enVente" @click="vendre">
-                    <Check />
-                    Confirmer
+                    <LoaderCircle v-if="enVente" class="animate-spin" />
+                    <Check v-else />
+                    {{ enVente ? 'Impression…' : 'Confirmer' }}
                 </Button>
             </DialogFooter>
         </DialogContent>

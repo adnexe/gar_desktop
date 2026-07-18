@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watchDebounced } from '@vueuse/core';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
-import { Check, Mail, Package, Plus, Send, Trash2, UserRound, X } from '@lucide/vue';
+import { Check, LoaderCircle, Mail, Package, Plus, Send, Trash2, UserRound, X } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
@@ -857,8 +857,9 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
         <div class="shrink-0 flex items-center justify-end gap-2 border-t bg-background px-6 py-3">
             <Button variant="outline" @click="() => { void nettoyerCachePdfCourrier(); emit('fermer'); }">Fermer</Button>
             <Button :disabled="!peutEnvoyer" @click="ouvrirConfirmation">
-                <Send />
-                {{ enregistrement ? 'Enregistrement…' : 'Enregistrer et imprimer' }}
+                <LoaderCircle v-if="enregistrement" class="animate-spin" />
+                <Send v-else />
+                {{ enregistrement ? 'Impression en cours…' : 'Enregistrer et imprimer' }}
             </Button>
         </div>
 
@@ -898,8 +899,9 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                         Fermer
                     </Button>
                     <Button :disabled="enregistrement" @click="envoyer">
-                        <Check />
-                        {{ enregistrement ? 'Enregistrement…' : 'Confirmer' }}
+                        <LoaderCircle v-if="enregistrement" class="animate-spin" />
+                        <Check v-else />
+                        {{ enregistrement ? 'Impression…' : 'Confirmer' }}
                     </Button>
                 </div>
             </div>

@@ -35,6 +35,7 @@ type ImprimanteExposee = {
 };
 
 type ResultatImpression = { ok: true; imprimante: string } | { ok: false; erreur: string };
+type CibleImpression = { printer?: string; libelle: string };
 type EtatImprimanteWindows = {
     name?: string;
     workOffline?: boolean;
@@ -87,12 +88,20 @@ function messageEtatImprimanteWindows(etat: EtatImprimanteWindows): string | nul
     return null;
 }
 
-async function verifierImprimanteWindowsPrete(): Promise<ResultatImpression | null> {
+function echapperPowerShellSingleQuote(valeur: string): string {
+    return valeur.replace(/'/g, "''");
+}
+
+async function verifierImprimanteWindowsPrete(printerName?: string): Promise<ResultatImpression | null> {
     if (process.platform !== 'win32') return null;
 
     const debut = performance.now();
+    const filtre = printerName
+        ? `$target = '${echapperPowerShellSingleQuote(printerName)}'
+$printer = Get-CimInstance Win32_Printer | Where-Object { $_.Name -eq $target } | Select-Object -First 1 Name,WorkOffline,PrinterStatus,DetectedErrorState,ExtendedPrinterStatus`
+        : "$printer = Get-CimInstance Win32_Printer | Where-Object { $_.Default -eq $true } | Select-Object -First 1 Name,WorkOffline,PrinterStatus,DetectedErrorState,ExtendedPrinterStatus";
     const script = `
-$printer = Get-CimInstance Win32_Printer | Where-Object { $_.Default -eq $true } | Select-Object -First 1 Name,WorkOffline,PrinterStatus,DetectedErrorState,ExtendedPrinterStatus
+${filtre}
 if ($null -eq $printer) {
   Write-Output '{"absent":true}'
 } else {
@@ -119,16 +128,24 @@ if ($null -eq $printer) {
         };
 
         if (data.absent) {
-            logger.warn('Contrôle imprimante Windows refusé : aucune imprimante par défaut.', { duree_ms: dureeMs(debut) });
-            return { ok: false, erreur: 'Aucune imprimante par défaut configurée. La vente est annulée.' };
+            logger.warn('Contrôle imprimante Windows : imprimante introuvable, contrôle détaillé ignoré.', {
+                imprimante: printerName ?? 'par défaut',
+                duree_ms: dureeMs(debut),
+            });
+
+            return printerName
+                ? { ok: false, erreur: `L'imprimante ${printerName} est introuvable dans Windows.` }
+                : null;
         }
         if (data.Name && estNomImprimanteVirtuelle(data.Name)) {
-            logger.warn('Contrôle imprimante Windows refusé : imprimante par défaut virtuelle.', {
+            logger.warn('Contrôle imprimante Windows : imprimante virtuelle détectée.', {
                 imprimante: data.Name,
                 duree_ms: dureeMs(debut),
             });
 
-            return { ok: false, erreur: `L'imprimante par défaut (${data.Name}) n'est pas l'imprimante ticket. Définissez la XPrinter comme imprimante par défaut.` };
+            return printerName
+                ? { ok: false, erreur: `L'imprimante sélectionnée (${data.Name}) n'est pas une imprimante ticket.` }
+                : null;
         }
 
         const etat: EtatImprimanteWindows = {
@@ -311,27 +328,42 @@ function estNomImprimanteVirtuelle(nom: string): boolean {
     return /onenote|fax|xps|print to pdf|pdf24|microsoft/i.test(nom);
 }
 
-async function verifierImprimanteDisponible(sender: WebContents): Promise<ResultatImpression> {
-    const controleWindows = await verifierImprimanteWindowsPrete();
+function imprimantesPhysiques(imprimantes: ImprimanteRuntime[]): ImprimanteRuntime[] {
+    return ordonnerImprimantes(imprimantes).filter((imprimante) => imprimante.name && !estImprimanteVirtuelle(imprimante));
+}
+
+async function choisirCibleImpression(sender: WebContents): Promise<{ ok: true; cible: CibleImpression } | { ok: false; erreur: string }> {
+    const imprimantes = await listerImprimantes(sender);
+    const physiques = imprimantesPhysiques(imprimantes);
+    const cible = physiques.find(estImprimanteParDefaut) ?? physiques[0];
+
+    if (!cible) {
+        logger.warn('Aucune imprimante physique détectée pour impression.', {
+            imprimantes: imprimantes.map(nomImprimante),
+        });
+
+        return {
+            ok: false,
+            erreur: "Aucune imprimante ticket utilisable n'est détectée. Vérifiez que l'imprimante est allumée et installée.",
+        };
+    }
+
+    const libelle = nomImprimante(cible);
+    if (!estImprimanteParDefaut(cible)) {
+        logger.warn('Aucune imprimante par défaut détectée, première imprimante physique utilisée.', { imprimante: libelle });
+    }
+
+    const controleWindows = await verifierImprimanteWindowsPrete(cible.name);
     if (controleWindows) return controleWindows;
 
-    const imprimantes = await listerImprimantes(sender);
-    const imprimanteDefaut = imprimantes.find(estImprimanteParDefaut);
-    if (!imprimanteDefaut) {
-        return {
-            ok: false,
-            erreur: "Aucune imprimante par défaut n'est configurée. Définissez l'imprimante ticket par défaut avant de vendre.",
-        };
-    }
+    return { ok: true, cible: { printer: cible.name, libelle } };
+}
 
-    if (estImprimanteVirtuelle(imprimanteDefaut)) {
-        return {
-            ok: false,
-            erreur: `L'imprimante par défaut (${nomImprimante(imprimanteDefaut)}) n'est pas une imprimante ticket. Définissez l'imprimante thermique par défaut.`,
-        };
-    }
+async function verifierImprimanteDisponible(sender: WebContents): Promise<ResultatImpression> {
+    const cible = await choisirCibleImpression(sender);
+    if (!cible.ok) return cible;
 
-    return { ok: true, imprimante: nomImprimante(imprimanteDefaut) };
+    return { ok: true, imprimante: cible.cible.libelle };
 }
 
 /**
@@ -391,11 +423,10 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
 
         // Imprimante par défaut d'abord (sans nom), puis les imprimantes
         // physiques (défaut en tête) — jamais les virtuelles en repli.
-        const cibles: { printer?: string; libelle: string }[] = [
-            { libelle: 'imprimante par défaut' },
-            ...ordonnerImprimantes(imprimantes)
-                .filter((imprimante) => imprimante.name && !estImprimanteVirtuelle(imprimante))
-                .map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
+        const physiques = imprimantesPhysiques(imprimantes);
+        const cibles: CibleImpression[] = [
+            ...(imprimantes.length === 0 || physiques.some(estImprimanteParDefaut) ? [{ libelle: 'imprimante par défaut' }] : []),
+            ...physiques.map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
         ];
 
         // Papier personnalisé à la taille exacte du reçu (paper=80mm x Hmm) :
@@ -555,11 +586,10 @@ async function imprimerViaPdfMacos(sender: WebContents, imprimantes: ImprimanteR
         await writeFile(fichier, pdf);
         chrono.ecriture_pdf_ms = dureeMs(debutEcriture);
 
-        const cibles: { printer?: string; libelle: string }[] = [
-            { libelle: 'imprimante par défaut' },
-            ...ordonnerImprimantes(imprimantes)
-                .filter((imprimante) => imprimante.name && !estImprimanteVirtuelle(imprimante))
-                .map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
+        const physiques = imprimantesPhysiques(imprimantes);
+        const cibles: CibleImpression[] = [
+            ...(imprimantes.length === 0 || physiques.some(estImprimanteParDefaut) ? [{ libelle: 'imprimante par défaut' }] : []),
+            ...physiques.map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
         ];
         const hauteurPapierMm = Math.round(hauteurPouces * 25.4);
         chrono.hauteur_papier_mm = hauteurPapierMm;
@@ -635,7 +665,7 @@ async function imprimerViaPdfMacos(sender: WebContents, imprimantes: ImprimanteR
     }
 }
 
-async function imprimerPdfPrepare(id: string): Promise<ResultatImpression> {
+async function imprimerPdfPrepare(sender: WebContents, id: string): Promise<ResultatImpression> {
     const debutTotal = performance.now();
     const prepare = pdfPrepares.get(id);
     if (!prepare) {
@@ -657,9 +687,16 @@ async function imprimerPdfPrepare(id: string): Promise<ResultatImpression> {
     };
 
     try {
+        const cible = await choisirCibleImpression(sender);
+        if (!cible.ok) {
+            chrono.erreur = cible.erreur;
+            return cible;
+        }
+
         if (process.platform === 'darwin') {
             const debutCups = performance.now();
             await execFileAsync('/usr/bin/lp', [
+                ...(cible.cible.printer ? ['-d', cible.cible.printer] : []),
                 '-o',
                 `media=Custom.80x${prepare.hauteurPapierMm}mm`,
                 '-o',
@@ -670,7 +707,7 @@ async function imprimerPdfPrepare(id: string): Promise<ResultatImpression> {
             const coupe = await envoyerCoupeMacos();
             chrono.sortie_ms = dureeMs(debutCups);
             chrono.resultat = 'succes';
-            chrono.imprimante = `imprimante par défaut (PDF préparé CUPS 80x${prepare.hauteurPapierMm})`;
+            chrono.imprimante = `${cible.cible.libelle} (PDF préparé CUPS 80x${prepare.hauteurPapierMm})`;
             if (!coupe.ok) {
                 logger.warn('Coupe macOS/CUPS non confirmée sur PDF préparé.', { id, erreur: coupe.erreur });
             }
@@ -678,20 +715,15 @@ async function imprimerPdfPrepare(id: string): Promise<ResultatImpression> {
             return { ok: true, imprimante: chrono.imprimante };
         }
 
-        const controleWindows = await verifierImprimanteWindowsPrete();
-        if (controleWindows) {
-            chrono.erreur = controleWindows.erreur;
-            return controleWindows;
-        }
-
         const debutSumatra = performance.now();
         await imprimerFichierPdf(prepare.fichier, {
+            ...(cible.cible.printer ? { printer: cible.cible.printer } : {}),
             paperSize: `80mm x ${prepare.hauteurPapierMm}mm`,
             scale: 'noscale',
         });
         chrono.sortie_ms = dureeMs(debutSumatra);
         chrono.resultat = 'succes';
-        chrono.imprimante = `imprimante par défaut (PDF préparé 80x${prepare.hauteurPapierMm})`;
+        chrono.imprimante = `${cible.cible.libelle} (PDF préparé 80x${prepare.hauteurPapierMm})`;
 
         return { ok: true, imprimante: chrono.imprimante };
     } catch (erreur) {
@@ -939,7 +971,7 @@ export function enregistrerIpc(): void {
     ipcMain.handle('impression:ticket', imprimerDepuisRenderer);
     ipcMain.handle('impression:recu', imprimerDepuisRenderer);
     ipcMain.handle('impression:preparerPdf', async (event, hauteurMm?: number) => preparerPdfDepuisRenderer(event.sender, hauteurMm));
-    ipcMain.handle('impression:imprimerPdfPrepare', async (_event, id: string) => imprimerPdfPrepare(id));
+    ipcMain.handle('impression:imprimerPdfPrepare', async (event, id: string) => imprimerPdfPrepare(event.sender, id));
     ipcMain.handle('impression:supprimerPdfPrepare', async (_event, id: string) => {
         await supprimerPdfPrepare(id);
         return { ok: true as const };

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
-import { Check, Printer, Search, X } from '@lucide/vue';
+import { Check, LoaderCircle, Printer, Search, X } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
 import {
     Dialog,
@@ -616,7 +616,9 @@ async function enregistrer() {
         <div class="flex justify-end gap-2 border-t pt-4">
             <Button variant="outline" @click="() => { void nettoyerCachePdfBagage(); emit('fermer'); }">Fermer</Button>
             <Button :disabled="montant === null || enCours" @click="ouvrirConfirmation">
-                {{ enCours ? 'Enregistrement…' : 'Enregistrer et imprimer' }}
+                <LoaderCircle v-if="enCours" class="animate-spin" />
+                <Printer v-else />
+                {{ enCours ? 'Impression en cours…' : 'Enregistrer et imprimer' }}
             </Button>
         </div>
     </div>
@@ -658,8 +660,9 @@ async function enregistrer() {
                     Fermer
                 </Button>
                 <Button :disabled="enCours" @click="enregistrer">
-                    <Check />
-                    Confirmer
+                    <LoaderCircle v-if="enCours" class="animate-spin" />
+                    <Check v-else />
+                    {{ enCours ? 'Impression…' : 'Confirmer' }}
                 </Button>
             </DialogFooter>
         </DialogContent>
