@@ -42,11 +42,12 @@ export async function reclamerLicence(
     reference: string,
     appareil: string,
     licenceUuid?: string | null,
+    codePoste?: string | null,
     timeoutMs = 10000,
 ): Promise<ReponseLicenceDesktop> {
     const { data } = await http.post<ReponseLicenceDesktop>(
         '/api/desktop/licence/reclamer',
-        { reference, appareil, licence_uuid: licenceUuid ?? null },
+        { reference, appareil, licence_uuid: licenceUuid ?? null, code_poste: codePoste ?? null },
         {
             timeout: timeoutMs,
             validateStatus: (status) => status < 500,

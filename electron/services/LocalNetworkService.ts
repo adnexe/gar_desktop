@@ -206,6 +206,17 @@ export class LocalNetworkService {
         }
     }
 
+    async relancerServeurDepuisConfig(): Promise<ConfigurationReseauLocal> {
+        migrer(getDb());
+        if (this.mode() !== 'serveur') {
+            return this.configuration();
+        }
+
+        await this.demarrerServeur(this.port());
+
+        return this.configuration();
+    }
+
     async arreter(): Promise<void> {
         await this.arreterServeur();
     }

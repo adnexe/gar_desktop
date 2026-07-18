@@ -60,11 +60,11 @@ export class BootstrapService {
         };
     }
 
-    async reclamerLicence(reference: string, appareil: string): Promise<ReponseLicenceDesktop> {
+    async reclamerLicence(reference: string, appareil: string, codePoste?: string | null): Promise<ReponseLicenceDesktop> {
         migrer(getDb());
 
         const licenceLocale = this.licenceActuelle();
-        const resultat = await appelLicence(reference, appareil, licenceLocale?.uuid ?? null);
+        const resultat = await appelLicence(reference, appareil, licenceLocale?.uuid ?? null, codePoste ?? licenceLocale?.code_poste ?? null);
 
         if (resultat.ok && resultat.licence) {
             this.enregistrerLicence(resultat.licence);
@@ -140,10 +140,10 @@ export class BootstrapService {
         logger.warn(`Licence locale invalidée (${statut}).`);
     }
 
-    async configurer(reference: string, appareil: string) {
+    async configurer(reference: string, appareil: string, codePoste?: string | null) {
         migrer(getDb());
 
-        const licence = await this.reclamerLicence(reference, appareil);
+        const licence = await this.reclamerLicence(reference, appareil, codePoste);
         if (!licence.ok) {
             throw new Error('LICENCE_INDISPONIBLE');
         }

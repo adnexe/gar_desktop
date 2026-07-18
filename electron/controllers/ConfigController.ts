@@ -66,12 +66,12 @@ export const ConfigController = {
     agenceActuelle: () => service.agenceActuelle(),
     compagnieActuelle: () => service.compagnieActuelle(),
     licenceActuelle: () => service.licenceActuelle(),
-    reclamerLicence: (reference: string, appareil: string) => service.reclamerLicence(reference, appareil),
+    reclamerLicence: (reference: string, appareil: string, codePoste?: string | null) => service.reclamerLicence(reference, appareil, codePoste),
     verifierLicence: async () => {
         await service.verifierLicenceEnLigne();
         return service.licenceActuelle();
     },
-    configurer: (reference: string, appareil: string) => service.configurer(reference, appareil),
+    configurer: (reference: string, appareil: string, codePoste?: string | null) => service.configurer(reference, appareil, codePoste),
     actualiser: async () => {
         try {
             return { ok: true as const, agence: await service.actualiser(), baseUrl: apiBaseUrl() };
@@ -82,6 +82,7 @@ export const ConfigController = {
         }
     },
     reseauLocal: () => localNetworkService.configuration(),
+    relancerServeurLocal: () => localNetworkService.relancerServeurDepuisConfig(),
     configurerReseauLocal: (params: { mode: ModeReseauLocal; serveurUrl?: string | null; port?: number | null; secret?: string | null; acteurUserId?: number | null }) => {
         verifierSuperAdmin(params.acteurUserId);
 

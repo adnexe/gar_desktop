@@ -33,7 +33,7 @@ declare global {
                     assigned_device: string | null;
                     statut: string;
                 } | null>;
-                reclamerLicence: (reference: string, appareil: string) => Promise<{
+                reclamerLicence: (reference: string, appareil: string, codePoste?: string | null) => Promise<{
                 verifierLicence: () => Promise<unknown>;
                     ok: boolean;
                     statut: string;
@@ -51,9 +51,18 @@ declare global {
                         statut: string;
                     };
                 }>;
-                configurer: (reference: string, appareil: string) => Promise<unknown>;
+                configurer: (reference: string, appareil: string, codePoste?: string | null) => Promise<unknown>;
                 actualiser: () => Promise<{ ok: boolean; agence?: unknown; erreur?: string; baseUrl?: string }>;
                 reseauLocal: () => Promise<{
+                    mode: 'autonome' | 'serveur' | 'client';
+                    serveurUrl: string | null;
+                    port: number;
+                    secret: string | null;
+                    actif: boolean;
+                    adresses: string[];
+                    agence: string | null;
+                }>;
+                relancerServeurLocal: () => Promise<{
                     mode: 'autonome' | 'serveur' | 'client';
                     serveurUrl: string | null;
                     port: number;

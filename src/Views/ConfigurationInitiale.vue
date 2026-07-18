@@ -9,6 +9,7 @@ import { Label } from '@/Components/ui/label';
 import { useConfigStore } from '@/Stores/config';
 
 const reference = ref('');
+const codePoste = ref('');
 const enCours = ref(false);
 const erreur = ref('');
 const messageLicence = ref('');
@@ -17,7 +18,7 @@ const config = useConfigStore();
 const router = useRouter();
 
 async function valider() {
-    if (!reference.value.trim()) return;
+    if (!reference.value.trim() || !codePoste.value.trim()) return;
 
     enCours.value = true;
     erreur.value = '';
@@ -26,7 +27,8 @@ async function valider() {
 
     try {
         const referenceAgence = reference.value.trim().toUpperCase();
-        const licence = await config.reclamerLicence(referenceAgence, 'poste-caisse');
+        const code = normaliserCodePoste(codePoste.value);
+        const licence = await config.reclamerLicence(referenceAgence, 'poste-caisse', code);
 
         if (!licence.ok) {
             licenceBloquee.value = true;
@@ -35,13 +37,17 @@ async function valider() {
         }
 
         messageLicence.value = licence.message;
-        await config.configurer(referenceAgence, 'poste-caisse');
+        await config.configurer(referenceAgence, 'poste-caisse', code);
         router.push({ name: 'connexion' });
     } catch {
         erreur.value = "Référence agence introuvable, agence désactivée, ou pas de connexion internet pour ce premier réglage.";
     } finally {
         enCours.value = false;
     }
+}
+
+function normaliserCodePoste(valeur: string) {
+    return valeur.trim().padStart(3, '0');
 }
 
 </script>
@@ -56,14 +62,19 @@ async function valider() {
                 <h1 class="text-lg font-semibold">Configuration de l'agence</h1>
                 <p class="text-sm font-medium text-muted-foreground">Adnexe Transport</p>
                 <p class="text-sm text-muted-foreground">
-                    Saisissez la référence de votre agence (ex : AG-7K2M9Q). Une connexion internet est nécessaire
-                    uniquement pour cette première étape.
+                    Saisissez la référence de l'agence et le numéro de poste indiqué sur la licence.
+                    Une connexion internet est nécessaire uniquement pour cette première étape.
                 </p>
             </div>
 
             <div class="space-y-1.5">
                 <Label for="reference">Référence agence</Label>
                 <Input id="reference" v-model="reference" placeholder="AG-XXXXXX" autofocus />
+            </div>
+
+            <div class="space-y-1.5">
+                <Label for="code_poste">Numéro de poste</Label>
+                <Input id="code_poste" v-model="codePoste" placeholder="Ex : 001" maxlength="10" />
             </div>
 
             <p v-if="erreur" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{{ erreur }}</p>
@@ -79,7 +90,7 @@ async function valider() {
                 {{ messageLicence }}
             </p>
 
-            <Button type="submit" class="w-full" :disabled="enCours || !reference.trim()">
+            <Button type="submit" class="w-full" :disabled="enCours || !reference.trim() || !codePoste.trim()">
                 {{ enCours ? 'Vérification…' : 'Configurer cet appareil' }}
             </Button>
 

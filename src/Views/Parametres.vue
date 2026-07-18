@@ -258,8 +258,26 @@ async function activerServeurLocal() {
         reseau.value = await window.api.config.configurerReseauLocal({ mode: 'serveur', port: portServeur.value, acteurUserId: session.userId });
         roleMachine.value = reseau.value.mode;
         secretReseau.value = reseau.value.secret ?? '';
-        statutConnexion.value = 'connecte';
+        statutConnexion.value = reseau.value.actif ? 'connecte' : 'deconnecte';
         message.value = 'Cette machine est maintenant la caisse serveur locale.';
+    });
+}
+
+async function relancerServeurLocal() {
+    if (reseau.value?.mode !== 'serveur') {
+        erreur.value = "Cette machine n'est pas configurée comme caisse serveur.";
+        return;
+    }
+
+    await executer(async () => {
+        reseau.value = await window.api.config.relancerServeurLocal();
+        roleMachine.value = reseau.value.mode;
+        portServeur.value = reseau.value.port;
+        secretReseau.value = reseau.value.secret ?? '';
+        statutConnexion.value = reseau.value.actif ? 'connecte' : 'deconnecte';
+        message.value = reseau.value.actif
+            ? 'Serveur local relancé. Les postes clients peuvent se reconnecter.'
+            : "Le serveur local n'a pas démarré.";
     });
 }
 
@@ -579,10 +597,26 @@ async function nettoyerDonneesTest() {
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <p class="font-semibold">{{ libelleMode }}</p>
-                            <p class="text-sm text-muted-foreground">Seul un super admin peut changer le rôle réseau de cette machine.</p>
+                            <p class="text-sm text-muted-foreground">
+                                <template v-if="reseau?.mode === 'serveur'">
+                                    Cette machine démarre le serveur local quand l'application est ouverte.
+                                </template>
+                                <template v-else>
+                                    Seul un super admin peut changer le rôle réseau de cette machine.
+                                </template>
+                            </p>
                         </div>
                         <span :class="badgeEtat(reseauLocalOn)">
                             Réseau local {{ reseauLocalOn ? 'ON' : 'OFF' }}
+                        </span>
+                    </div>
+                    <div v-if="reseau?.mode === 'serveur'" class="mt-4 flex flex-wrap items-center gap-2">
+                        <Button type="button" variant="outline" :disabled="enCours" @click="relancerServeurLocal">
+                            <RefreshCw :class="['size-4', enCours ? 'animate-spin' : '']" />
+                            Relancer serveur local
+                        </Button>
+                        <span :class="badgeConnexion(serveurOn ? 'connecte' : 'deconnecte', serveurConnecte)">
+                            {{ serveurConnecte ? 'Serveur actif' : 'Serveur arrêté' }}
                         </span>
                     </div>
                 </div>
@@ -608,12 +642,24 @@ async function nettoyerDonneesTest() {
                         <Input id="port-serveur" v-model.number="portServeur" type="number" min="1" class="h-10" />
                     </div>
 
-                    <Button type="button" class="w-full" :disabled="enCours" @click="activerServeurLocal">
-                        <Power class="size-4" />
-                        Activer comme serveur
-                    </Button>
+                    <div class="grid gap-2 sm:grid-cols-2">
+                        <Button type="button" :disabled="enCours" @click="activerServeurLocal">
+                            <Power class="size-4" />
+                            Activer comme serveur
+                        </Button>
+                        <Button type="button" variant="outline" :disabled="enCours || reseau?.mode !== 'serveur'" @click="relancerServeurLocal">
+                            <RefreshCw :class="['size-4', enCours ? 'animate-spin' : '']" />
+                            Relancer serveur local
+                        </Button>
+                    </div>
 
                     <div v-if="reseau?.mode === 'serveur'" class="space-y-2 rounded-md border bg-background p-3 text-sm">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-muted-foreground">État réel</span>
+                            <span :class="badgeConnexion(serveurOn ? 'connecte' : 'deconnecte', serveurConnecte)">
+                                {{ serveurConnecte ? 'Serveur démarré' : 'Serveur arrêté' }}
+                            </span>
+                        </div>
                         <div class="flex items-center justify-between gap-3">
                             <span class="text-muted-foreground">Code réseau</span>
                             <span class="font-mono font-semibold">{{ reseau.secret }}</span>

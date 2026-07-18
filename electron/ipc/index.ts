@@ -965,6 +965,7 @@ export function enregistrerIpc(): void {
     gerer('config:configurer', ConfigController.configurer);
     gerer('config:actualiser', ConfigController.actualiser);
     gerer('config:reseauLocal', ConfigController.reseauLocal);
+    gerer('config:relancerServeurLocal', ConfigController.relancerServeurLocal);
     gerer('config:configurerReseauLocal', ConfigController.configurerReseauLocal);
     gerer('config:testerReseauLocal', ConfigController.testerReseauLocal);
     gerer('config:actualiserVoyagesServeurLocal', ConfigController.actualiserVoyagesServeurLocal);

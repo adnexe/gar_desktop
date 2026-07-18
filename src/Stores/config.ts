@@ -83,8 +83,8 @@ export const useConfigStore = defineStore('config', () => {
         licence.value = await window.api.config.licenceActuelle();
     }
 
-    async function reclamerLicence(reference: string, appareil: string): Promise<ReponseLicence> {
-        const resultat = (await window.api.config.reclamerLicence(reference, appareil)) as ReponseLicence;
+    async function reclamerLicence(reference: string, appareil: string, codePoste?: string | null): Promise<ReponseLicence> {
+        const resultat = (await window.api.config.reclamerLicence(reference, appareil, codePoste ?? null)) as ReponseLicence;
         if (resultat.ok && resultat.licence) {
             licence.value = resultat.licence;
         } else if (licence.value && ['expiree', 'desactivee', 'aucune_licence'].includes(resultat.statut)) {
@@ -94,8 +94,8 @@ export const useConfigStore = defineStore('config', () => {
         return resultat;
     }
 
-    async function configurer(reference: string, appareil: string) {
-        agence.value = (await window.api.config.configurer(reference, appareil)) as AgenceLocale;
+    async function configurer(reference: string, appareil: string, codePoste?: string | null) {
+        agence.value = (await window.api.config.configurer(reference, appareil, codePoste ?? null)) as AgenceLocale;
         compagnie.value = await window.api.config.compagnieActuelle();
         licence.value = await window.api.config.licenceActuelle();
         configuree.value = true;
