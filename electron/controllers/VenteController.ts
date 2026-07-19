@@ -39,5 +39,5 @@ export const VenteController = {
     },
     ventesDuJour: (agenceId: number, date?: string, userId?: number | null) => service.ventesDuJour(agenceId, date, userId),
     finDeCaisse: (agenceId: number, date?: string, userId?: number | null, voyageId?: number | null) => service.rapportFinDeCaisse(agenceId, date, userId, voyageId),
-    voyagesFinDeCaisse: (agenceId: number, date?: string, userId?: number | null) => service.voyagesFinDeCaisse(agenceId, date, userId),
+    voyagesFinDeCaisse: (agenceId: number, date?: string) => service.voyagesFinDeCaisse(agenceId, date),
 };

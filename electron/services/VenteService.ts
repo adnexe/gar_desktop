@@ -236,10 +236,11 @@ export class VenteService {
             voyages: lignes,
             nombre_tickets_total: lignes.reduce((s, l) => s + l.nombre_tickets, 0),
             montant_total: lignes.reduce((s, l) => s + l.montant_total, 0),
+            agents: this.tickets.agentsVentes(agenceId, date, userId, voyageId),
         };
     }
 
-    voyagesFinDeCaisse(agenceId: number, date?: string, userId?: number | null) {
-        return this.tickets.voyagesAvecVentes(agenceId, date, userId);
+    voyagesFinDeCaisse(agenceId: number, date?: string) {
+        return this.tickets.voyagesDuJourAvecOccupation(agenceId, date);
     }
 }

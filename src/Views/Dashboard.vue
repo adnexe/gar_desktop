@@ -6,7 +6,7 @@ import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 
-interface TicketDuJour { montant: number; timbre: number }
+interface TicketDuJour { montant: number; timbre: number; total?: number }
 interface BagageDuJour { montant: number }
 interface CourrierDuJour { montant_total: number }
 
@@ -36,21 +36,31 @@ const dateDuJour = new Intl.DateTimeFormat('fr-FR', {
     year: 'numeric',
 }).format(new Date());
 
+// Les agents ne voient que leurs propres opérations ; admin et chef de gare
+// voient tout (même règle que les écrans vente/bagages/courrier).
+const userIdFiltre = computed(() => ['super_admin', 'admin', 'chef_gare'].includes(session.role) ? null : session.userId);
+
 onMounted(async () => {
     if (!session.agenceId) return;
-    const data = (await window.api.historique.duJour(session.agenceId)) as {
-        tickets: TicketDuJour[];
-        bagages: BagageDuJour[];
-        courriers: CourrierDuJour[];
-    };
+    const [tickets, bagages, courriers] = await Promise.all([
+        session.peutModule('ticket')
+            ? window.api.vente.ventesDuJour(session.agenceId, undefined, userIdFiltre.value) as Promise<TicketDuJour[]>
+            : Promise.resolve([]),
+        session.peutModule('bagage')
+            ? window.api.bagage.duJour(session.agenceId, undefined, userIdFiltre.value) as Promise<BagageDuJour[]>
+            : Promise.resolve([]),
+        session.peutModule('courrier')
+            ? window.api.courrier.duJour(session.agenceId, undefined, userIdFiltre.value) as Promise<CourrierDuJour[]>
+            : Promise.resolve([]),
+    ]);
 
     resume.value = {
-        tickets: data.tickets.length,
-        totalTickets: data.tickets.reduce((s, t) => s + t.montant + t.timbre, 0),
-        bagages: data.bagages.length,
-        totalBagages: data.bagages.reduce((s, b) => s + b.montant, 0),
-        courriers: data.courriers.length,
-        totalCourriers: data.courriers.reduce((s, c) => s + c.montant_total, 0),
+        tickets: tickets.length,
+        totalTickets: tickets.reduce((s, t) => s + (t.total ?? t.montant + t.timbre), 0),
+        bagages: bagages.length,
+        totalBagages: bagages.reduce((s, b) => s + b.montant, 0),
+        courriers: courriers.length,
+        totalCourriers: courriers.reduce((s, c) => s + c.montant_total, 0),
     };
 });
 </script>

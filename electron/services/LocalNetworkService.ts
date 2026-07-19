@@ -72,16 +72,19 @@ const handlers: Record<string, (...args: never[]) => unknown> = {
     'vente:annulerImpression': VenteController.annulerImpression,
     'vente:ventesDuJour': VenteController.ventesDuJour,
     'vente:finDeCaisse': VenteController.finDeCaisse,
+    'vente:voyagesFinDeCaisse': VenteController.voyagesFinDeCaisse,
     'bagage:rechercherTicket': BagageController.rechercherTicket,
     'bagage:enregistrer': BagageController.enregistrer,
     'bagage:confirmerImpression': BagageController.confirmerImpression,
     'bagage:annulerImpression': BagageController.annulerImpression,
     'bagage:duJour': BagageController.duJour,
+    'bagage:details': BagageController.details,
     'bagage:finDeCaisse': BagageController.finDeCaisse,
     'courrier:enregistrer': CourrierController.enregistrer,
     'courrier:confirmerImpression': CourrierController.confirmerImpression,
     'courrier:annulerImpression': CourrierController.annulerImpression,
     'courrier:duJour': CourrierController.duJour,
+    'courrier:details': CourrierController.details,
     'courrier:finDeCaisse': CourrierController.finDeCaisse,
     'voyage:formulaire': VoyageController.formulaire,
     'voyage:creer': VoyageController.creer,
@@ -97,6 +100,7 @@ const canauxClientVersServeur = new Set<string>([
     'vente:annulerImpression',
     'vente:ventesDuJour',
     'vente:finDeCaisse',
+    'vente:voyagesFinDeCaisse',
 ]);
 
 const canauxServeurLocalAutorises = new Set<string>([
@@ -107,6 +111,7 @@ const canauxServeurLocalAutorises = new Set<string>([
     'vente:annulerImpression',
     'vente:ventesDuJour',
     'vente:finDeCaisse',
+    'vente:voyagesFinDeCaisse',
     'bagage:rechercherTicket',
     'voyage:exporterPourClient',
 ]);

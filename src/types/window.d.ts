@@ -166,7 +166,7 @@ declare global {
                 annulerImpression: (uuid: string, motif: string) => Promise<{ ok: boolean }>;
                 ventesDuJour: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown[]>;
                 finDeCaisse: (agenceId: number, date?: string, userId?: number | null, voyageId?: number | null) => Promise<unknown>;
-                voyagesFinDeCaisse: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown[]>;
+                voyagesFinDeCaisse: (agenceId: number, date?: string) => Promise<unknown[]>;
             };
             impression: {
                 imprimerTicket: (hauteurMm?: number) => Promise<{ ok: boolean; erreur?: string }>;
@@ -190,16 +190,18 @@ declare global {
                 enregistrer: (demande: unknown) => Promise<{ ok: boolean; bagage?: unknown; erreur?: string }>;
                 confirmerImpression: (uuid: string) => Promise<{ ok: boolean; erreur?: string }>;
                 annulerImpression: (uuid: string, motif: string) => Promise<{ ok: boolean }>;
-                duJour: (agenceId: number, date?: string) => Promise<unknown[]>;
-                finDeCaisse: (agenceId: number, date?: string) => Promise<unknown>;
+                duJour: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown[]>;
+                details: (uuid: string) => Promise<unknown>;
+                finDeCaisse: (agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) => Promise<unknown>;
             };
             courrier: {
                 preparerNumero: (agenceId: number) => Promise<string | null>;
                 enregistrer: (demande: unknown) => Promise<unknown>;
                 confirmerImpression: (uuid: string) => Promise<{ ok: boolean; erreur?: string }>;
                 annulerImpression: (uuid: string, motif: string) => Promise<{ ok: boolean }>;
-                duJour: (agenceId: number, date?: string) => Promise<unknown[]>;
-                finDeCaisse: (agenceId: number, date?: string) => Promise<unknown>;
+                duJour: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown[]>;
+                details: (uuid: string) => Promise<unknown>;
+                finDeCaisse: (agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) => Promise<unknown>;
             };
             voyage: {
                 formulaire: (agenceId: number) => Promise<unknown>;
@@ -207,7 +209,7 @@ declare global {
                 liste: (agenceId: number, date?: string) => Promise<unknown[]>;
             };
             historique: {
-                duJour: (agenceId: number) => Promise<unknown>;
+                duJour: (agenceId: number, userId?: number | null) => Promise<unknown>;
             };
             diagnostic: {
                 log: (niveau: 'info' | 'warn', message: string, contexte?: unknown) => Promise<{ ok: boolean }>;

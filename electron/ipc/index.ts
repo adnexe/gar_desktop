@@ -490,12 +490,14 @@ export function enregistrerIpc(): void {
     gerer('bagage:confirmerImpression', BagageController.confirmerImpression);
     gerer('bagage:annulerImpression', BagageController.annulerImpression);
     gerer('bagage:duJour', BagageController.duJour);
+    gerer('bagage:details', BagageController.details);
     gerer('bagage:finDeCaisse', BagageController.finDeCaisse);
 
     gerer('courrier:enregistrer', CourrierController.enregistrer);
     gerer('courrier:confirmerImpression', CourrierController.confirmerImpression);
     gerer('courrier:annulerImpression', CourrierController.annulerImpression);
     gerer('courrier:duJour', CourrierController.duJour);
+    gerer('courrier:details', CourrierController.details);
     gerer('courrier:finDeCaisse', CourrierController.finDeCaisse);
 
     gerer('voyage:formulaire', VoyageController.formulaire);

@@ -12,6 +12,9 @@ export const BagageController = {
             if (erreur instanceof Error && erreur.message === 'TICKET_INTROUVABLE') {
                 return { ok: false as const, erreur: 'Aucun ticket ne correspond à ce code.' };
             }
+            if (erreur instanceof Error && erreur.message === 'COMPTE_NON_AUTORISE_BAGAGE') {
+                return { ok: false as const, erreur: "Ce compte n'est pas autorisé à enregistrer des bagages." };
+            }
             throw erreur;
         }
     },
@@ -27,6 +30,7 @@ export const BagageController = {
 
         return { ok: true as const };
     },
-    duJour: (agenceId: number, date?: string) => service.duJour(agenceId, date),
-    finDeCaisse: (agenceId: number, date?: string) => service.rapportFinDeCaisse(agenceId, date),
+    duJour: (agenceId: number, date?: string, userId?: number | null) => service.duJour(agenceId, date, userId),
+    details: (uuid: string) => service.details(uuid),
+    finDeCaisse: (agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) => service.rapportFinDeCaisse(agenceId, date, voyageId, userId),
 };

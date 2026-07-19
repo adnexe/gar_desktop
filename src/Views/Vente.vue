@@ -84,11 +84,12 @@ const rapportFinDeCaisse = ref<RapportFinDeCaisse | null>(null);
 const erreurImpression = ref('');
 
 // Fin de caisse ciblée : 0 = tous les voyages, sinon l'id du voyage choisi.
-interface VoyageFinDeCaisse { voyage_id: number; itineraire: string; heure_depart: string; numero_depart: number; nombre_tickets: number }
+interface VoyageFinDeCaisse { voyage_id: number; itineraire: string; heure_depart: string; numero_depart: number; places_total: number; places_vendues: number }
 const voyagesFinDeCaisse = ref<VoyageFinDeCaisse[]>([]);
 const voyageFinDeCaisseId = ref(0);
+const voyageFinDeCaisseChoisi = computed(() => voyagesFinDeCaisse.value.find((v) => v.voyage_id === voyageFinDeCaisseId.value) ?? null);
 const voyageFinDeCaisseLibelle = computed(() => {
-    const v = voyagesFinDeCaisse.value.find((x) => x.voyage_id === voyageFinDeCaisseId.value);
+    const v = voyageFinDeCaisseChoisi.value;
     return v ? `${v.itineraire} — ${v.heure_depart} · Départ ${v.numero_depart}` : '';
 });
 
@@ -105,7 +106,7 @@ async function chargerRapportFinDeCaisse() {
 async function ouvrirFinDeCaisse() {
     if (!session.agenceId) return;
     voyageFinDeCaisseId.value = 0;
-    voyagesFinDeCaisse.value = (await window.api.vente.voyagesFinDeCaisse(session.agenceId, dateFiltre.value, userIdFinDeCaisse.value)) as VoyageFinDeCaisse[];
+    voyagesFinDeCaisse.value = (await window.api.vente.voyagesFinDeCaisse(session.agenceId, dateFiltre.value)) as VoyageFinDeCaisse[];
     await chargerRapportFinDeCaisse();
     finDeCaisseOuvert.value = true;
 }
@@ -220,20 +221,25 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
         <!-- Rapport de fin de caisse : nombre de tickets et montant par trajet,
              pour faire le point avec le chef de gare avant de clôturer. -->
         <Dialog v-model:open="finDeCaisseOuvert">
-            <DialogContent class="sm:max-w-md">
+            <DialogContent class="max-h-[92vh] w-[92vw] max-w-lg overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle class="flex items-center gap-2"><ClipboardList class="size-5" /> Fin de caisse — {{ dateFiltre }}</DialogTitle>
                 </DialogHeader>
 
-                <Select v-if="voyagesFinDeCaisse.length > 0" v-model="voyageFinDeCaisseId">
-                    <SelectTrigger class="w-full"><SelectValue placeholder="Tous les voyages" /></SelectTrigger>
-                    <SelectContent>
+                <Select v-model="voyageFinDeCaisseId">
+                    <SelectTrigger class="w-full max-w-full [&>span]:truncate"><SelectValue placeholder="Tous les voyages" /></SelectTrigger>
+                    <SelectContent class="max-w-[var(--reka-select-trigger-width)]">
                         <SelectItem :value="0">Tous les voyages</SelectItem>
-                        <SelectItem v-for="v in voyagesFinDeCaisse" :key="v.voyage_id" :value="v.voyage_id">
-                            {{ v.itineraire }} — {{ v.heure_depart }} · Départ {{ v.numero_depart }} ({{ v.nombre_tickets }} ticket(s))
+                        <SelectItem v-for="v in voyagesFinDeCaisse" :key="v.voyage_id" :value="v.voyage_id" class="*:[span]:last:block *:[span]:last:truncate">
+                            {{ v.itineraire }} — {{ v.heure_depart }} · {{ v.places_vendues }}/{{ v.places_total }}
                         </SelectItem>
                     </SelectContent>
                 </Select>
+
+                <p v-if="voyageFinDeCaisseChoisi" class="rounded-md bg-muted/40 px-3 py-2 text-sm">
+                    Places vendues : <span class="font-semibold">{{ voyageFinDeCaisseChoisi.places_vendues }}</span>
+                    · Places restantes : <span class="font-semibold">{{ voyageFinDeCaisseChoisi.places_total - voyageFinDeCaisseChoisi.places_vendues }}</span>
+                </p>
 
                 <div v-if="rapportFinDeCaisse" class="space-y-2 text-sm">
                     <div v-for="v in rapportFinDeCaisse.voyages" :key="v.trajet_id" class="flex items-center justify-between rounded-md border px-3 py-2">
@@ -246,9 +252,15 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     <p v-if="rapportFinDeCaisse.voyages.length === 0" class="text-sm text-muted-foreground">
                         Aucune vente pour cette date.
                     </p>
-                    <div class="flex items-center justify-between border-t pt-2 font-semibold">
-                        <span>{{ rapportFinDeCaisse.nombre_tickets_total }} ticket(s) au total</span>
-                        <span class="text-lg">{{ formatMontant(rapportFinDeCaisse.montant_total) }}</span>
+                    <div class="space-y-1 border-t pt-2">
+                        <div class="flex items-start justify-between gap-4 text-muted-foreground">
+                            <span class="shrink-0">Agent(s)</span>
+                            <span class="text-right font-medium text-foreground">{{ rapportFinDeCaisse.agents.join(', ') || '—' }}</span>
+                        </div>
+                        <div class="flex items-center justify-between font-semibold">
+                            <span>{{ rapportFinDeCaisse.nombre_tickets_total }} ticket(s) au total</span>
+                            <span class="text-lg">{{ formatMontant(rapportFinDeCaisse.montant_total) }}</span>
+                        </div>
                     </div>
                 </div>
 
@@ -269,6 +281,8 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 :agence="config.agence ? `${config.agence.nom} — ${config.agence.ville_nom}` : ''"
                 :caissier="session.nom"
                 :voyage="voyageFinDeCaisseLibelle"
+                :places-vendues="voyageFinDeCaisseChoisi?.places_vendues"
+                :places-restantes="voyageFinDeCaisseChoisi ? voyageFinDeCaisseChoisi.places_total - voyageFinDeCaisseChoisi.places_vendues : undefined"
             />
         </div>
     </AppSidebarLayout>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { History } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { useSessionStore } from '@/Stores/session';
@@ -15,16 +15,27 @@ const courriers = ref<CourrierDuJour[]>([]);
 
 const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + ' FCFA';
 
+// Les agents ne voient que leurs propres opérations ; admin et chef de gare
+// voient tout (même règle que les écrans vente/bagages/courrier).
+const userIdFiltre = computed(() => ['super_admin', 'admin', 'chef_gare'].includes(session.role) ? null : session.userId);
+
 onMounted(async () => {
     if (!session.agenceId) return;
-    const data = (await window.api.historique.duJour(session.agenceId)) as {
-        tickets: TicketDuJour[];
-        bagages: BagageDuJour[];
-        courriers: CourrierDuJour[];
-    };
-    tickets.value = data.tickets;
-    bagages.value = data.bagages;
-    courriers.value = data.courriers;
+    const [ticketsDuJour, bagagesDuJour, courriersDuJour] = await Promise.all([
+        session.peutModule('ticket')
+            ? window.api.vente.ventesDuJour(session.agenceId, undefined, userIdFiltre.value) as Promise<TicketDuJour[]>
+            : Promise.resolve([]),
+        session.peutModule('bagage')
+            ? window.api.bagage.duJour(session.agenceId, undefined, userIdFiltre.value) as Promise<BagageDuJour[]>
+            : Promise.resolve([]),
+        session.peutModule('courrier')
+            ? window.api.courrier.duJour(session.agenceId, undefined, userIdFiltre.value) as Promise<CourrierDuJour[]>
+            : Promise.resolve([]),
+    ]);
+
+    tickets.value = ticketsDuJour;
+    bagages.value = bagagesDuJour;
+    courriers.value = courriersDuJour;
 });
 </script>
 

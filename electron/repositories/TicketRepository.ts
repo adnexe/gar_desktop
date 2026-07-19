@@ -482,14 +482,36 @@ export class TicketRepository {
             .all(agenceId, date ?? 'now', userId ?? null, userId ?? null, voyageId ?? null, voyageId ?? null) as never[];
     }
 
-    // Liste des voyages ayant au moins un ticket valide sur la date, pour
-    // proposer une fin de caisse ciblée sur un seul départ.
-    voyagesAvecVentes(agenceId: number, date?: string, userId?: number | null): {
+    // Noms des agents ayant réalisé les ventes du périmètre (mêmes filtres que
+    // le rapport de fin de caisse), pour affichage sur le reçu.
+    agentsVentes(agenceId: number, date?: string, userId?: number | null, voyageId?: number | null): string[] {
+        return (getDb()
+            .prepare(
+                `SELECT DISTINCT u.name AS nom
+                 FROM tickets t
+                 JOIN voyages v ON v.id = t.voyage_id
+                 JOIN users u ON u.id = t.user_id
+                 WHERE v.agence_depart_id = ? AND date(t.created_at) = date(?)
+                   AND t.statut_ticket = 'valide'
+                   AND (? IS NULL OR t.user_id = ?)
+                   AND (? IS NULL OR t.voyage_id = ?)
+                 ORDER BY u.name ASC`,
+            )
+            .all(agenceId, date ?? 'now', userId ?? null, userId ?? null, voyageId ?? null, voyageId ?? null) as { nom: string | null }[])
+            .map((l) => l.nom)
+            .filter((n): n is string => !!n);
+    }
+
+    // Tous les voyages du jour avec leur occupation (places vendues = tickets
+    // non annulés, tous caissiers confondus), pour le sélecteur de fin de
+    // caisse — même sans vente, le voyage reste sélectionnable (rapport à 0).
+    voyagesDuJourAvecOccupation(agenceId: number, date?: string): {
         voyage_id: number;
         itineraire: string;
         heure_depart: string;
         numero_depart: number;
-        nombre_tickets: number;
+        places_total: number;
+        places_vendues: number;
     }[] {
         return getDb()
             .prepare(
@@ -497,16 +519,14 @@ export class TicketRepository {
                         i.nom AS itineraire,
                         substr(v.heure_depart, 1, 5) AS heure_depart,
                         v.numero_depart AS numero_depart,
-                        COUNT(t.id) AS nombre_tickets
-                 FROM tickets t
-                 JOIN voyages v ON v.id = t.voyage_id
+                        veh.nombre_places AS places_total,
+                        (SELECT COUNT(*) FROM tickets t WHERE t.voyage_id = v.id AND t.statut_ticket <> 'annule') AS places_vendues
+                 FROM voyages v
                  JOIN itineraires i ON i.id = v.itineraire_id
-                 WHERE v.agence_depart_id = ? AND date(t.created_at) = date(?)
-                   AND t.statut_ticket = 'valide'
-                   AND (? IS NULL OR t.user_id = ?)
-                 GROUP BY v.id, i.nom, v.heure_depart, v.numero_depart
+                 JOIN vehicules veh ON veh.id = v.vehicule_id
+                 WHERE v.agence_depart_id = ? AND date(v.date_depart) = date(?)
                  ORDER BY v.heure_depart ASC, v.numero_depart ASC`,
             )
-            .all(agenceId, date ?? 'now', userId ?? null, userId ?? null) as never[];
+            .all(agenceId, date ?? 'now') as never[];
     }
 }

@@ -385,4 +385,12 @@ export const migrations: { nom: string; sql: string }[] = [
             ALTER TABLE agences ADD COLUMN code_ticket TEXT;
         `,
     },
+    {
+        nom: '0014_client_sur_bagages',
+        sql: `
+            -- Un bagage sans ticket peut quand même porter un client (nom /
+            -- téléphone saisis au comptoir), comme les courriers.
+            ALTER TABLE bagages ADD COLUMN client_id INTEGER REFERENCES clients(id);
+        `,
+    },
 ];

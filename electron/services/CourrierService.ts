@@ -27,6 +27,8 @@ export class CourrierService {
     }
 
     enregistrer(demande: DemandeCourrier) {
+        this.verifierDroitCourrier(demande);
+
         const expediteur = this.clients.trouverOuCreer(demande.expediteur, 'courrier');
         const destinataire = this.clients.trouverOuCreer(demande.destinataire, 'courrier');
 
@@ -49,6 +51,62 @@ export class CourrierService {
             numeroCourrier: demande.numeroCourrier,
             createdAt: demande.createdAt,
         });
+    }
+
+    private verifierDroitCourrier(demande: DemandeCourrier): void {
+        const utilisateur = getDb()
+            .prepare(
+                `SELECT u.id, u.role, u.agent_id,
+                        ag.agence_id, ag.type_agent, ag.actif AS agent_actif,
+                        COALESCE(ag.desactive_localement, 0) AS agent_desactive_localement,
+                        COALESCE(ag.supprime_localement, 0) AS agent_supprime_localement,
+                        agence.actif AS agence_actif
+                 FROM users u
+                 LEFT JOIN agents ag ON ag.id = u.agent_id
+                 LEFT JOIN agences agence ON agence.id = ag.agence_id
+                 WHERE u.id = ?
+                   AND u.actif = 1
+                   AND COALESCE(u.desactive_localement, 0) = 0
+                   AND COALESCE(u.supprime_localement, 0) = 0
+                 LIMIT 1`,
+            )
+            .get(demande.userId) as
+            | {
+                  role: string;
+                  agent_id: number | null;
+                  agence_id: number | null;
+                  type_agent: string | null;
+                  agent_actif: number | null;
+                  agent_desactive_localement: number | null;
+                  agent_supprime_localement: number | null;
+                  agence_actif: number | null;
+              }
+            | undefined;
+
+        if (!utilisateur) {
+            throw new Error('COMPTE_NON_AUTORISE_COURRIER');
+        }
+
+        const roleAutorise = ['super_admin', 'admin', 'chef_gare'].includes(utilisateur.role);
+        const moduleAutorise = (utilisateur.type_agent ?? '').split(',').filter(Boolean).includes('courrier');
+        if (!roleAutorise && !moduleAutorise) {
+            throw new Error('COMPTE_NON_AUTORISE_COURRIER');
+        }
+
+        if (utilisateur.agent_id !== null) {
+            if (utilisateur.agent_id !== demande.agentId || utilisateur.agence_id !== demande.agenceId) {
+                throw new Error('COMPTE_NON_AUTORISE_COURRIER');
+            }
+
+            if (
+                utilisateur.agent_actif !== 1 ||
+                utilisateur.agent_desactive_localement === 1 ||
+                utilisateur.agent_supprime_localement === 1 ||
+                utilisateur.agence_actif !== 1
+            ) {
+                throw new Error('COMPTE_NON_AUTORISE_COURRIER');
+            }
+        }
     }
 
     private voyageIdLocal(id: number | null): number | null {
@@ -83,12 +141,16 @@ export class CourrierService {
         return this.courriers.annulerImpression(uuid, motif);
     }
 
-    duJour(agenceId: number, date?: string) {
-        return this.courriers.duJour(agenceId, date);
+    duJour(agenceId: number, date?: string, userId?: number | null) {
+        return this.courriers.duJour(agenceId, date, userId);
     }
 
-    rapportFinDeCaisse(agenceId: number, date?: string) {
-        const rapport = this.courriers.rapportDuJour(agenceId, date);
+    details(uuid: string) {
+        return this.courriers.details(uuid);
+    }
+
+    rapportFinDeCaisse(agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) {
+        const rapport = this.courriers.rapportDuJour(agenceId, date, voyageId, userId);
         return { date: date ?? new Date().toISOString().slice(0, 10), ...rapport };
     }
 }

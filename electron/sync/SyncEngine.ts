@@ -238,15 +238,22 @@ export class SyncEngine {
                         b.created_at, b.updated_at,
                         COALESCE(t.uuid, b.ticket_uuid) AS ticket_uuid,
                         COALESCE(t.numero_ticket, b.ticket_numero) AS ticket_numero,
-                        COALESCE(v.uuid, b.voyage_uuid) AS voyage_uuid
+                        COALESCE(v.uuid, b.voyage_uuid) AS voyage_uuid,
+                        cb.uuid AS client_uuid
                  FROM bagages b
                  LEFT JOIN tickets t ON t.id = b.ticket_id
                  LEFT JOIN voyages v ON v.id = b.voyage_id
+                 LEFT JOIN clients cb ON cb.id = b.client_id
                  WHERE b.uuid = ?`,
             )
             .get(uuid) as Record<string, unknown> | undefined;
 
-        return ligne ?? null;
+        if (!ligne) return null;
+
+        return {
+            ...ligne,
+            client: typeof ligne.client_uuid === 'string' ? this.clientPayload(ligne.client_uuid) : null,
+        };
     }
 
     private courrierPayload(uuid: string): Record<string, unknown> | null {

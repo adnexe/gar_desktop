@@ -14,6 +14,9 @@ export const CourrierController = {
             if (erreur instanceof Error && erreur.message === 'EXPEDITEUR_DESTINATAIRE_REQUIS') {
                 return { ok: false as const, erreur: 'Expéditeur et destinataire sont obligatoires.' };
             }
+            if (erreur instanceof Error && erreur.message === 'COMPTE_NON_AUTORISE_COURRIER') {
+                return { ok: false as const, erreur: "Ce compte n'est pas autorisé à enregistrer des courriers." };
+            }
             // Toute autre erreur (contrainte SQLite, etc.) est renvoyée proprement
             // au renderer au lieu d'être relancée (promesse rejetée = bouton figé).
             return { ok: false as const, erreur: erreur instanceof Error ? erreur.message : "L'enregistrement a échoué." };
@@ -31,6 +34,7 @@ export const CourrierController = {
 
         return { ok: true as const };
     },
-    duJour: (agenceId: number, date?: string) => service.duJour(agenceId, date),
-    finDeCaisse: (agenceId: number, date?: string) => service.rapportFinDeCaisse(agenceId, date),
+    duJour: (agenceId: number, date?: string, userId?: number | null) => service.duJour(agenceId, date, userId),
+    details: (uuid: string) => service.details(uuid),
+    finDeCaisse: (agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) => service.rapportFinDeCaisse(agenceId, date, voyageId, userId),
 };

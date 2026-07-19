@@ -44,7 +44,7 @@ const api = {
         annulerImpression: (uuid: string, motif: string) => ipcRenderer.invoke('vente:annulerImpression', uuid, motif),
         ventesDuJour: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('vente:ventesDuJour', agenceId, date, userId),
         finDeCaisse: (agenceId: number, date?: string, userId?: number | null, voyageId?: number | null) => ipcRenderer.invoke('vente:finDeCaisse', agenceId, date, userId, voyageId),
-        voyagesFinDeCaisse: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('vente:voyagesFinDeCaisse', agenceId, date, userId),
+        voyagesFinDeCaisse: (agenceId: number, date?: string) => ipcRenderer.invoke('vente:voyagesFinDeCaisse', agenceId, date),
     },
     impression: {
         imprimerTicket: (hauteurMm?: number) => ipcRenderer.invoke('impression:ticket', hauteurMm),
@@ -62,16 +62,18 @@ const api = {
         enregistrer: (demande: unknown) => ipcRenderer.invoke('bagage:enregistrer', demande),
         confirmerImpression: (uuid: string) => ipcRenderer.invoke('bagage:confirmerImpression', uuid),
         annulerImpression: (uuid: string, motif: string) => ipcRenderer.invoke('bagage:annulerImpression', uuid, motif),
-        duJour: (agenceId: number, date?: string) => ipcRenderer.invoke('bagage:duJour', agenceId, date),
-        finDeCaisse: (agenceId: number, date?: string) => ipcRenderer.invoke('bagage:finDeCaisse', agenceId, date),
+        duJour: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('bagage:duJour', agenceId, date, userId),
+        details: (uuid: string) => ipcRenderer.invoke('bagage:details', uuid),
+        finDeCaisse: (agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) => ipcRenderer.invoke('bagage:finDeCaisse', agenceId, date, voyageId, userId),
     },
     courrier: {
         preparerNumero: (agenceId: number) => ipcRenderer.invoke('courrier:preparerNumero', agenceId),
         enregistrer: (demande: unknown) => ipcRenderer.invoke('courrier:enregistrer', demande),
         confirmerImpression: (uuid: string) => ipcRenderer.invoke('courrier:confirmerImpression', uuid),
         annulerImpression: (uuid: string, motif: string) => ipcRenderer.invoke('courrier:annulerImpression', uuid, motif),
-        duJour: (agenceId: number, date?: string) => ipcRenderer.invoke('courrier:duJour', agenceId, date),
-        finDeCaisse: (agenceId: number, date?: string) => ipcRenderer.invoke('courrier:finDeCaisse', agenceId, date),
+        duJour: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('courrier:duJour', agenceId, date, userId),
+        details: (uuid: string) => ipcRenderer.invoke('courrier:details', uuid),
+        finDeCaisse: (agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) => ipcRenderer.invoke('courrier:finDeCaisse', agenceId, date, voyageId, userId),
     },
     voyage: {
         formulaire: (agenceId: number) => ipcRenderer.invoke('voyage:formulaire', agenceId),
@@ -79,7 +81,7 @@ const api = {
         liste: (agenceId: number, date?: string) => ipcRenderer.invoke('voyage:liste', agenceId, date),
     },
     historique: {
-        duJour: (agenceId: number) => ipcRenderer.invoke('historique:duJour', agenceId),
+        duJour: (agenceId: number, userId?: number | null) => ipcRenderer.invoke('historique:duJour', agenceId, userId),
     },
     diagnostic: {
         log: (niveau: 'info' | 'warn', message: string, contexte?: unknown) => ipcRenderer.invoke('diagnostic:log', niveau, message, contexte),

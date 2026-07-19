@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watchDebounced } from '@vueuse/core';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
-import { Check, Mail, Package, Plus, Send, Trash2, UserRound, X } from '@lucide/vue';
+import { Check, Mail, Package, Plus, Printer, Send, Trash2, UserRound, X } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
@@ -224,6 +224,31 @@ function nomComplet(personne: { nom: string; prenoms: string }) {
     return [personne.prenoms, personne.nom].filter(Boolean).join(' ').trim();
 }
 
+// Après un envoi réussi, on garde le dernier reçu en mémoire : le bloc
+// « Dernier courrier » permet de réimprimer reçu ou étiquette.
+function resetSaisie() {
+    villeArriveeId.value = null;
+    agenceArriveeId.value = null;
+    agencesDestination.value = [];
+    voyageId.value = null;
+    expediteur.nom = '';
+    expediteur.prenoms = '';
+    expediteur.telephone = '';
+    destinataire.nom = '';
+    destinataire.prenoms = '';
+    destinataire.telephone = '';
+    nouveauColis.nom = '';
+    nouveauColis.type = 'petit';
+    nouveauColis.quantite = 1;
+    nouveauColis.prix = 0;
+    colisListe.value = [];
+    prixExpedition.value = null;
+    pourcentageExpedition.value = 10;
+    expeditionManuelle.value = false;
+    confirmationOuverte.value = false;
+    erreur.value = '';
+}
+
 function resetTout() {
     villeArriveeId.value = null;
     agenceArriveeId.value = null;
@@ -272,6 +297,20 @@ async function imprimer(partie: 'recu' | 'etiquette'): Promise<ResultatImpressio
         return await window.api.impression.imprimerRecu(hauteurZoneImpressionMm());
     } finally {
         partieImpression.value = 'tout';
+    }
+}
+
+async function reimprimer(partie: 'recu' | 'etiquette') {
+    if (!recu.value) return;
+
+    erreur.value = '';
+    try {
+        const impression = await imprimer(partie);
+        if (!impression.ok) {
+            erreur.value = `${partie === 'recu' ? 'Reçu' : 'Étiquette'} non imprimé(e) : ${impression.erreur ?? 'Impression non confirmée par le système.'}`;
+        }
+    } catch (e) {
+        erreur.value = `${partie === 'recu' ? 'Reçu' : 'Étiquette'} non imprimé(e) : ${messageErreurInconnue(e, "L'impression n'a pas pu être lancée.")}`;
     }
 }
 
@@ -400,7 +439,7 @@ async function envoyer() {
             montant_total: reponse.courrier.montantTotal,
         });
 
-        resetTout();
+        resetSaisie();
     } catch (e) {
         erreur.value = messageErreurInconnue(e, "Une erreur est survenue lors de l'enregistrement.");
         confirmationOuverte.value = false;
@@ -597,6 +636,17 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     <p class="text-muted-foreground">Frais d'expédition : {{ formatMontant(prixExpedition ?? 0) }}</p>
                     <p class="mt-1 border-t pt-1 text-xl font-semibold">Total à payer : {{ formatMontant(montantTotal) }}</p>
                 </div>
+            </div>
+
+            <div v-if="recu" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                <div>
+                    <p class="text-sm font-semibold">Dernier courrier enregistré : {{ recu.numero_courrier }}</p>
+                    <p class="text-sm text-muted-foreground">{{ recu.destination }} · {{ recu.destinataire_nom }}</p>
+                </div>
+                <Button variant="outline" @click="reimprimer('etiquette')">
+                    <Printer />
+                    Réimprimer étiquette (talon)
+                </Button>
             </div>
         </div>
 

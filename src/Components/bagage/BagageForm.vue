@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { watchDebounced } from '@vueuse/core';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { Check, Printer, Search, X } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
 import {
@@ -63,6 +64,26 @@ const villeArriveeId = ref<number | null>(null);
 const voyagesAgence = ref<VoyageOption[]>([]);
 const voyageId = ref<number | null>(null);
 
+// Client facultatif saisi au comptoir : prérempli depuis le ticket trouvé ou
+// par recherche téléphone (comme le formulaire courrier), sinon saisie libre.
+const client = reactive({ nom: '', prenoms: '', telephone: '' });
+type ClientRecherche = { nom: string | null; prenoms: string | null };
+
+watchDebounced(() => client.telephone, async (telephone) => {
+    const telephoneRecherche = telephone.trim();
+    if (!telephoneRecherche || telephoneRecherche.length < 3) return;
+
+    try {
+        const donnees = (await window.api.vente.rechercherClient(telephoneRecherche)) as ClientRecherche | null;
+        if (client.telephone.trim() !== telephoneRecherche || !donnees) return;
+
+        client.nom = donnees.nom ?? client.nom;
+        client.prenoms = donnees.prenoms ?? client.prenoms;
+    } catch {
+        // Une panne de recherche ne doit pas bloquer la saisie manuelle.
+    }
+}, { debounce: 300 });
+
 const montant = ref<number | null>(null);
 const valeur = ref<number | null>(null);
 const description = ref('');
@@ -92,9 +113,11 @@ const destinationNom = computed(() => villes.value.find((v) => v.id === villeArr
 const voyageSelectionne = computed(() => voyagesAgence.value.find((v) => v.id === voyageId.value) ?? null);
 const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + ' FCFA';
 
-const clientNomComplet = computed(() =>
-    ticket.value ? `${ticket.value.client_prenoms ?? ''} ${ticket.value.client_nom ?? ''}`.trim() || 'Client anonyme' : '',
-);
+const clientNomComplet = computed(() => {
+    const saisie = `${client.prenoms} ${client.nom}`.trim();
+    if (saisie) return saisie;
+    return ticket.value ? `${ticket.value.client_prenoms ?? ''} ${ticket.value.client_nom ?? ''}`.trim() || 'Client anonyme' : '';
+});
 
 async function chargerVoyagesAgence() {
     if (!config.agence) {
@@ -145,6 +168,9 @@ async function rechercher() {
 
     villeArriveeId.value = ticket.value.ville_arrivee_id;
     voyageId.value = ticket.value.voyage_id;
+    client.nom = ticket.value.client_nom ?? '';
+    client.prenoms = ticket.value.client_prenoms ?? '';
+    client.telephone = ticket.value.client_telephone ?? '';
 }
 
 function libelleVoyage(v: VoyageOption) {
@@ -176,6 +202,9 @@ function resetSaisie() {
     rechercheEffectuee.value = false;
     villeArriveeId.value = null;
     voyageId.value = null;
+    client.nom = '';
+    client.prenoms = '';
+    client.telephone = '';
     montant.value = null;
     valeur.value = null;
     description.value = '';
@@ -246,6 +275,11 @@ async function enregistrer() {
             villeArriveeId: villeArriveeId.value,
             voyageId: voyageId.value,
             voyageUuid: ticket.value?.voyage_uuid ?? voyageSelectionne.value?.uuid ?? null,
+            client: {
+                nom: client.nom.trim() || null,
+                prenoms: client.prenoms.trim() || null,
+                telephone: client.telephone.trim() || null,
+            },
             userId,
             agentId: session.agentId,
             description: description.value || null,
@@ -303,6 +337,21 @@ async function enregistrer() {
             }
 
             return;
+        }
+
+        // Le reçu client est sorti : le talon à coller sur le bagage part en
+        // second job (l'imprimante coupe entre les deux). Son échec n'annule
+        // pas l'enregistrement, on avertit simplement.
+        try {
+            modeImpression.value = 'talon';
+            const talon = await lancerImpression();
+            if (!talon.ok) {
+                erreur.value = `Le reçu est imprimé, mais le talon n'est pas sorti : ${talon.erreur ?? 'erreur inconnue'}. Utilisez « Réimprimer talon ».`;
+            }
+        } catch (e) {
+            erreur.value = `Le reçu est imprimé, mais le talon n'est pas sorti : ${messageErreurInconnue(e, 'erreur inconnue')}. Utilisez « Réimprimer talon ».`;
+        } finally {
+            modeImpression.value = 'recu';
         }
 
         const confirmation = await window.api.bagage.confirmerImpression(reponse.bagage.uuid);
@@ -364,6 +413,25 @@ async function enregistrer() {
         </div>
 
         <div class="rounded-xl border p-5">
+            <p class="mb-2 text-base font-semibold">Client <span class="font-normal text-muted-foreground">(facultatif)</span></p>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div class="space-y-1.5">
+                    <Label for="bagage_client_telephone">Téléphone</Label>
+                    <Input id="bagage_client_telephone" v-model="client.telephone" class="h-10 text-base" />
+                </div>
+                <div class="space-y-1.5">
+                    <Label for="bagage_client_nom">Nom</Label>
+                    <Input id="bagage_client_nom" v-model="client.nom" class="h-10 text-base" />
+                </div>
+                <div class="space-y-1.5">
+                    <Label for="bagage_client_prenoms">Prénoms</Label>
+                    <Input id="bagage_client_prenoms" v-model="client.prenoms" class="h-10 text-base" />
+                </div>
+            </div>
+            <p class="mt-2 text-xs text-muted-foreground">Prérempli depuis le ticket ou par téléphone si le client est déjà connu.</p>
+        </div>
+
+        <div class="rounded-xl border p-5">
             <p class="mb-3 text-base font-semibold">Destination et voyage</p>
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div class="space-y-1.5">
@@ -414,7 +482,7 @@ async function enregistrer() {
             </div>
             <Button variant="outline" @click="imprimerTalon">
                 <Printer />
-                Imprimer talon
+                Réimprimer talon
             </Button>
         </div>
 
@@ -438,6 +506,10 @@ async function enregistrer() {
                 <div class="flex justify-between">
                     <span class="text-muted-foreground">Ticket</span>
                     <span class="font-medium">{{ ticket ? ticket.numero_ticket : 'Sans ticket' }}</span>
+                </div>
+                <div v-if="clientNomComplet" class="flex justify-between">
+                    <span class="text-muted-foreground">Client</span>
+                    <span class="font-medium">{{ clientNomComplet }}</span>
                 </div>
                 <div v-if="destinationNom" class="flex justify-between">
                     <span class="text-muted-foreground">Destination</span>

@@ -4,6 +4,7 @@ export interface RapportFinDeCaisse {
     voyages: { trajet_id: number; trajet: string; date_depart: string; heure_depart: string; numero_depart: number; nombre_tickets: number; montant_total: number }[];
     nombre_tickets_total: number;
     montant_total: number;
+    agents: string[];
 }
 
 defineProps<{
@@ -12,6 +13,8 @@ defineProps<{
     caissier: string;
     /** Libellé du voyage quand la fin de caisse ne concerne qu'un seul départ. */
     voyage?: string;
+    placesVendues?: number;
+    placesRestantes?: number;
 }>();
 
 const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + ' FCFA';
@@ -31,7 +34,19 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             <span>Caissier</span>
             <span>{{ caissier }}</span>
         </div>
+        <div v-if="rapport.agents.length" class="ligne" style="display:flex;justify-content:space-between;gap:8px">
+            <span>Agent(s)</span>
+            <span style="text-align:right">{{ rapport.agents.join(', ') }}</span>
+        </div>
         <p v-if="voyage" style="font-weight: 700">{{ voyage }}</p>
+        <div v-if="voyage && placesVendues !== undefined" class="ligne" style="display:flex;justify-content:space-between">
+            <span>Places vendues</span>
+            <span>{{ placesVendues }}</span>
+        </div>
+        <div v-if="voyage && placesRestantes !== undefined" class="ligne" style="display:flex;justify-content:space-between">
+            <span>Places restantes</span>
+            <span>{{ placesRestantes }}</span>
+        </div>
 
         <p style="border-top: 1px dashed #000; margin: 4px 0" />
 
