@@ -1,11 +1,36 @@
 import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 // pdf-to-printer est en CommonJS : import par défaut obligatoire (main en ESM).
 import pdfToPrinter from 'pdf-to-printer';
 
 const { print: imprimerFichierPdf } = pdfToPrinter;
+const execFileAsync = promisify(execFile);
+
+// Envoie un PDF à l'imprimante : SumatraPDF (pdf-to-printer) sous Windows,
+// CUPS (`lp`) sous macOS/Linux — même stratégie des deux côtés : papier
+// personnalisé à la taille du reçu, réduction si la page dépasse la zone
+// imprimable (plutôt qu'un rognage à droite).
+async function envoyerPdfImprimante(fichier: string, options: { printer?: string; paperSize?: string }): Promise<void> {
+    if (process.platform === 'win32') {
+        await imprimerFichierPdf(fichier, {
+            ...(options.printer ? { printer: options.printer } : {}),
+            ...(options.paperSize ? { paperSize: options.paperSize } : {}),
+            scale: 'shrink',
+        });
+        return;
+    }
+
+    const args: string[] = [];
+    if (options.printer) args.push('-d', options.printer.replace(/ /g, '_'));
+    const dims = options.paperSize?.match(/^(\d+)mm x (\d+)mm$/);
+    if (dims) args.push('-o', `media=Custom.${dims[1]}x${dims[2]}mm`);
+    args.push(fichier);
+    await execFileAsync('lp', args);
+}
 import { ConfigController } from '../controllers/ConfigController';
 import { AuthController } from '../controllers/AuthController';
 import { AgentController } from '../controllers/AgentController';
@@ -205,10 +230,9 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
                 const debutSumatra = performance.now();
 
                 try {
-                    await imprimerFichierPdf(fichier, {
+                    await envoyerPdfImprimante(fichier, {
                         ...(cible.printer ? { printer: cible.printer } : {}),
                         ...(format.paperSize ? { paperSize: format.paperSize } : {}),
-                        scale: 'noscale',
                     });
 
                     const imprimante = `${cible.libelle} (PDF ${format.libelle})`;
@@ -288,11 +312,11 @@ async function imprimerDirect(sender: WebContents, hauteurMm?: number): Promise<
     const tentatives: string[] = [];
     let imprimantes: ImprimanteRuntime[] | null = null;
 
-    // Sous Windows, la voie PDF + SumatraPDF est la seule fiable. Chemin
-    // rapide : on imprime d'abord directement sur l'imprimante par défaut,
-    // sans lister toutes les imprimantes. Si ce chemin échoue, on retombe sur
-    // le repli complet historique (liste imprimantes + imprimantes physiques).
-    if (process.platform === 'win32') {
+    // La voie PDF est la seule fiable : SumatraPDF sous Windows, CUPS (`lp`)
+    // sous macOS/Linux — l'impression Chromium directe échoue sur les
+    // thermiques (« Invalid printer settings ») sur les deux plateformes.
+    // Chemin rapide : imprimante par défaut d'abord, puis repli complet.
+    if (process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux') {
         try {
             const viaPdfDefaut = await imprimerViaPdf(sender, [], tentatives, hauteurMm);
             if (viaPdfDefaut.ok) return viaPdfDefaut;
