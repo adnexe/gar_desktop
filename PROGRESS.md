@@ -211,3 +211,10 @@ Deux causes corrigées :
 - **Anti-rognage à droite** : sous Windows, SumatraPDF passe de `scale: 'noscale'` à `'shrink'` — identique quand la page tient dans la zone imprimable, sinon réduction au lieu d'un rognage (les thermiques 80 mm n'impriment que ~72 mm utiles).
 - **macOS/Linux : même stratégie PDF que Windows** (`envoyerPdfImprimante` dans `ipc/index.ts`) : l'impression Chromium directe échoue aussi sur les thermiques côté macOS (« Invalid printer settings » constaté avec la POS-80 branchée au Mac de dev) et retombait sur le dialogue système en A4 → tickets décalés à droite/incomplets/mélangés. Désormais : printToPDF → `lp -d <imprimante> -o media=Custom.80xHmm`, avec les mêmes replis que Windows. Commande validée sur la file CUPS réelle (job accepté puis annulé).
 - Rendu du talon bagage vérifié visuellement (capture du zone-impression rendu par Chromium) : toutes les infos présentes, alignées à gauche, aucune superposition.
+
+## Bagage : préremplissage vérifié, talon enrichi, impression propre (19/07/2026)
+
+- **Préremplissage client depuis le ticket** : vérifié en réel via le vrai formulaire (recherche ADJ003000099 → téléphone/nom/prénoms remplis automatiquement : Fatou DIABATE 0788990011).
+- **Impressions coupées** : deux causes corrigées — logos des reçus à hauteur fixe (une image pas encore chargée faussait la mesure → bas coupé) et marge de sécurité passée de +4 à +8 mm ; côté CUPS (macOS), `-o fit-to-page` évite tout rognage par la zone imprimable du pilote.
+- **Talon bagage restructuré** : tous les libellés sont toujours affichés, valeur vide si non renseignée — N° Ticket/Sans ticket, Place, DESTINATION (en gros), Voyage, CLIENT (nom + téléphone), CONTENU (description, valeur déclarée, montant payé), date + agence. Le téléphone client apparaît aussi sur le reçu.
+- **Vérifié de bout en bout dans l'app réelle** : enregistrement d'un bagage via le formulaire (ticket lié) → aucune erreur, « Dernier bagage enregistré : ADJ004000002 », **3 jobs réels dans la file CUPS de la POS-80** (reçu + talon + réimpression). Rendu du talon capturé et validé visuellement.

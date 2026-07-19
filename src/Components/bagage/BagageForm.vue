@@ -97,6 +97,7 @@ const recu = ref<{
     destination: string | null;
     voyage: string | null;
     client: string | null;
+    client_telephone: string | null;
     valeur: number | null;
     montant: number;
     description: string | null;
@@ -305,6 +306,7 @@ async function enregistrer() {
             destination,
             voyage: voyageRecu(),
             client: clientNomComplet.value || null,
+            client_telephone: client.telephone.trim() || ticket.value?.client_telephone || null,
             valeur: valeur.value,
             montant: montantActuel,
             description: description.value || null,

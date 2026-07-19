@@ -165,7 +165,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 }
 
 .logo {
-    max-height: 34px;
+    height: 34px;
     max-width: 44mm;
     object-fit: contain;
     margin: 0 auto 3px;

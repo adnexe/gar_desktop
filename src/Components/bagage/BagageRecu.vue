@@ -18,6 +18,7 @@ type RecuBagage = {
     destination: string | null;
     voyage: string | null;
     client: string | null;
+    client_telephone?: string | null;
     valeur: number | null;
     montant: number;
     description: string | null;
@@ -69,6 +70,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         <div class="bloc">
             <p class="titre">CLIENT</p>
             <p class="nom-client">{{ recu.client || 'Client anonyme' }}</p>
+            <p v-if="recu.client_telephone" class="petit">{{ recu.client_telephone }}</p>
             <div class="ligne montant">
                 <span>Montant :</span>
                 <strong>{{ formatMontant(recu.montant) }}</strong>
@@ -115,21 +117,38 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 <span>N° Ticket</span>
                 <strong>{{ recu.numero_ticket || 'Sans ticket' }}</strong>
             </div>
-            <div v-if="recu.numero_place" class="ligne">
+            <div class="ligne">
                 <span>Place</span>
-                <span>N° {{ recu.numero_place }}</span>
+                <span>{{ recu.numero_place ? `N° ${recu.numero_place}` : '' }}</span>
             </div>
-            <div v-if="recu.destination" class="destination-talon">{{ recu.destination }}</div>
-            <div v-if="recu.voyage" class="petit">Voyage : {{ recu.voyage }}</div>
+            <p class="titre">Destination</p>
+            <div class="destination-talon">{{ recu.destination || '' }}</div>
+            <div class="ligne">
+                <span>Voyage</span>
+                <span>{{ recu.voyage || '' }}</span>
+            </div>
         </div>
 
         <div class="bloc">
             <p class="titre">CLIENT</p>
-            <p class="nom-client">{{ recu.client || 'Client anonyme' }}</p>
+            <p class="nom-client">{{ recu.client || '' }}</p>
+            <div class="ligne">
+                <span>Téléphone</span>
+                <span>{{ recu.client_telephone || '' }}</span>
+            </div>
         </div>
 
         <div class="bloc contenu">
-            <p class="titre">{{ recu.description || 'Bagage' }}</p>
+            <p class="titre">CONTENU</p>
+            <p>{{ recu.description || '' }}</p>
+            <div class="ligne">
+                <span>Valeur déclarée</span>
+                <span>{{ recu.valeur !== null ? formatMontant(recu.valeur) : '' }}</span>
+            </div>
+            <div class="ligne">
+                <span>Montant payé</span>
+                <strong>{{ formatMontant(recu.montant) }}</strong>
+            </div>
         </div>
 
         <div class="bas-talon">
@@ -150,7 +169,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 }
 
 .logo {
-    max-height: 34px;
+    height: 34px;
     max-width: 44mm;
     object-fit: contain;
     margin: 0 auto 3px;

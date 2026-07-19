@@ -41,5 +41,7 @@ export function hauteurZoneImpressionMm(): number | undefined {
 
     if (!px) return undefined;
 
-    return Math.ceil((px * 25.4) / 96) + 4;
+    // Marge de sécurité : arrondis de rendu, marges du pilote et bas de
+    // ticket — mieux vaut 2-3 mm de blanc qu'une dernière ligne coupée.
+    return Math.ceil((px * 25.4) / 96) + 8;
 }

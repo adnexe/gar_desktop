@@ -206,7 +206,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 }
 
 .logo {
-    max-height: 36px;
+    height: 36px;
     max-width: 44mm;
     object-fit: contain;
     margin: 0 auto 3px;

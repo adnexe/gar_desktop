@@ -187,6 +187,7 @@ const recuReimpression = computed(() => {
         destination: b.destination,
         voyage: b.voyage,
         client: b.client,
+        client_telephone: b.client_telephone,
         valeur: b.valeur,
         montant: b.montant,
         description: b.description,

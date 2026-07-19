@@ -28,6 +28,10 @@ async function envoyerPdfImprimante(fichier: string, options: { printer?: string
     if (options.printer) args.push('-d', options.printer.replace(/ /g, '_'));
     const dims = options.paperSize?.match(/^(\d+)mm x (\d+)mm$/);
     if (dims) args.push('-o', `media=Custom.${dims[1]}x${dims[2]}mm`);
+    // La zone imprimable des thermiques est plus étroite que le papier
+    // (~72 mm sur 80 mm) : sans ajustement, le pilote rogne à droite et en
+    // bas. « fit-to-page » réduit très légèrement la page pour tout garder.
+    args.push('-o', 'fit-to-page');
     args.push(fichier);
     await execFileAsync('lp', args);
 }
