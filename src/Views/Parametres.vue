@@ -543,7 +543,8 @@ async function nettoyerDonneesTest() {
                 </div>
 
                 <div class="mt-4 overflow-hidden rounded-md border">
-                    <table v-if="imprimantes.length > 0" class="w-full text-sm">
+                    <div v-if="imprimantes.length > 0" class="overflow-x-auto">
+                    <table class="w-full text-sm">
                         <thead class="bg-muted/40 text-left text-muted-foreground">
                             <tr>
                                 <th class="px-3 py-2 font-medium">Nom</th>
@@ -562,6 +563,7 @@ async function nettoyerDonneesTest() {
                             </tr>
                         </tbody>
                     </table>
+                    </div>
                     <p v-else class="bg-muted/30 px-4 py-5 text-sm text-muted-foreground">
                         L’application ne voit pas encore d’imprimante. Vérifiez l’installation système, allumez l’imprimante, puis actualisez.
                     </p>

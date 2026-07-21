@@ -28,7 +28,7 @@ export function hauteurZoneImpressionMm(): number | undefined {
         style.position = 'absolute';
         style.left = '-10000px';
         style.top = '0';
-        style.width = '72mm'; // même largeur que les reçus à l'impression
+        style.width = '80mm'; // largeur du papier ; chaque reçu (70mm) est centré dedans
 
         px = Math.max(px, zone.scrollHeight);
 
@@ -41,7 +41,8 @@ export function hauteurZoneImpressionMm(): number | undefined {
 
     if (!px) return undefined;
 
-    // Marge de sécurité : arrondis de rendu, marges du pilote et bas de
-    // ticket — mieux vaut 2-3 mm de blanc qu'une dernière ligne coupée.
-    return Math.ceil((px * 25.4) / 96) + 8;
+    // Marge de sécurité : arrondis de rendu, marge basse propre à certains
+    // pilotes (Epson...) qui coupent sinon la dernière ligne — mieux vaut
+    // 2-3mm de blanc en trop qu'un reçu incomplet.
+    return Math.ceil((px * 25.4) / 96) + 10;
 }

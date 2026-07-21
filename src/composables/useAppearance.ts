@@ -10,24 +10,24 @@ export type UseAppearanceReturn = {
     updateAppearance: (value: Appearance) => void;
 };
 
+// Une seule classe CSS à la fois sur <html> : "dark", "theme-feminin" ou
+// "theme-universel" (variables définies dans app.css). "light" = aucune
+// classe, ce sont les variables par défaut de :root.
+const CLASSES_THEME = ['dark', 'theme-feminin', 'theme-universel'] as const;
+
 export function updateTheme(value: Appearance): void {
     if (typeof window === 'undefined') {
         return;
     }
 
-    if (value === 'system') {
-        const mediaQueryList = window.matchMedia(
-            '(prefers-color-scheme: dark)',
-        );
-        const systemTheme = mediaQueryList.matches ? 'dark' : 'light';
+    const resolue = value === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : value;
 
-        document.documentElement.classList.toggle(
-            'dark',
-            systemTheme === 'dark',
-        );
-    } else {
-        document.documentElement.classList.toggle('dark', value === 'dark');
-    }
+    document.documentElement.classList.remove(...CLASSES_THEME);
+    if (resolue === 'dark') document.documentElement.classList.add('dark');
+    else if (resolue === 'feminin') document.documentElement.classList.add('theme-feminin');
+    else if (resolue === 'universel') document.documentElement.classList.add('theme-universel');
 }
 
 const setCookie = (name: string, value: string, days = 365) => {

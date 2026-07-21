@@ -393,4 +393,12 @@ export const migrations: { nom: string; sql: string }[] = [
             ALTER TABLE bagages ADD COLUMN client_id INTEGER REFERENCES clients(id);
         `,
     },
+    {
+        nom: '0015_disposition_sieges_vehicules',
+        sql: `
+            -- "3-2" (3 sièges à gauche de l'allée, 2 à droite) ou "2-2".
+            -- Nullable : sans valeur, le plan de sièges reste générique.
+            ALTER TABLE vehicules ADD COLUMN disposition_sieges TEXT;
+        `,
+    },
 ];

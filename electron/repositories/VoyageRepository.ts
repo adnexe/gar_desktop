@@ -50,6 +50,7 @@ export interface VoyageDisponible {
     itineraire_nom: string | null;
     vehicule_immatriculation: string;
     nombre_places: number;
+    disposition_sieges: string | null;
     chauffeur_nom: string | null;
     places_occupees: number[];
     premiere_place_libre: number | null;
@@ -63,6 +64,32 @@ export interface NouveauVoyage {
     dateDepart: string;
     heureDepart: string;
     numeroDepart: number;
+    statut?: string;
+}
+
+// Volontairement restreint : l'itinéraire, la date/heure et le n° de départ
+// ne sont PAS modifiables après création. Un voyage identifie une vente (les
+// places vendues s'y rattachent) — permettre de le rebasculer sur un autre
+// trajet/horaire ouvrirait une faille : revendre les mêmes places sous un
+// autre trajet en réutilisant le même voyage. Seuls le véhicule, le
+// chauffeur et le statut (annuler, marquer parti/terminé...) sont éditables.
+export interface ModificationVoyage {
+    vehiculeId: number;
+    chauffeurId: number | null;
+    statut: string;
+}
+
+export interface VoyageEdition {
+    id: number;
+    uuid: string;
+    agence_depart_id: number;
+    itineraire_id: number;
+    vehicule_id: number;
+    chauffeur_id: number | null;
+    date_depart: string;
+    heure_depart: string;
+    numero_depart: number;
+    statut: string;
 }
 
 export interface VoyageListe {
@@ -124,7 +151,7 @@ export class VoyageRepository {
             .prepare(
                 `SELECT v.id, v.uuid, v.date_depart, v.heure_depart, v.numero_depart, v.statut,
                         v.itineraire_id, i.nom AS itineraire_nom,
-                        veh.immatriculation AS vehicule_immatriculation, veh.nombre_places,
+                        veh.immatriculation AS vehicule_immatriculation, veh.nombre_places, veh.disposition_sieges,
                         c.nom AS chauffeur_nom
                  FROM voyages v
                  JOIN itineraires i ON i.id = v.itineraire_id
@@ -157,11 +184,12 @@ export class VoyageRepository {
         const db = getDb();
         const uuid = nouvelUuid();
         const maintenant = new Date().toISOString();
+        const statut = donnees.statut ?? 'programme';
 
         const info = db
             .prepare(
                 `INSERT INTO voyages (uuid, agence_depart_id, itineraire_id, vehicule_id, chauffeur_id, date_depart, heure_depart, numero_depart, statut, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'programme', ?, ?)`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
                 uuid,
@@ -172,14 +200,58 @@ export class VoyageRepository {
                 donnees.dateDepart,
                 donnees.heureDepart,
                 donnees.numeroDepart,
+                statut,
                 maintenant,
                 maintenant,
             );
 
         const id = Number(info.lastInsertRowid);
-        queueManager.ajouter('voyages', uuid, { ...donnees, uuid });
+        queueManager.ajouter('voyages', uuid, { ...donnees, statut, uuid });
 
         return { id, uuid };
+    }
+
+    // Pour préremplir le formulaire d'édition (ids bruts des selects, pas les
+    // libellés). L'agence n'est pas modifiable : un voyage reste attaché à
+    // l'agence qui l'a créé.
+    parUuid(uuid: string): VoyageEdition | null {
+        const ligne = getDb()
+            .prepare(
+                `SELECT id, uuid, agence_depart_id, itineraire_id, vehicule_id, chauffeur_id,
+                        date_depart, heure_depart, numero_depart, statut
+                 FROM voyages
+                 WHERE uuid = ?`,
+            )
+            .get(uuid) as VoyageEdition | undefined;
+
+        return ligne ?? null;
+    }
+
+    // Un chef de gare peut annuler un voyage, ou changer de véhicule/chauffeur
+    // (panne, remplacement de dernière minute). L'itinéraire, la date/heure et
+    // le n° de départ sont volontairement hors de portée (voir ModificationVoyage).
+    modifier(uuid: string, donnees: ModificationVoyage): { id: number; uuid: string } | null {
+        const db = getDb();
+        const maintenant = new Date().toISOString();
+
+        const existant = db.prepare('SELECT id, agence_depart_id FROM voyages WHERE uuid = ?').get(uuid) as { id: number; agence_depart_id: number } | undefined;
+        if (!existant) return null;
+
+        db.prepare(
+            `UPDATE voyages
+             SET vehicule_id = ?, chauffeur_id = ?, statut = ?, updated_at = ?
+             WHERE uuid = ?`,
+        ).run(
+            donnees.vehiculeId,
+            donnees.chauffeurId,
+            donnees.statut,
+            maintenant,
+            uuid,
+        );
+
+        queueManager.ajouter('voyages', uuid, { ...donnees, agenceId: existant.agence_depart_id, uuid }, 'update');
+
+        return { id: existant.id, uuid };
     }
 
     exporterPourClient(agenceId: number, date?: string | null): VoyageServeur[] {

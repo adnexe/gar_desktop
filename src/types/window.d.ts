@@ -206,6 +206,8 @@ declare global {
             voyage: {
                 formulaire: (agenceId: number) => Promise<unknown>;
                 creer: (donnees: unknown) => Promise<unknown>;
+                details: (uuid: string) => Promise<unknown>;
+                modifier: (uuid: string, donnees: unknown) => Promise<{ ok: boolean; id?: number; uuid?: string; erreur?: string }>;
                 liste: (agenceId: number, date?: string) => Promise<unknown[]>;
             };
             historique: {

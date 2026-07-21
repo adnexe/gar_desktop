@@ -240,7 +240,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                     <p class="text-[0.95rem] text-muted-foreground">Suivez les courriers du jour et envoyez-en un nouveau</p>
                 </div>
 
-                <div class="flex items-center gap-2">
+                <!-- flex-wrap : sur les petits écrans (postes de bureau), les
+                     boutons passent à la ligne au lieu de déborder du cadre. -->
+                <div class="flex w-full flex-wrap items-center gap-2 lg:w-auto">
                     <Input v-model="dateFiltre" type="date" class="h-10 w-44 text-base" />
                     <Button variant="outline" :disabled="!session.agenceId" @click="ouvrirFinDeCaisse">
                         <ClipboardList />
@@ -263,7 +265,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
                 <p v-if="courriersAffiches.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">{{ recherche ? 'Aucun résultat pour cette recherche.' : 'Aucun courrier pour cette date.' }}</p>
 
-                <table v-else class="w-full text-[0.95rem]">
+                <div v-else class="overflow-x-auto">
+                <table class="w-full text-[0.95rem]">
                     <thead class="bg-muted/40">
                         <tr class="border-b text-left text-muted-foreground">
                             <th class="px-3 py-3 font-medium">Heure</th>
@@ -283,6 +286,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                         </tr>
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
 

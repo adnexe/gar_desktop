@@ -156,7 +156,11 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 <style scoped>
 .ticket-recu {
-    width: 72mm;
+    /* 70mm centré dans les 80mm du papier (voir .zone-impression) : la
+       marge de 5mm de chaque côté absorbe les petits décalages propres à
+       chaque modèle d'imprimante (Epson, Xprinter...) sans rogner le texte. */
+    width: 70mm;
+    margin: 0 auto;
     color: #000;
     font-family: Arial, 'Helvetica Neue', sans-serif;
     font-size: 13px;

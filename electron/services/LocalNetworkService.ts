@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
-import { randomBytes } from 'node:crypto';
 import { getDb } from '../database/connection';
 import { migrer } from '../database/migrate';
 import { logger } from '../logger';
@@ -88,6 +87,8 @@ const handlers: Record<string, (...args: never[]) => unknown> = {
     'courrier:finDeCaisse': CourrierController.finDeCaisse,
     'voyage:formulaire': VoyageController.formulaire,
     'voyage:creer': VoyageController.creer,
+    'voyage:details': VoyageController.details,
+    'voyage:modifier': VoyageController.modifier,
     'voyage:liste': VoyageController.liste,
     'voyage:exporterPourClient': VoyageController.exporterPourClient,
     'historique:duJour': HistoriqueController.duJour,
@@ -208,6 +209,27 @@ export class LocalNetworkService {
         migrer(getDb());
         if (this.mode() === 'serveur') {
             await this.demarrerServeur(this.port());
+        }
+    }
+
+    // Symétrique de demarrerDepuisConfig() côté client : au lancement de
+    // l'app, un poste client tente tout de suite de joindre sa caisse
+    // serveur et de récupérer les derniers voyages, au lieu d'attendre que
+    // l'agent ouvre un écran qui en a besoin. Un échec (serveur pas encore
+    // allumé) n'empêche jamais le poste de démarrer — la base locale reste
+    // utilisable, et chaque écran retente sa propre synchro au besoin.
+    async connecterClientDepuisConfig(): Promise<void> {
+        migrer(getDb());
+        if (this.mode() !== 'client') return;
+
+        const agence = this.agences.actuelle();
+        if (!agence) return;
+
+        try {
+            const resultat = await this.actualiserVoyagesDepuisServeur(agence.id);
+            logger.info(`Poste client connecté à la caisse serveur au lancement : ${resultat.message}`);
+        } catch (erreur) {
+            logger.warn('Poste client : connexion à la caisse serveur impossible au lancement (nouvel essai plus tard).', erreur);
         }
     }
 
@@ -342,6 +364,15 @@ export class LocalNetworkService {
     }
 
     private async demarrerServeur(port: number): Promise<void> {
+        // Le code réseau est fixe pour l'instant (voir genererSecret) : on
+        // aligne aussi les postes déjà configurés avec un ancien code
+        // aléatoire, pour qu'un simple redémarrage suffise à converger vers
+        // le code unique, sans reconfiguration manuelle.
+        const secretActuel = this.config.obtenir('reseau_secret');
+        if (secretActuel !== this.genererSecret()) {
+            this.config.definir('reseau_secret', this.genererSecret());
+        }
+
         if (this.serveur && this.portActif === port) return;
         await this.arreterServeur();
 
@@ -477,8 +508,13 @@ export class LocalNetworkService {
         return (trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `http://${trimmed}`).replace(/\/+$/, '');
     }
 
+    // Code réseau fixe pour l'instant (demande explicite) : plus simple à
+    // communiquer/saisir sur les postes clients d'une même gare, le temps de
+    // stabiliser la mise en place du mode caisse serveur/client sur le
+    // terrain. Pour revenir à un code aléatoire par poste serveur, remettre
+    // `randomBytes(4).toString('hex').toUpperCase()`.
     private genererSecret(): string {
-        return randomBytes(4).toString('hex').toUpperCase();
+        return 'ADNEXE01';
     }
 
     private refuserConnexionSurCePoste(url: string): void {

@@ -54,6 +54,7 @@ export class VenteService {
             itineraire: v.itineraire_nom,
             vehicule_immatriculation: v.vehicule_immatriculation,
             nombre_places: v.nombre_places,
+            disposition_sieges: v.disposition_sieges,
             chauffeur: v.chauffeur_nom,
             places_occupees: v.places_occupees,
             premiere_place_libre: v.premiere_place_libre,

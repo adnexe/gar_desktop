@@ -20,7 +20,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 </script>
 
 <template>
-    <div class="ticket-recu">
+    <div class="ticket-recu" style="width: 70mm; margin: 0 auto">
         <p class="text-center font-bold">{{ agence }}</p>
         <p class="text-center font-bold">{{ titre }}</p>
         <hr />

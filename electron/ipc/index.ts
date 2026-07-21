@@ -530,6 +530,8 @@ export function enregistrerIpc(): void {
 
     gerer('voyage:formulaire', VoyageController.formulaire);
     gerer('voyage:creer', VoyageController.creer);
+    gerer('voyage:details', VoyageController.details);
+    gerer('voyage:modifier', VoyageController.modifier);
     gerer('voyage:liste', VoyageController.liste);
 
     gerer('historique:duJour', HistoriqueController.duJour);

@@ -49,6 +49,7 @@ onMounted(async () => {
 
             <section v-if="session.peutModule('ticket')" class="overflow-hidden rounded-lg border bg-card p-5 shadow-sm">
                 <h2 class="mb-3 text-base font-semibold">Tickets</h2>
+                <div class="overflow-x-auto">
                 <table class="w-full text-[0.95rem]">
                     <tbody>
                         <tr v-for="t in tickets" :key="t.uuid" class="border-b last:border-0 hover:bg-muted/30">
@@ -60,11 +61,13 @@ onMounted(async () => {
                         </tr>
                     </tbody>
                 </table>
+                </div>
                 <p v-if="tickets.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">Aucun ticket aujourd'hui.</p>
             </section>
 
             <section v-if="session.peutModule('bagage')" class="overflow-hidden rounded-lg border bg-card p-5 shadow-sm">
                 <h2 class="mb-3 text-base font-semibold">Bagages</h2>
+                <div class="overflow-x-auto">
                 <table class="w-full text-[0.95rem]">
                     <tbody>
                         <tr v-for="b in bagages" :key="b.uuid" class="border-b last:border-0 hover:bg-muted/30">
@@ -75,11 +78,13 @@ onMounted(async () => {
                         </tr>
                     </tbody>
                 </table>
+                </div>
                 <p v-if="bagages.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">Aucun bagage aujourd'hui.</p>
             </section>
 
             <section v-if="session.peutModule('courrier')" class="overflow-hidden rounded-lg border bg-card p-5 shadow-sm">
                 <h2 class="mb-3 text-base font-semibold">Courriers</h2>
+                <div class="overflow-x-auto">
                 <table class="w-full text-[0.95rem]">
                     <tbody>
                         <tr v-for="c in courriers" :key="c.uuid" class="border-b last:border-0 hover:bg-muted/30">
@@ -90,6 +95,7 @@ onMounted(async () => {
                         </tr>
                     </tbody>
                 </table>
+                </div>
                 <p v-if="courriers.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">Aucun courrier aujourd'hui.</p>
             </section>
         </div>

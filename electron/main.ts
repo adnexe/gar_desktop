@@ -95,6 +95,9 @@ app.whenReady().then(() => {
     void localNetworkService.demarrerDepuisConfig().catch((erreur) => {
         logger.warn('Serveur local non démarré.', erreur);
     });
+    void localNetworkService.connecterClientDepuisConfig().catch((erreur) => {
+        logger.warn('Connexion au poste client non tentée.', erreur);
+    });
     syncEngine.demarrer();
     creerFenetre();
 

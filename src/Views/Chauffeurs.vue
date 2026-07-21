@@ -116,7 +116,8 @@ onMounted(() => {
                 <p v-if="chargement" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">Chargement des chauffeurs...</p>
                 <p v-else-if="chauffeurs.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">Aucun chauffeur synchronisé.</p>
 
-                <table v-else class="w-full text-[0.95rem]">
+                <div v-else class="overflow-x-auto">
+                <table class="w-full text-[0.95rem]">
                     <thead class="bg-muted/40">
                         <tr class="border-b text-left text-muted-foreground">
                             <th class="px-3 py-3 font-medium">Nom</th>
@@ -136,6 +137,7 @@ onMounted(() => {
                         </tr>
                     </tbody>
                 </table>
+                </div>
             </section>
         </div>
     </AppSidebarLayout>

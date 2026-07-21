@@ -63,6 +63,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         <div class="bloc">
             <p class="titre">N° TICKET</p>
             <p class="numero-ticket">{{ recu.numero_ticket || 'Sans ticket' }}</p>
+            <p v-if="recu.numero_place" class="petit">Siège N° {{ recu.numero_place }}</p>
             <p v-if="recu.destination" class="destination">{{ recu.destination }}</p>
             <p v-if="recu.voyage" class="petit">Voyage : {{ recu.voyage }}</p>
         </div>
@@ -118,7 +119,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 <strong>{{ recu.numero_ticket || 'Sans ticket' }}</strong>
             </div>
             <div class="ligne">
-                <span>Place</span>
+                <span>Siège</span>
                 <span>{{ recu.numero_place ? `N° ${recu.numero_place}` : '' }}</span>
             </div>
             <p class="titre">Destination</p>
@@ -160,7 +161,11 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 <style scoped>
 .ticket-recu {
-    width: 72mm;
+    /* 70mm centré dans les 80mm du papier (voir .zone-impression) : la
+       marge de 5mm de chaque côté absorbe les petits décalages propres à
+       chaque modèle d'imprimante (Epson, Xprinter...) sans rogner le texte. */
+    width: 70mm;
+    margin: 0 auto;
     color: #000;
     font-family: Arial, 'Helvetica Neue', sans-serif;
     font-size: 13px;

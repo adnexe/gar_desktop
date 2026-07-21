@@ -104,8 +104,8 @@ export class CatalogueRepository {
             for (const c of bootstrap.chauffeurs) chauffeurStmt.run(c);
 
             const vehiculeStmt = db.prepare(
-                `INSERT OR REPLACE INTO vehicules (id, uuid, agence_id, immatriculation, marque, modele, nombre_places, statut, created_at, updated_at)
-                 VALUES (@id, @uuid, @agence_id, @immatriculation, @marque, @modele, @nombre_places, @statut, @created_at, @updated_at)`,
+                `INSERT OR REPLACE INTO vehicules (id, uuid, agence_id, immatriculation, marque, modele, nombre_places, disposition_sieges, statut, created_at, updated_at)
+                 VALUES (@id, @uuid, @agence_id, @immatriculation, @marque, @modele, @nombre_places, @disposition_sieges, @statut, @created_at, @updated_at)`,
             );
             for (const v of bootstrap.vehicules) vehiculeStmt.run(v);
 

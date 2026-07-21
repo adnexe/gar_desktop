@@ -1,24 +1,45 @@
 <script setup lang="ts">
-import { Moon, Sun } from '@lucide/vue';
+import { computed } from 'vue';
+import { Heart, Moon, Sparkles, Sun } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/Components/ui/dropdown-menu';
 import { useAppearance } from '@/composables/useAppearance';
+import type { ResolvedAppearance } from '@/types';
 
 const { resolvedAppearance, updateAppearance } = useAppearance();
 
-function basculer() {
-    updateAppearance(resolvedAppearance.value === 'dark' ? 'light' : 'dark');
-}
+const themes: { valeur: ResolvedAppearance; libelle: string; icone: object }[] = [
+    { valeur: 'light', libelle: 'Clair', icone: Sun },
+    { valeur: 'dark', libelle: 'Sombre', icone: Moon },
+    { valeur: 'feminin', libelle: 'Féminin', icone: Heart },
+    { valeur: 'universel', libelle: 'Universel', icone: Sparkles },
+];
+
+const icone = computed(() => themes.find((t) => t.valeur === resolvedAppearance.value)?.icone ?? Sun);
 </script>
 
 <template>
-    <Button
-        variant="ghost"
-        size="icon"
-        :aria-label="resolvedAppearance === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'"
-        :title="resolvedAppearance === 'dark' ? 'Mode clair' : 'Mode sombre'"
-        @click="basculer"
-    >
-        <Sun v-if="resolvedAppearance === 'dark'" />
-        <Moon v-else />
-    </Button>
+    <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="icon" title="Changer de thème" aria-label="Changer de thème">
+                <component :is="icone" />
+            </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+            <DropdownMenuItem
+                v-for="theme in themes"
+                :key="theme.valeur"
+                :class="resolvedAppearance === theme.valeur && 'bg-accent text-accent-foreground'"
+                @click="updateAppearance(theme.valeur)"
+            >
+                <component :is="theme.icone" />
+                {{ theme.libelle }}
+            </DropdownMenuItem>
+        </DropdownMenuContent>
+    </DropdownMenu>
 </template>

@@ -38,6 +38,7 @@ type VoyageDisponible = {
     itineraire: string | null;
     vehicule_immatriculation: string;
     nombre_places: number;
+    disposition_sieges: string | null;
     chauffeur: string | null;
     places_occupees: number[];
     premiere_place_libre: number | null;
@@ -744,6 +745,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                         <SeatMap
                             v-else
                             :nombre-places="voyageSelectionne.nombre_places"
+                            :disposition="voyageSelectionne.disposition_sieges"
                             :places-occupees="voyageSelectionne.places_occupees"
                             :place-selectionnee="placeSelectionnee"
                             @select="(place) => (placeSelectionnee = place)"

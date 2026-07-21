@@ -64,6 +64,7 @@ export interface VehiculeApi {
     marque: string | null;
     modele: string | null;
     nombre_places: number;
+    disposition_sieges: string | null;
     statut: string;
     created_at: string;
     updated_at: string;

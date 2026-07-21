@@ -111,7 +111,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 <span>{{ recu.tarification === 'vip' ? 'VIP' : 'Ordinaire' }}</span>
             </div>
             <div class="ligne place">
-                <span>Place</span>
+                <span>Siège</span>
                 <span>N° {{ recu.numero_place }}</span>
             </div>
             <div class="ligne">
@@ -168,7 +168,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
         </div>
 
         <div class="talon-bloc">
-            <p class="talon-label">Place / Bus</p>
+            <p class="talon-label">Siège / Bus</p>
             <p class="talon-valeur">N° {{ recu.numero_place }} · {{ recu.vehicule }}</p>
         </div>
 
@@ -187,7 +187,11 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 
 <style scoped>
 .ticket-recu {
-    width: 72mm;
+    /* 70mm centré dans les 80mm du papier (voir .zone-impression) : la
+       marge de 5mm de chaque côté absorbe les petits décalages propres à
+       chaque modèle d'imprimante (Epson, Xprinter...) sans rogner le texte. */
+    width: 70mm;
+    margin: 0 auto;
     font-family: Arial, 'Helvetica Neue', sans-serif;
     font-size: 13px;
     line-height: 1.4;

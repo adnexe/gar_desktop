@@ -160,6 +160,84 @@
     --sidebar: hsl(240 5.9% 10%);
 }
 
+/* Thème "Féminin" : surfaces blanches et neutres, le rose ne vit que dans
+   les boutons/accents/liens et une pointe de teinte sur la sidebar — pas un
+   aplat de couleur saturée partout. */
+.theme-feminin {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(340 15% 15%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(340 15% 15%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(340 15% 15%);
+    --primary: hsl(333 70% 58%);
+    --primary-foreground: hsl(0 0% 100%);
+    --secondary: hsl(335 40% 96%);
+    --secondary-foreground: hsl(333 40% 25%);
+    --muted: hsl(340 20% 97%);
+    --muted-foreground: hsl(333 10% 45%);
+    --accent: hsl(335 45% 95%);
+    --accent-foreground: hsl(333 40% 22%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(335 25% 91%);
+    --input: hsl(335 20% 93%);
+    --ring: hsl(333 70% 58%);
+    --chart-1: hsl(333 70% 60%);
+    --chart-2: hsl(285 55% 65%);
+    --chart-3: hsl(20 80% 65%);
+    --chart-4: hsl(50 85% 60%);
+    --chart-5: hsl(200 65% 60%);
+    --sidebar-background: hsl(335 35% 97%);
+    --sidebar-foreground: hsl(333 30% 25%);
+    --sidebar-primary: hsl(333 65% 50%);
+    --sidebar-primary-foreground: hsl(0 0% 100%);
+    --sidebar-accent: hsl(333 45% 92%);
+    --sidebar-accent-foreground: hsl(333 45% 25%);
+    --sidebar-border: hsl(335 25% 90%);
+    --sidebar-ring: hsl(333 70% 58%);
+    --sidebar: hsl(335 35% 97%);
+}
+
+/* Thème "Universel" : même principe que Féminin mais en bleu — surfaces
+   blanches/neutres, le bleu ne vit que dans les boutons/accents et une
+   pointe de teinte sur la sidebar. */
+.theme-universel {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(222 20% 16%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(222 20% 16%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(222 20% 16%);
+    --primary: hsl(217 85% 55%);
+    --primary-foreground: hsl(0 0% 100%);
+    --secondary: hsl(215 40% 96%);
+    --secondary-foreground: hsl(222 25% 22%);
+    --muted: hsl(215 25% 97%);
+    --muted-foreground: hsl(220 10% 46%);
+    --accent: hsl(215 45% 95%);
+    --accent-foreground: hsl(222 30% 22%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(215 25% 91%);
+    --input: hsl(215 20% 92%);
+    --ring: hsl(217 85% 55%);
+    --chart-1: hsl(217 85% 58%);
+    --chart-2: hsl(38 88% 55%);
+    --chart-3: hsl(160 65% 45%);
+    --chart-4: hsl(333 70% 60%);
+    --chart-5: hsl(270 60% 62%);
+    --sidebar-background: hsl(215 30% 97%);
+    --sidebar-foreground: hsl(222 20% 25%);
+    --sidebar-primary: hsl(217 80% 50%);
+    --sidebar-primary-foreground: hsl(0 0% 100%);
+    --sidebar-accent: hsl(215 45% 92%);
+    --sidebar-accent-foreground: hsl(222 30% 22%);
+    --sidebar-border: hsl(215 25% 90%);
+    --sidebar-ring: hsl(217 85% 55%);
+    --sidebar: hsl(215 30% 97%);
+}
+
 @layer base {
     * {
         @apply border-border outline-ring/50;
@@ -183,6 +261,11 @@
         position: absolute;
         top: 0;
         left: 0;
+        /* Largeur du papier (80mm), pas du reçu : chaque .ticket-recu est
+           plus étroit et centré dedans (voir composants), pour absorber les
+           petits décalages de marge propres à chaque modèle d'imprimante
+           (Epson vs Xprinter...) au lieu d'être rogné d'un côté. */
+        width: 80mm;
     }
     .ticket-recu {
         break-inside: avoid;

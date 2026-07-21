@@ -78,6 +78,8 @@ const api = {
     voyage: {
         formulaire: (agenceId: number) => ipcRenderer.invoke('voyage:formulaire', agenceId),
         creer: (donnees: unknown) => ipcRenderer.invoke('voyage:creer', donnees),
+        details: (uuid: string) => ipcRenderer.invoke('voyage:details', uuid),
+        modifier: (uuid: string, donnees: unknown) => ipcRenderer.invoke('voyage:modifier', uuid, donnees),
         liste: (agenceId: number, date?: string) => ipcRenderer.invoke('voyage:liste', agenceId, date),
     },
     historique: {
