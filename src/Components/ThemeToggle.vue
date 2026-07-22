@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Heart, Moon, Sparkles, Sun } from '@lucide/vue';
+import { Feather, Heart, Leaf, Moon, Sparkles, Sun, Sunset } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
 import {
     DropdownMenu,
@@ -18,6 +18,9 @@ const themes: { valeur: ResolvedAppearance; libelle: string; icone: object }[] =
     { valeur: 'dark', libelle: 'Sombre', icone: Moon },
     { valeur: 'feminin', libelle: 'Féminin', icone: Heart },
     { valeur: 'universel', libelle: 'Universel', icone: Sparkles },
+    { valeur: 'emeraude', libelle: 'Émeraude', icone: Leaf },
+    { valeur: 'ambre', libelle: 'Ambre', icone: Sunset },
+    { valeur: 'doux', libelle: 'Doux', icone: Feather },
 ];
 
 const icone = computed(() => themes.find((t) => t.valeur === resolvedAppearance.value)?.icone ?? Sun);

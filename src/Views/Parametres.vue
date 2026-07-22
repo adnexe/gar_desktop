@@ -49,6 +49,8 @@ const actualisation = ref(false);
 const chargementImprimantes = ref(false);
 const testImpression = ref(false);
 const nettoyageDonnees = ref(false);
+const resetEnCours = ref(false);
+const synchroEnCours = ref(false);
 const message = ref('');
 const erreur = ref('');
 const messageImpression = ref('');
@@ -445,6 +447,70 @@ async function nettoyerDonneesTest() {
         nettoyageDonnees.value = false;
     }
 }
+
+// Force un cycle de synchro tout de suite au lieu d'attendre le déclenchement
+// automatique (toutes les 30s s'il y a des éléments en attente) — utile après
+// une coupure réseau, ou pour vérifier que la file n'est pas bloquée.
+async function synchroniserMaintenant() {
+    synchroEnCours.value = true;
+    erreur.value = '';
+    message.value = '';
+    const debut = Date.now();
+
+    try {
+        const resultat = await window.api.config.synchroniserMaintenant();
+        if (resultat.enAttente === 0) {
+            message.value = 'Synchronisation à jour : tout a été envoyé à admin.';
+        } else if (resultat.erreur) {
+            message.value = `${resultat.enAttente} élément(s) encore en attente.`;
+            erreur.value = `Ça bloque sur un(e) ${resultat.erreur.entite} : ${resultat.erreur.derniere_erreur ?? 'erreur inconnue'} (${resultat.erreur.tentatives} tentative(s)).`;
+        } else {
+            message.value = `${resultat.enAttente} élément(s) encore en attente, ça devrait continuer tout seul.`;
+        }
+    } catch (e) {
+        erreur.value = messageErreur(e, 'Impossible de lancer la synchronisation.');
+    } finally {
+        // Quand la caisse est hors-ligne ou que la file est vide, le cycle se
+        // termine en quelques millisecondes : sans ce délai minimum, le
+        // chargement clignote trop vite pour être visible.
+        const ecoule = Date.now() - debut;
+        if (ecoule < 500) {
+            await new Promise((resolve) => setTimeout(resolve, 500 - ecoule));
+        }
+        synchroEnCours.value = false;
+    }
+}
+
+// Contrairement au nettoyage ci-dessus, tout est effacé ici : licence,
+// configuration, agents, catalogue... Le poste redevient comme neuf et
+// redemande le numéro de gare + le numéro de poste. Purement local : ne
+// touche pas à l'admin (une licence déjà assignée reste assignée là-bas).
+async function resetComplet() {
+    if (!estSuperAdmin.value || !session.userId) {
+        erreur.value = 'Seul un super admin peut réinitialiser cette machine.';
+        return;
+    }
+
+    const confirmer = window.confirm(
+        'Réinitialiser complètement ce poste ? TOUT sera supprimé : configuration, licence, agents, utilisateurs, catalogue, voyages, ventes, et tout ce qui n\'a pas encore été synchronisé avec admin sera perdu. Le poste redémarrera comme neuf, en redemandant le numéro de gare et le numéro de poste. Cette action est irréversible.',
+    );
+    if (!confirmer) return;
+
+    resetEnCours.value = true;
+    erreur.value = '';
+    message.value = '';
+
+    try {
+        await window.api.config.resetComplet(session.userId);
+        // Rechargement complet : remet tous les stores (config, session...) à
+        // zéro et laisse le garde de navigation rediriger vers /configuration
+        // puisque le poste n'est plus configuré.
+        window.location.reload();
+    } catch (e) {
+        erreur.value = messageErreur(e, 'Impossible de réinitialiser ce poste.');
+        resetEnCours.value = false;
+    }
+}
 </script>
 
 <template>
@@ -831,6 +897,45 @@ async function nettoyerDonneesTest() {
                         <RefreshCw v-if="nettoyageDonnees" class="icone-tourne size-4" />
                         <Trash2 v-else class="size-4" />
                         {{ nettoyageDonnees ? 'Nettoyage...' : 'Nettoyer les données de test' }}
+                    </Button>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-4 border-t pt-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex min-w-0 items-start gap-3">
+                        <div class="rounded-md bg-muted p-2">
+                            <RefreshCw class="size-5 text-foreground" />
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-base font-semibold">Synchronisation</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                Force l'envoi vers admin tout de suite au lieu d'attendre le déclenchement automatique — utile après une coupure réseau, ou pour vérifier que rien n'est bloqué.
+                            </p>
+                        </div>
+                    </div>
+
+                    <Button type="button" variant="outline" :disabled="synchroEnCours" @click="synchroniserMaintenant">
+                        <RefreshCw :class="['size-4', synchroEnCours ? 'icone-tourne' : '']" />
+                        {{ synchroEnCours ? 'Synchronisation...' : 'Synchroniser vers admin' }}
+                    </Button>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-4 border-t border-destructive/20 pt-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex min-w-0 items-start gap-3">
+                        <div class="rounded-md bg-destructive/10 p-2">
+                            <RefreshCw class="size-5 text-destructive" />
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-base font-semibold">Réinitialisation complète</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                Efface TOUT sur ce poste (configuration, licence, agents, catalogue, ventes...) et redemande le numéro de gare et de poste, comme à la première installation.
+                            </p>
+                        </div>
+                    </div>
+
+                    <Button type="button" variant="destructive" :disabled="resetEnCours" @click="resetComplet">
+                        <RefreshCw v-if="resetEnCours" class="icone-tourne size-4" />
+                        <RefreshCw v-else class="size-4" />
+                        {{ resetEnCours ? 'Réinitialisation...' : 'Réinitialiser ce poste' }}
                     </Button>
                 </div>
             </section>

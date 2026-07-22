@@ -7,9 +7,12 @@ import { logger } from '../logger';
 import { BootstrapService } from '../services/BootstrapService';
 import { localNetworkService, type ModeReseauLocal } from '../services/LocalNetworkService';
 import { UserRepository } from '../repositories/UserRepository';
+import { SyncQueueRepository } from '../repositories/SyncQueueRepository';
+import { syncEngine } from '../sync/SyncEngine';
 
 const service = new BootstrapService();
 const users = new UserRepository();
+const fileSync = new SyncQueueRepository();
 
 function messageErreurActualisation(erreur: unknown): string {
     if (axios.isAxiosError(erreur)) {
@@ -81,6 +84,18 @@ export const ConfigController = {
             return { ok: false as const, erreur: messageErreurActualisation(erreur), baseUrl: apiBaseUrl() };
         }
     },
+    // Force un cycle de synchro vers admin tout de suite (au lieu d'attendre
+    // le déclenchement automatique) — utile après une coupure réseau ou pour
+    // vérifier que la file n'est pas bloquée sur un élément en erreur.
+    synchroniserMaintenant: async () => {
+        await syncEngine.runCycle();
+
+        return {
+            ok: true as const,
+            enAttente: fileSync.compterEnAttente(),
+            erreur: fileSync.premiereErreurEnAttente(),
+        };
+    },
     reseauLocal: () => localNetworkService.configuration(),
     relancerServeurLocal: () => localNetworkService.relancerServeurDepuisConfig(),
     configurerReseauLocal: (params: { mode: ModeReseauLocal; serveurUrl?: string | null; port?: number | null; secret?: string | null; acteurUserId?: number | null }) => {
@@ -133,6 +148,58 @@ export const ConfigController = {
             ok: true as const,
             suppressions,
             message: 'Données de test supprimées sur cette machine.',
+        };
+    },
+    // Réinitialisation complète du poste : contrairement à nettoyerDonneesTest
+    // (qui garde licence/config/agents/catalogue), ici tout est effacé — y
+    // compris la configuration et la licence locale — pour retomber
+    // exactement dans l'état d'un poste jamais configuré. Purement local :
+    // rien n'est envoyé à l'admin (une licence déjà assignée reste assignée
+    // côté admin, à libérer là-bas si besoin de la réattribuer ailleurs).
+    resetComplet: (acteurUserId?: number | null) => {
+        verifierSuperAdmin(acteurUserId);
+
+        const db = getDb();
+        migrer(db);
+
+        // Tables listées dans l'ordre où les tables dépendantes sont vidées
+        // avant celles dont elles dépendent (les FK sont de toute façon
+        // désactivées pendant la transaction, mais l'ordre reste plus clair
+        // à la lecture).
+        const toutesLesTables = [
+            'colis', 'bagages', 'courriers', 'tickets', 'clients', 'voyages',
+            'tarifs', 'itineraire_trajet', 'itineraires', 'trajets',
+            'agents', 'users', 'vehicules', 'chauffeurs', 'agences', 'villes',
+            'sync_queue', 'config',
+        ];
+        const suppressions: Record<string, number> = {};
+
+        db.pragma('foreign_keys = OFF');
+        try {
+            db.transaction(() => {
+                for (const table of toutesLesTables) {
+                    if (!tableExiste(db, table)) continue;
+
+                    const resultat = db.prepare(`DELETE FROM ${table}`).run();
+                    suppressions[table] = resultat.changes;
+                }
+
+                if (tableExiste(db, 'sqlite_sequence')) {
+                    db.prepare(
+                        `DELETE FROM sqlite_sequence WHERE name IN (${toutesLesTables.map(() => '?').join(', ')})`,
+                    ).run(...toutesLesTables);
+                }
+            })();
+        } finally {
+            db.pragma('foreign_keys = ON');
+        }
+
+        logger.info('Réinitialisation complète du poste local effectuée', { acteur_user_id: acteurUserId ?? null, suppressions });
+
+        return {
+            ok: true as const,
+            suppressions,
+            message: 'Poste entièrement réinitialisé.',
         };
     },
 };

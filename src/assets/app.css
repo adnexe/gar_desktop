@@ -199,43 +199,157 @@
     --sidebar: hsl(335 35% 97%);
 }
 
-/* Thème "Universel" : même principe que Féminin mais en bleu — surfaces
-   blanches/neutres, le bleu ne vit que dans les boutons/accents et une
-   pointe de teinte sur la sidebar. */
+/* Thème "Universel" : même principe que "Doux" (couleur partout, pas de
+   surface blanche) mais en teal/cyan profond au lieu de bleu-gris. */
 .theme-universel {
-    --background: hsl(0 0% 100%);
-    --foreground: hsl(222 20% 16%);
-    --card: hsl(0 0% 100%);
-    --card-foreground: hsl(222 20% 16%);
-    --popover: hsl(0 0% 100%);
-    --popover-foreground: hsl(222 20% 16%);
-    --primary: hsl(217 85% 55%);
-    --primary-foreground: hsl(0 0% 100%);
-    --secondary: hsl(215 40% 96%);
-    --secondary-foreground: hsl(222 25% 22%);
-    --muted: hsl(215 25% 97%);
-    --muted-foreground: hsl(220 10% 46%);
-    --accent: hsl(215 45% 95%);
-    --accent-foreground: hsl(222 30% 22%);
+    --background: hsl(190 25% 12%);
+    --foreground: hsl(185 20% 75%);
+    --card: hsl(190 25% 12%);
+    --card-foreground: hsl(185 20% 75%);
+    --popover: hsl(190 25% 12%);
+    --popover-foreground: hsl(185 20% 75%);
+    --primary: hsl(174 70% 45%);
+    --primary-foreground: hsl(190 30% 8%);
+    --secondary: hsl(190 20% 19%);
+    --secondary-foreground: hsl(185 20% 88%);
+    --muted: hsl(190 20% 17%);
+    --muted-foreground: hsl(188 12% 55%);
+    --accent: hsl(190 22% 23%);
+    --accent-foreground: hsl(185 20% 88%);
     --destructive: hsl(0 84.2% 60.2%);
     --destructive-foreground: hsl(0 0% 98%);
-    --border: hsl(215 25% 91%);
-    --input: hsl(215 20% 92%);
-    --ring: hsl(217 85% 55%);
-    --chart-1: hsl(217 85% 58%);
+    --border: hsl(190 20% 19%);
+    --input: hsl(190 20% 19%);
+    --ring: hsl(174 70% 45%);
+    --chart-1: hsl(174 70% 45%);
     --chart-2: hsl(38 88% 55%);
-    --chart-3: hsl(160 65% 45%);
+    --chart-3: hsl(270 55% 65%);
     --chart-4: hsl(333 70% 60%);
-    --chart-5: hsl(270 60% 62%);
-    --sidebar-background: hsl(215 30% 97%);
-    --sidebar-foreground: hsl(222 20% 25%);
-    --sidebar-primary: hsl(217 80% 50%);
+    --chart-5: hsl(217 85% 60%);
+    --sidebar-background: hsl(190 25% 9%);
+    --sidebar-foreground: hsl(185 20% 75%);
+    --sidebar-primary: hsl(174 70% 42%);
+    --sidebar-primary-foreground: hsl(190 30% 8%);
+    --sidebar-accent: hsl(190 20% 16%);
+    --sidebar-accent-foreground: hsl(185 20% 88%);
+    --sidebar-border: hsl(190 20% 13%);
+    --sidebar-ring: hsl(174 70% 45%);
+    --sidebar: hsl(190 25% 9%);
+}
+
+/* Thème "Émeraude" : même principe (surfaces blanches/neutres, couleur
+   concentrée sur boutons/accents/sidebar) en vert. */
+.theme-emeraude {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(155 20% 14%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(155 20% 14%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(155 20% 14%);
+    --primary: hsl(160 84% 30%);
+    --primary-foreground: hsl(0 0% 100%);
+    --secondary: hsl(150 35% 95%);
+    --secondary-foreground: hsl(155 40% 20%);
+    --muted: hsl(150 25% 97%);
+    --muted-foreground: hsl(155 12% 44%);
+    --accent: hsl(150 40% 94%);
+    --accent-foreground: hsl(155 45% 20%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(150 25% 90%);
+    --input: hsl(150 20% 92%);
+    --ring: hsl(160 84% 30%);
+    --chart-1: hsl(160 80% 35%);
+    --chart-2: hsl(38 88% 55%);
+    --chart-3: hsl(200 70% 50%);
+    --chart-4: hsl(333 70% 60%);
+    --chart-5: hsl(270 55% 60%);
+    --sidebar-background: hsl(150 30% 96%);
+    --sidebar-foreground: hsl(155 25% 22%);
+    --sidebar-primary: hsl(160 75% 28%);
     --sidebar-primary-foreground: hsl(0 0% 100%);
-    --sidebar-accent: hsl(215 45% 92%);
-    --sidebar-accent-foreground: hsl(222 30% 22%);
-    --sidebar-border: hsl(215 25% 90%);
-    --sidebar-ring: hsl(217 85% 55%);
-    --sidebar: hsl(215 30% 97%);
+    --sidebar-accent: hsl(150 40% 91%);
+    --sidebar-accent-foreground: hsl(155 40% 20%);
+    --sidebar-border: hsl(150 25% 89%);
+    --sidebar-ring: hsl(160 84% 30%);
+    --sidebar: hsl(150 30% 96%);
+}
+
+/* Thème "Ambre" : même principe en orange/terracotta chaud. */
+.theme-ambre {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(20 25% 15%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(20 25% 15%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(20 25% 15%);
+    --primary: hsl(24 88% 46%);
+    --primary-foreground: hsl(0 0% 100%);
+    --secondary: hsl(30 45% 95%);
+    --secondary-foreground: hsl(20 45% 25%);
+    --muted: hsl(30 30% 97%);
+    --muted-foreground: hsl(25 12% 45%);
+    --accent: hsl(28 50% 94%);
+    --accent-foreground: hsl(20 50% 22%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(28 30% 90%);
+    --input: hsl(28 25% 92%);
+    --ring: hsl(24 88% 46%);
+    --chart-1: hsl(24 85% 50%);
+    --chart-2: hsl(160 65% 40%);
+    --chart-3: hsl(200 70% 50%);
+    --chart-4: hsl(333 70% 60%);
+    --chart-5: hsl(48 90% 55%);
+    --sidebar-background: hsl(30 40% 96%);
+    --sidebar-foreground: hsl(20 35% 24%);
+    --sidebar-primary: hsl(24 80% 42%);
+    --sidebar-primary-foreground: hsl(0 0% 100%);
+    --sidebar-accent: hsl(28 50% 91%);
+    --sidebar-accent-foreground: hsl(20 50% 22%);
+    --sidebar-border: hsl(28 30% 89%);
+    --sidebar-ring: hsl(24 88% 46%);
+    --sidebar: hsl(30 40% 96%);
+}
+
+/* Thème "Doux" : palette "Atom One Dark" (thème VSCode/Atom) — bleu-gris
+   plutôt que noir pur, texte gris-bleuté doux plutôt que blanc pur, accents
+   colorés sourds (bleu, vert, jaune, violet, cyan) repris de sa palette de
+   coloration syntaxique. Plus doux au regard que "Sombre" (noir/blanc pur). */
+.theme-doux {
+    --background: hsl(220 15% 13%);
+    --foreground: hsl(219 14% 71%);
+    --card: hsl(220 15% 13%);
+    --card-foreground: hsl(219 14% 71%);
+    --popover: hsl(220 15% 13%);
+    --popover-foreground: hsl(219 14% 71%);
+    --primary: hsl(207 82% 66%);
+    --primary-foreground: hsl(220 20% 10%);
+    --secondary: hsl(220 14% 19%);
+    --secondary-foreground: hsl(219 14% 85%);
+    --muted: hsl(220 14% 17%);
+    --muted-foreground: hsl(220 10% 52%);
+    --accent: hsl(221 14% 23%);
+    --accent-foreground: hsl(219 14% 85%);
+    --destructive: hsl(355 65% 65%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(220 14% 19%);
+    --input: hsl(220 14% 19%);
+    --ring: hsl(207 82% 66%);
+    --chart-1: hsl(207 82% 66%);
+    --chart-2: hsl(95 38% 62%);
+    --chart-3: hsl(39 67% 69%);
+    --chart-4: hsl(286 60% 67%);
+    --chart-5: hsl(187 47% 55%);
+    --sidebar-background: hsl(220 15% 10%);
+    --sidebar-foreground: hsl(219 14% 71%);
+    --sidebar-primary: hsl(207 82% 66%);
+    --sidebar-primary-foreground: hsl(220 20% 10%);
+    --sidebar-accent: hsl(220 14% 17%);
+    --sidebar-accent-foreground: hsl(219 14% 85%);
+    --sidebar-border: hsl(220 14% 15%);
+    --sidebar-ring: hsl(207 82% 66%);
+    --sidebar: hsl(220 13% 15%);
 }
 
 @layer base {

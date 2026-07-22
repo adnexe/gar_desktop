@@ -455,12 +455,14 @@ export function enregistrerIpc(): void {
     gerer('config:verifierLicence', ConfigController.verifierLicence);
     gerer('config:configurer', ConfigController.configurer);
     gerer('config:actualiser', ConfigController.actualiser);
+    gerer('config:synchroniserMaintenant', ConfigController.synchroniserMaintenant);
     gerer('config:reseauLocal', ConfigController.reseauLocal);
     gerer('config:configurerReseauLocal', ConfigController.configurerReseauLocal);
     gerer('config:testerReseauLocal', ConfigController.testerReseauLocal);
     gerer('config:actualiserVoyagesServeurLocal', ConfigController.actualiserVoyagesServeurLocal);
     gerer('config:relancerServeurLocal', ConfigController.relancerServeurLocal);
     gerer('config:nettoyerDonneesTest', ConfigController.nettoyerDonneesTest);
+    gerer('config:resetComplet', ConfigController.resetComplet);
 
     gerer('auth:connecter', AuthController.connecter);
     gerer('auth:verifierSession', AgentController.verifierSession);

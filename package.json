@@ -20,7 +20,7 @@
         ],
         "publish": {
             "provider": "generic",
-            "url": "https://std.adnexe.com/updates/desktop/"
+            "url": "https://adnexetransport.adnexe.com/"
         },
         "win": {
             "target": [
@@ -48,7 +48,7 @@
         "postinstall": "electron-rebuild -f -w better-sqlite3",
         "pack": "npm run build && electron-builder --dir",
         "dist": "npm run build && electron-builder",
-        "build:win": "npm run build && electron-builder -- --win",
+        "build:win": " npm version patch --no-git-tag-version  && npm run build && electron-builder -- --win",
         "build:win:nsis": "npm version patch --no-git-tag-version && npm run build && electron-builder --win nsis",
         "build:win-portable": "npm run build && electron-builder --win portable",
         "build:mac": "npm run build && electron-builder --mac"

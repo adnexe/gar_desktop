@@ -53,6 +53,11 @@ declare global {
                 }>;
                 configurer: (reference: string, appareil: string, codePoste?: string | null) => Promise<unknown>;
                 actualiser: () => Promise<{ ok: boolean; agence?: unknown; erreur?: string; baseUrl?: string }>;
+                synchroniserMaintenant: () => Promise<{
+                    ok: boolean;
+                    enAttente: number;
+                    erreur: { entite: string; tentatives: number; derniere_erreur: string | null } | null;
+                }>;
                 reseauLocal: () => Promise<{
                     mode: 'autonome' | 'serveur' | 'client';
                     serveurUrl: string | null;
@@ -89,6 +94,11 @@ declare global {
                 testerReseauLocal: (serveurUrl: string, secret: string) => Promise<{ ok: boolean; message: string; agence?: string | null }>;
                 actualiserVoyagesServeurLocal: (agenceId: number, date?: string | null) => Promise<{ ok: boolean; nombre: number; tickets: number; message: string }>;
                 nettoyerDonneesTest: (acteurUserId: number) => Promise<{
+                    ok: boolean;
+                    suppressions: Record<string, number>;
+                    message: string;
+                }>;
+                resetComplet: (acteurUserId: number) => Promise<{
                     ok: boolean;
                     suppressions: Record<string, number>;
                     message: string;
