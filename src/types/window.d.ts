@@ -216,6 +216,9 @@ declare global {
             diagnostic: {
                 log: (niveau: 'info' | 'warn', message: string, contexte?: unknown) => Promise<{ ok: boolean }>;
             };
+            miseAJour: {
+                surMiseAJourPrete: (callback: (version: string) => void) => () => void;
+            };
         };
     }
 }

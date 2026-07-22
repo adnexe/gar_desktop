@@ -13,6 +13,7 @@ import {
 } from '@/Components/ui/dialog';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
+import { Spinner } from '@/Components/ui/spinner';
 import {
     Select,
     SelectContent,
@@ -60,6 +61,8 @@ const ticket = ref<TicketTrouve | null>(null);
 const rechercheEffectuee = ref(false);
 
 const villes = ref<Ville[]>([]);
+// On ne peut pas envoyer un bagage vers la ville où l'on se trouve déjà.
+const villesDestinationsPossibles = computed(() => villes.value.filter((v) => v.id !== config.agence?.ville_id));
 const villeArriveeId = ref<number | null>(null);
 const voyagesAgence = ref<VoyageOption[]>([]);
 const voyageId = ref<number | null>(null);
@@ -289,7 +292,7 @@ async function enregistrer() {
         })) as { ok: boolean; bagage?: { uuid: string; numero_bagage: string }; erreur?: string };
 
         if (!reponse.ok || !reponse.bagage) {
-            erreur.value = reponse.erreur ?? "L'enregistrement a échoué.";
+            erreur.value = reponse.erreur ?? "L'enregistrement n'a pas abouti. Réessaie, rien n'a été perdu.";
             confirmationOuverte.value = false;
             return;
         }
@@ -376,7 +379,7 @@ async function enregistrer() {
 
         resetSaisie();
     } catch (e) {
-        erreur.value = messageErreurInconnue(e, "Une erreur est survenue lors de l'enregistrement.");
+        erreur.value = messageErreurInconnue(e, "L'enregistrement n'a pas abouti. Réessaie, rien n'a été perdu.");
         confirmationOuverte.value = false;
     } finally {
         enCours.value = false;
@@ -441,7 +444,7 @@ async function enregistrer() {
                     <Select v-model="villeArriveeId">
                         <SelectTrigger class="h-10 w-full"><SelectValue placeholder="Choisir une ville" /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem v-for="v in villes" :key="v.id" :value="v.id">{{ v.nom }}</SelectItem>
+                            <SelectItem v-for="v in villesDestinationsPossibles" :key="v.id" :value="v.id">{{ v.nom }}</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -537,8 +540,9 @@ async function enregistrer() {
                     Fermer
                 </Button>
                 <Button :disabled="enCours" @click="enregistrer">
-                    <Check />
-                    Confirmer
+                    <Spinner v-if="enCours" />
+                    <Check v-else />
+                    {{ enCours ? 'Enregistrement…' : 'Confirmer' }}
                 </Button>
             </DialogFooter>
         </DialogContent>

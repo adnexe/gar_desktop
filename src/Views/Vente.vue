@@ -7,6 +7,7 @@ import FinDeCaisseRecu, { type RapportFinDeCaisse } from '@/Components/vente/Fin
 import { Badge } from '@/Components/ui/badge';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
+import { Spinner } from '@/Components/ui/spinner';
 import {
     Dialog,
     DialogContent,
@@ -21,6 +22,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/Components/ui/select';
+import { useCompteurAnime } from '@/composables/useCompteurAnime';
+import { choisirSalutation } from '@/composables/useSalutation';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import type { VenteDuJour } from '@/types/vente';
@@ -82,6 +85,9 @@ onMounted(async () => {
 const finDeCaisseOuvert = ref(false);
 const rapportFinDeCaisse = ref<RapportFinDeCaisse | null>(null);
 const erreurImpression = ref('');
+const impressionEnCours = ref(false);
+const salutationFinDeCaisse = ref('');
+const { valeur: totalAnime, animerVers: animerTotal } = useCompteurAnime();
 
 // Fin de caisse ciblée : 0 = tous les voyages, sinon l'id du voyage choisi.
 interface VoyageFinDeCaisse { voyage_id: number; itineraire: string; heure_depart: string; numero_depart: number; places_total: number; places_vendues: number }
@@ -101,24 +107,34 @@ async function chargerRapportFinDeCaisse() {
         userIdFinDeCaisse.value,
         voyageFinDeCaisseId.value || null,
     )) as RapportFinDeCaisse;
+    animerTotal(rapportFinDeCaisse.value.montant_total);
 }
 
 async function ouvrirFinDeCaisse() {
     if (!session.agenceId) return;
     voyageFinDeCaisseId.value = 0;
+    salutationFinDeCaisse.value = choisirSalutation();
+    rapportFinDeCaisse.value = null;
+    // Le dialog s'ouvre avant le chargement : l'animation du total ne se
+    // voit que si elle tourne pendant que le dialog est déjà affiché.
+    finDeCaisseOuvert.value = true;
     voyagesFinDeCaisse.value = (await window.api.vente.voyagesFinDeCaisse(session.agenceId, dateFiltre.value)) as VoyageFinDeCaisse[];
     await chargerRapportFinDeCaisse();
-    finDeCaisseOuvert.value = true;
 }
 
 watch(voyageFinDeCaisseId, chargerRapportFinDeCaisse);
 
 async function imprimerFinDeCaisse() {
     erreurImpression.value = '';
+    impressionEnCours.value = true;
     await nextTick();
-    const impression = await window.api.impression.imprimerRecu();
-    if (!impression.ok) {
-        erreurImpression.value = impression.erreur ?? "L'impression n'a pas pu être lancée.";
+    try {
+        const impression = await window.api.impression.imprimerRecu();
+        if (!impression.ok) {
+            erreurImpression.value = impression.erreur ?? "L'impression n'a pas pu être lancée.";
+        }
+    } finally {
+        impressionEnCours.value = false;
     }
 }
 
@@ -176,6 +192,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                             <th class="px-3 py-3 font-medium">Client</th>
                             <th class="px-3 py-3 text-right font-medium">Prix</th>
                             <th class="px-3 py-3 text-right font-medium">Timbre</th>
+                            <th class="px-3 py-3 text-right font-medium">Commission</th>
                             <th class="px-3 py-3 text-right font-medium">Total</th>
                         </tr>
                     </thead>
@@ -188,6 +205,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                             <td class="px-3 py-3">{{ vente.client ?? '—' }}</td>
                             <td class="px-3 py-3 text-right">{{ formatMontant(vente.montant) }}</td>
                             <td class="px-3 py-3 text-right">{{ formatMontant(vente.timbre) }}</td>
+                            <td class="px-3 py-3 text-right">{{ vente.commission > 0 ? formatMontant(vente.commission) : '—' }}</td>
                             <td class="px-3 py-3 text-right font-semibold">
                                 {{ formatMontant(vente.total) }}
                             </td>
@@ -230,6 +248,8 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     <DialogTitle class="flex items-center gap-2"><ClipboardList class="size-5" /> Fin de caisse — {{ dateFiltre }}</DialogTitle>
                 </DialogHeader>
 
+                <p class="text-sm text-muted-foreground">{{ salutationFinDeCaisse }}, {{ session.nom }} ! Voici le récap.</p>
+
                 <Select v-model="voyageFinDeCaisseId">
                     <SelectTrigger class="w-full max-w-full [&>span]:truncate"><SelectValue placeholder="Tous les voyages" /></SelectTrigger>
                     <SelectContent class="max-w-[var(--reka-select-trigger-width)]">
@@ -246,12 +266,18 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 </p>
 
                 <div v-if="rapportFinDeCaisse" class="space-y-2 text-sm">
-                    <div v-for="v in rapportFinDeCaisse.voyages" :key="v.trajet_id" class="flex items-center justify-between rounded-md border px-3 py-2">
-                        <div>
-                            <p class="font-medium">{{ v.trajet }}</p>
-                            <p class="text-xs text-muted-foreground">{{ v.heure_depart }} · {{ v.nombre_tickets }} ticket(s)</p>
+                    <div v-for="v in rapportFinDeCaisse.voyages" :key="v.trajet_id" class="rounded-md border px-3 py-2">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-medium">{{ v.trajet }}</p>
+                                <p class="text-xs text-muted-foreground">{{ v.heure_depart }} · {{ v.nombre_tickets }} ticket(s)</p>
+                            </div>
+                            <span class="font-semibold">{{ formatMontant(v.montant_total) }}</span>
                         </div>
-                        <span class="font-semibold">{{ formatMontant(v.montant_total) }}</span>
+                        <p v-if="v.commission_total > 0" class="mt-1 flex justify-between text-xs text-muted-foreground">
+                            <span>dont commission courtier</span>
+                            <span>-{{ formatMontant(v.commission_total) }}</span>
+                        </p>
                     </div>
                     <p v-if="rapportFinDeCaisse.voyages.length === 0" class="text-sm text-muted-foreground">
                         Aucune vente pour cette date.
@@ -261,16 +287,36 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                             <span class="shrink-0">Agent(s)</span>
                             <span class="text-right font-medium text-foreground">{{ rapportFinDeCaisse.agents.join(', ') || '—' }}</span>
                         </div>
+                        <div class="flex items-center justify-between text-muted-foreground">
+                            <span>Total billets</span>
+                            <span class="font-medium text-foreground">{{ formatMontant(rapportFinDeCaisse.montant_ventes_total) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-muted-foreground">
+                            <span>Total timbre</span>
+                            <span class="font-medium text-foreground">{{ formatMontant(rapportFinDeCaisse.timbre_total) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-muted-foreground">
+                            <span>Total commission</span>
+                            <span class="font-medium text-foreground">{{ formatMontant(rapportFinDeCaisse.commission_total) }}</span>
+                        </div>
                         <div class="flex items-center justify-between font-semibold">
                             <span>{{ rapportFinDeCaisse.nombre_tickets_total }} ticket(s) au total</span>
-                            <span class="text-lg">{{ formatMontant(rapportFinDeCaisse.montant_total) }}</span>
+                            <span class="text-lg">{{ formatMontant(totalAnime) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between font-semibold text-emerald-700 dark:text-emerald-400">
+                            <span>Net après déduction</span>
+                            <span class="text-lg">{{ formatMontant(rapportFinDeCaisse.montant_net_total) }}</span>
                         </div>
                     </div>
                 </div>
 
                 <DialogFooter>
                     <Button variant="outline" @click="finDeCaisseOuvert = false">Fermer</Button>
-                    <Button @click="imprimerFinDeCaisse"><Printer /> Imprimer</Button>
+                    <Button :disabled="impressionEnCours" @click="imprimerFinDeCaisse">
+                        <Spinner v-if="impressionEnCours" />
+                        <Printer v-else />
+                        {{ impressionEnCours ? 'Impression…' : 'Imprimer' }}
+                    </Button>
                 </DialogFooter>
                 <p v-if="erreurImpression" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {{ erreurImpression }}

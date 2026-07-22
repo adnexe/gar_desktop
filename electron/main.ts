@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { enregistrerIpc } from './ipc';
 import { logger } from './logger';
 import { localNetworkService } from './services/LocalNetworkService';
+import { updateService } from './services/UpdateService';
 import { syncEngine } from './sync/SyncEngine';
 
 const estDev = !app.isPackaged;
@@ -99,6 +100,10 @@ app.whenReady().then(() => {
         logger.warn('Connexion au poste client non tentée.', erreur);
     });
     syncEngine.demarrer();
+    // Pas de vérification de mise à jour en dev : il n'y a rien à publier
+    // depuis un poste de développement, et ça éviterait des essais inutiles
+    // vers le serveur de production.
+    if (!estDev) updateService.demarrer();
     creerFenetre();
 
     app.on('activate', () => {

@@ -23,6 +23,7 @@ export interface DemandeVente {
     tarification: 'ordinaire' | 'vip';
     numeroPlace: number;
     timbre: number;
+    commission: number;
     client: InfosClient;
     numeroTicket?: string | null;
     createdAt?: string | null;
@@ -110,6 +111,7 @@ export class VenteService {
             numeroPlace: demande.numeroPlace,
             montant,
             timbre: demande.timbre,
+            commission: demande.commission,
             tarification: demande.tarification,
             numeroTicket: demande.numeroTicket,
             createdAt: demande.createdAt,
@@ -237,6 +239,10 @@ export class VenteService {
             voyages: lignes,
             nombre_tickets_total: lignes.reduce((s, l) => s + l.nombre_tickets, 0),
             montant_total: lignes.reduce((s, l) => s + l.montant_total, 0),
+            montant_ventes_total: lignes.reduce((s, l) => s + l.montant_ventes, 0),
+            timbre_total: lignes.reduce((s, l) => s + l.timbre_total, 0),
+            commission_total: lignes.reduce((s, l) => s + l.commission_total, 0),
+            montant_net_total: lignes.reduce((s, l) => s + l.montant_net, 0),
             agents: this.tickets.agentsVentes(agenceId, date, userId, voyageId),
         };
     }

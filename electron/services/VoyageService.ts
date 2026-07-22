@@ -11,7 +11,7 @@ export class VoyageService {
 
     formulaire(agenceId: number) {
         return {
-            itineraires: this.referentiel.itineraires(),
+            itineraires: this.referentiel.itineraires(agenceId),
             chauffeurs: this.referentiel.chauffeurs(agenceId),
             vehicules: this.referentiel.vehicules(agenceId),
             statuts: STATUTS_VOYAGE,

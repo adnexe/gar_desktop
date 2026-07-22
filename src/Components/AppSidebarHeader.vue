@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { CalendarDays } from '@lucide/vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { CalendarDays, RefreshCw } from '@lucide/vue';
 import { SidebarTrigger } from '@/Components/ui/sidebar';
 import { Badge } from '@/Components/ui/badge';
 import ThemeToggle from '@/Components/ThemeToggle.vue';
@@ -9,6 +9,18 @@ import { useConfigStore } from '@/Stores/config';
 defineProps<{ titre?: string }>();
 
 const config = useConfigStore();
+
+// Mise à jour prête : installée automatiquement à la prochaine fermeture de
+// l'app (jamais en pleine vente) — juste un signe discret pour rassurer.
+const miseAJourPrete = ref<string | null>(null);
+let desabonnerMiseAJour: (() => void) | null = null;
+
+onMounted(() => {
+    desabonnerMiseAJour = window.api.miseAJour.surMiseAJourPrete((version) => {
+        miseAJourPrete.value = version;
+    });
+});
+onUnmounted(() => desabonnerMiseAJour?.());
 
 const joursAbonnementRestants = computed(() => {
     if (!config.licence?.date_expiration) return null;
@@ -87,6 +99,15 @@ function formatDate(date: string | null | undefined) {
             <span v-if="titre" class="text-base font-semibold text-foreground">{{ titre }}</span>
         </div>
         <div class="ml-auto flex min-w-0 items-center gap-2">
+            <Badge
+                v-if="miseAJourPrete"
+                variant="outline"
+                class="rounded-md border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-700"
+                :title="`Version ${miseAJourPrete} téléchargée — s'installera au prochain redémarrage de l'app.`"
+            >
+                <RefreshCw class="size-4" />
+                <span class="hidden sm:inline">Mise à jour prête</span>
+            </Badge>
             <Badge v-if="config.licence" variant="outline" :class="classeAbonnement" :title="titreAbonnement">
                 <CalendarDays class="size-4" />
                 <span>{{ libelleAbonnementNavbar }}</span>

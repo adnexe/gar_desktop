@@ -16,6 +16,7 @@ export interface NouveauTicket {
     numeroPlace: number;
     montant: number;
     timbre: number;
+    commission: number;
     tarification: string;
     numeroTicket?: string | null;
     createdAt?: string | null;
@@ -29,6 +30,7 @@ export interface TicketRow {
     numero_place: number;
     montant: number;
     timbre: number;
+    commission: number;
     tarification: string;
     type_billet: string;
     client_id: number | null;
@@ -45,6 +47,7 @@ export interface VenteDuJour {
     client: string | null;
     montant: number;
     timbre: number;
+    commission: number;
     total: number;
 }
 
@@ -129,8 +132,8 @@ export class TicketRepository {
 
             const info = db
                 .prepare(
-                    `INSERT INTO tickets (uuid, numero_ticket, voyage_id, agent_id, user_id, client_id, trajet_id, type_billet, numero_place, montant, timbre, tarification, statut_paiement, statut_ticket, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'en_attente', 'impression_en_attente', ?, ?)`,
+                    `INSERT INTO tickets (uuid, numero_ticket, voyage_id, agent_id, user_id, client_id, trajet_id, type_billet, numero_place, montant, timbre, commission, tarification, statut_paiement, statut_ticket, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'en_attente', 'impression_en_attente', ?, ?)`,
                 )
                 .run(
                     uuid,
@@ -144,6 +147,7 @@ export class TicketRepository {
                     donnees.numeroPlace,
                     donnees.montant,
                     donnees.timbre,
+                    donnees.commission,
                     donnees.tarification,
                     maintenant,
                     maintenant,
@@ -157,6 +161,7 @@ export class TicketRepository {
                 numero_place: donnees.numeroPlace,
                 montant: donnees.montant,
                 timbre: donnees.timbre,
+                commission: donnees.commission,
                 tarification: donnees.tarification,
                 type_billet: donnees.typeBillet,
                 client_id: donnees.clientId,
@@ -218,12 +223,18 @@ export class TicketRepository {
         return info.changes > 0;
     }
 
+    // La ville de départ affichée est toujours celle de l'agence qui vend
+    // (un trajet est bidirectionnel en base, "vd"/"va" seuls donneraient
+    // parfois le sens inverse selon l'agence) : c'est ce qui part sur le
+    // ticket imprimé remis au client, donc critique à avoir dans le bon sens.
     avecDetails(ticketId: number) {
         return getDb()
             .prepare(
                 `SELECT t.uuid, t.numero_ticket, t.numero_place, t.montant, t.timbre, t.tarification, t.type_billet, t.created_at,
                         (t.montant + t.timbre) AS total,
-                        tr.nom AS trajet_nom, vd.nom AS ville_depart_nom, va.nom AS ville_arrivee_nom,
+                        tr.nom AS trajet_nom,
+                        agv.nom AS ville_depart_nom,
+                        CASE WHEN tr.ville_depart_id = agv.id THEN va.nom ELSE vd.nom END AS ville_arrivee_nom,
                         v.date_depart AS voyage_date, v.heure_depart AS voyage_heure, v.numero_depart,
                         veh.immatriculation AS vehicule_immatriculation,
                         a.nom AS agence_nom,
@@ -236,6 +247,7 @@ export class TicketRepository {
                  JOIN voyages v ON v.id = t.voyage_id
                  JOIN vehicules veh ON veh.id = v.vehicule_id
                  JOIN agences a ON a.id = v.agence_depart_id
+                 JOIN villes agv ON agv.id = a.ville_id
                  JOIN users u ON u.id = t.user_id
                  LEFT JOIN clients c ON c.id = t.client_id
                  WHERE t.id = ? AND t.statut_ticket <> 'annule'`,
@@ -427,15 +439,25 @@ export class TicketRepository {
         return { ...ticket, client: client ?? null, voyage: voyage ?? null };
     }
 
+    // Le nom du trajet est reconstruit avec la ville de l'agence à gauche
+    // (voir TrajetRepository.resoudreBidirectionnel) : un trajet est
+    // bidirectionnel en base, "tr.nom" seul afficherait parfois le sens
+    // inverse selon l'agence qui a vendu.
     ventesDuJour(agenceId: number, date?: string, userId?: number | null): VenteDuJour[] {
         return getDb()
             .prepare(
-                `SELECT t.uuid, t.numero_ticket, time(t.created_at) AS heure, tr.nom AS trajet, t.numero_place,
+                `SELECT t.uuid, t.numero_ticket, time(t.created_at) AS heure,
+                        (agv.nom || ' - ' || CASE WHEN tr.ville_depart_id = agv.id THEN vva.nom ELSE vvd.nom END) AS trajet,
+                        t.numero_place,
                         (c.prenoms || ' ' || c.nom) AS client, c.telephone AS client_telephone,
-                        t.montant, t.timbre, (t.montant + t.timbre) AS total
+                        t.montant, t.timbre, t.commission, (t.montant + t.timbre) AS total
                  FROM tickets t
                  JOIN voyages v ON v.id = t.voyage_id
                  JOIN trajets tr ON tr.id = t.trajet_id
+                 JOIN villes vvd ON vvd.id = tr.ville_depart_id
+                 JOIN villes vva ON vva.id = tr.ville_arrivee_id
+                 JOIN agences a ON a.id = v.agence_depart_id
+                 JOIN villes agv ON agv.id = a.ville_id
                  LEFT JOIN clients c ON c.id = t.client_id
                  WHERE v.agence_depart_id = ? AND date(t.created_at) = date(?)
                    AND t.statut_ticket = 'valide'
@@ -448,6 +470,11 @@ export class TicketRepository {
     // Rapport « fin de caisse » : nombre de tickets et montant encaissé par
     // trajet. Un même voyage peut contenir plusieurs trajets, donc grouper
     // seulement par voyage mélangerait les destinations dans une seule ligne.
+    // montant_ventes = prix des billets seuls (hors timbre), timbre_total =
+    // taxe reversée à l'État, commission_total = ce qui est dû au courtier.
+    // montant_total reste le total encaissé auprès du client (billet + timbre) ;
+    // montant_net = ce que la gare conserve une fois timbre et commission
+    // déduits du total encaissé.
     rapportParVoyage(agenceId: number, date?: string, userId?: number | null, voyageId?: number | null): {
         trajet_id: number;
         trajet: string;
@@ -455,12 +482,16 @@ export class TicketRepository {
         heure_depart: string;
         numero_depart: number;
         nombre_tickets: number;
+        montant_ventes: number;
+        timbre_total: number;
+        commission_total: number;
         montant_total: number;
+        montant_net: number;
     }[] {
         return getDb()
             .prepare(
                 `SELECT t.trajet_id AS trajet_id,
-                        tr.nom AS trajet,
+                        (agv.nom || ' - ' || CASE WHEN tr.ville_depart_id = agv.id THEN vva.nom ELSE vvd.nom END) AS trajet,
                         MIN(v.date_depart) AS date_depart,
                         CASE
                             WHEN COUNT(DISTINCT v.id) = 1 THEN substr(MIN(v.heure_depart), 1, 5)
@@ -468,16 +499,24 @@ export class TicketRepository {
                         END AS heure_depart,
                         MIN(v.numero_depart) AS numero_depart,
                         COUNT(t.id) AS nombre_tickets,
-                        COALESCE(SUM(t.montant + t.timbre), 0) AS montant_total
+                        COALESCE(SUM(t.montant), 0) AS montant_ventes,
+                        COALESCE(SUM(t.timbre), 0) AS timbre_total,
+                        COALESCE(SUM(t.commission), 0) AS commission_total,
+                        COALESCE(SUM(t.montant + t.timbre), 0) AS montant_total,
+                        COALESCE(SUM(t.montant - t.commission), 0) AS montant_net
                  FROM tickets t
                  JOIN voyages v ON v.id = t.voyage_id
                  JOIN trajets tr ON tr.id = t.trajet_id
+                 JOIN villes vvd ON vvd.id = tr.ville_depart_id
+                 JOIN villes vva ON vva.id = tr.ville_arrivee_id
+                 JOIN agences a ON a.id = v.agence_depart_id
+                 JOIN villes agv ON agv.id = a.ville_id
                  WHERE v.agence_depart_id = ? AND date(t.created_at) = date(?)
                    AND t.statut_ticket = 'valide'
                    AND (? IS NULL OR t.user_id = ?)
                    AND (? IS NULL OR t.voyage_id = ?)
-                 GROUP BY t.trajet_id, tr.nom
-                 ORDER BY MIN(v.heure_depart) ASC, tr.nom ASC`,
+                 GROUP BY t.trajet_id
+                 ORDER BY MIN(v.heure_depart) ASC, trajet ASC`,
             )
             .all(agenceId, date ?? 'now', userId ?? null, userId ?? null, voyageId ?? null, voyageId ?? null) as never[];
     }
@@ -516,13 +555,17 @@ export class TicketRepository {
         return getDb()
             .prepare(
                 `SELECT v.id AS voyage_id,
-                        i.nom AS itineraire,
+                        (agv.nom || ' - ' || CASE WHEN i.ville_depart_id = agv.id THEN va.nom ELSE vd.nom END) AS itineraire,
                         substr(v.heure_depart, 1, 5) AS heure_depart,
                         v.numero_depart AS numero_depart,
                         veh.nombre_places AS places_total,
                         (SELECT COUNT(*) FROM tickets t WHERE t.voyage_id = v.id AND t.statut_ticket <> 'annule') AS places_vendues
                  FROM voyages v
                  JOIN itineraires i ON i.id = v.itineraire_id
+                 JOIN villes vd ON vd.id = i.ville_depart_id
+                 JOIN villes va ON va.id = i.ville_arrivee_id
+                 JOIN agences a ON a.id = v.agence_depart_id
+                 JOIN villes agv ON agv.id = a.ville_id
                  JOIN vehicules veh ON veh.id = v.vehicule_id
                  WHERE v.agence_depart_id = ? AND date(v.date_depart) = date(?)
                  ORDER BY v.heure_depart ASC, v.numero_depart ASC`,

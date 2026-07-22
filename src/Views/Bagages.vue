@@ -7,6 +7,7 @@ import BagageRecu from '@/Components/bagage/BagageRecu.vue';
 import FinDeCaisseSimpleRecu from '@/Components/FinDeCaisseSimpleRecu.vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
+import { Spinner } from '@/Components/ui/spinner';
 import {
     Dialog,
     DialogContent,
@@ -21,6 +22,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/Components/ui/select';
+import { useCompteurAnime } from '@/composables/useCompteurAnime';
+import { choisirSalutation } from '@/composables/useSalutation';
 import { useConfigStore } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
 import { useSessionStore } from '@/Stores/session';
@@ -91,6 +94,9 @@ onMounted(charger);
 const finDeCaisseOuvert = ref(false);
 const rapportFinDeCaisse = ref<RapportFinDeCaisseBagage | null>(null);
 const erreurImpression = ref('');
+const impressionEnCours = ref(false);
+const salutationFinDeCaisse = ref('');
+const { valeur: totalAnime, animerVers: animerTotal } = useCompteurAnime();
 const lignesRapportFinDeCaisse = computed(() => rapportFinDeCaisse.value?.destinations.map((destination) => ({
     id: destination.destination_id,
     libelle: destination.destination,
@@ -126,24 +132,34 @@ async function chargerRapportFinDeCaisse() {
         voyageFinDeCaisseId.value || null,
         userIdFiltre.value,
     )) as RapportFinDeCaisseBagage;
+    animerTotal(rapportFinDeCaisse.value.montant_total);
 }
 
 async function ouvrirFinDeCaisse() {
     if (!session.agenceId) return;
     voyageFinDeCaisseId.value = 0;
+    salutationFinDeCaisse.value = choisirSalutation();
+    rapportFinDeCaisse.value = null;
+    // Le dialog s'ouvre avant le chargement : l'animation du total ne se
+    // voit que si elle tourne pendant que le dialog est déjà affiché.
+    finDeCaisseOuvert.value = true;
     voyagesFinDeCaisse.value = (await window.api.vente.voyagesFinDeCaisse(session.agenceId, dateFiltre.value)) as VoyageFinDeCaisse[];
     await chargerRapportFinDeCaisse();
-    finDeCaisseOuvert.value = true;
 }
 
 watch(voyageFinDeCaisseId, chargerRapportFinDeCaisse);
 
 async function imprimerFinDeCaisse() {
     erreurImpression.value = '';
+    impressionEnCours.value = true;
     await nextTick();
-    const impression = await window.api.impression.imprimerRecu();
-    if (!impression.ok) {
-        erreurImpression.value = impression.erreur ?? "L'impression n'a pas pu être lancée.";
+    try {
+        const impression = await window.api.impression.imprimerRecu();
+        if (!impression.ok) {
+            erreurImpression.value = impression.erreur ?? "L'impression n'a pas pu être lancée.";
+        }
+    } finally {
+        impressionEnCours.value = false;
     }
 }
 
@@ -294,6 +310,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 <DialogHeader>
                     <DialogTitle class="flex items-center gap-2"><ClipboardList class="size-5" /> Fin de caisse — {{ dateFiltre }}</DialogTitle>
                 </DialogHeader>
+                <p class="text-sm text-muted-foreground">{{ salutationFinDeCaisse }}, {{ session.nom }} ! Voici le récap.</p>
                 <Select v-model="voyageFinDeCaisseId">
                     <SelectTrigger class="w-full max-w-full [&>span]:truncate"><SelectValue placeholder="Tous les voyages" /></SelectTrigger>
                     <SelectContent class="max-w-[var(--reka-select-trigger-width)]">
@@ -334,13 +351,17 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                         </div>
                         <div class="flex items-center justify-between font-semibold">
                             <span>{{ rapportFinDeCaisse.nombre_bagages }} bagage(s) au total</span>
-                            <span class="text-lg">{{ formatMontant(rapportFinDeCaisse.montant_total) }}</span>
+                            <span class="text-lg">{{ formatMontant(totalAnime) }}</span>
                         </div>
                     </div>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" @click="finDeCaisseOuvert = false">Fermer</Button>
-                    <Button @click="imprimerFinDeCaisse"><Printer /> Imprimer</Button>
+                    <Button :disabled="impressionEnCours" @click="imprimerFinDeCaisse">
+                        <Spinner v-if="impressionEnCours" />
+                        <Printer v-else />
+                        {{ impressionEnCours ? 'Impression…' : 'Imprimer' }}
+                    </Button>
                 </DialogFooter>
                 <p v-if="erreurImpression" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {{ erreurImpression }}

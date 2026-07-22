@@ -1,9 +1,25 @@
 <script setup lang="ts">
 export interface RapportFinDeCaisse {
     date: string;
-    voyages: { trajet_id: number; trajet: string; date_depart: string; heure_depart: string; numero_depart: number; nombre_tickets: number; montant_total: number }[];
+    voyages: {
+        trajet_id: number;
+        trajet: string;
+        date_depart: string;
+        heure_depart: string;
+        numero_depart: number;
+        nombre_tickets: number;
+        montant_ventes: number;
+        timbre_total: number;
+        commission_total: number;
+        montant_total: number;
+        montant_net: number;
+    }[];
     nombre_tickets_total: number;
     montant_total: number;
+    montant_ventes_total: number;
+    timbre_total: number;
+    commission_total: number;
+    montant_net_total: number;
     agents: string[];
 }
 
@@ -56,6 +72,22 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 <span>{{ v.nombre_tickets }} ticket(s)</span>
                 <span>{{ formatMontant(v.montant_total) }}</span>
             </div>
+            <div class="ligne" style="display:flex;justify-content:space-between;font-size:11px">
+                <span>Billets</span>
+                <span>{{ formatMontant(v.montant_ventes) }}</span>
+            </div>
+            <div class="ligne" style="display:flex;justify-content:space-between;font-size:11px">
+                <span>Timbre</span>
+                <span>{{ formatMontant(v.timbre_total) }}</span>
+            </div>
+            <div class="ligne" style="display:flex;justify-content:space-between;font-size:11px">
+                <span>Commission</span>
+                <span>-{{ formatMontant(v.commission_total) }}</span>
+            </div>
+            <div class="ligne" style="display:flex;justify-content:space-between;font-size:11px;font-weight:700">
+                <span>Net</span>
+                <span>{{ formatMontant(v.montant_net) }}</span>
+            </div>
         </div>
 
         <p v-if="rapport.voyages.length === 0" class="text-center">Aucune vente ce jour.</p>
@@ -66,9 +98,25 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             <span>Total tickets</span>
             <span>{{ rapport.nombre_tickets_total }}</span>
         </div>
+        <div class="ligne" style="display:flex;justify-content:space-between">
+            <span>Total billets</span>
+            <span>{{ formatMontant(rapport.montant_ventes_total) }}</span>
+        </div>
+        <div class="ligne" style="display:flex;justify-content:space-between">
+            <span>Total timbre</span>
+            <span>{{ formatMontant(rapport.timbre_total) }}</span>
+        </div>
+        <div class="ligne" style="display:flex;justify-content:space-between">
+            <span>Total commission</span>
+            <span>{{ formatMontant(rapport.commission_total) }}</span>
+        </div>
         <div class="ligne" style="display:flex;justify-content:space-between;font-weight:700;font-size:13px">
-            <span>Montant global</span>
+            <span>Montant global encaissé</span>
             <span>{{ formatMontant(rapport.montant_total) }}</span>
+        </div>
+        <div class="ligne" style="display:flex;justify-content:space-between;font-weight:700;font-size:13px">
+            <span>Net après déduction</span>
+            <span>{{ formatMontant(rapport.montant_net_total) }}</span>
         </div>
     </div>
 </template>

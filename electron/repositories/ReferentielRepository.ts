@@ -73,31 +73,47 @@ export class ReferentielRepository {
     }
 
     // Voyages programmés au départ de l'agence, pour lier (facultativement)
-    // un bagage ou un courrier au voyage par lequel il part.
+    // un bagage ou un courrier au voyage par lequel il part. Nom d'itinéraire
+    // réorienté (ville de l'agence à gauche) : voir itineraires() ci-dessous.
     voyagesDeAgence(agenceId: number): VoyageOption[] {
         return getDb()
             .prepare(
-                `SELECT v.id, v.uuid, v.date_depart, v.heure_depart, i.nom AS itineraire_nom
+                `SELECT v.id, v.uuid, v.date_depart, v.heure_depart,
+                        (agv.nom || ' - ' || CASE WHEN i.ville_depart_id = agv.id THEN va.nom ELSE vd.nom END) AS itineraire_nom
                  FROM voyages v
                  JOIN itineraires i ON i.id = v.itineraire_id
+                 JOIN villes vd ON vd.id = i.ville_depart_id
+                 JOIN villes va ON va.id = i.ville_arrivee_id
+                 JOIN agences a ON a.id = v.agence_depart_id
+                 JOIN villes agv ON agv.id = a.ville_id
                  WHERE v.agence_depart_id = ? AND v.statut = 'programme'
                  ORDER BY v.date_depart ASC, v.heure_depart ASC`,
             )
             .all(agenceId) as VoyageOption[];
     }
 
-    itineraires(): ItineraireRow[] {
+    // Un itinéraire est bidirectionnel en base (même règle que les trajets :
+    // "Abidjan-Man" et "Man-Abidjan" sont le même itinéraire), donc on ne
+    // propose que ceux reliés à la ville de l'agence, réorientés pour que
+    // cette ville soit toujours le départ — jamais listée comme destination,
+    // comme c'est déjà le cas pour la vente de ticket et le courrier.
+    itineraires(agenceId: number): ItineraireRow[] {
         return getDb()
             .prepare(
-                `SELECT i.id, i.uuid, i.nom, i.ville_depart_id, i.ville_arrivee_id,
-                        vd.nom AS ville_depart_nom, va.nom AS ville_arrivee_nom
+                `SELECT i.id, i.uuid, i.ville_depart_id, i.ville_arrivee_id,
+                        agv.nom AS ville_depart_nom,
+                        CASE WHEN i.ville_depart_id = agv.id THEN va.nom ELSE vd.nom END AS ville_arrivee_nom,
+                        (agv.nom || ' - ' || CASE WHEN i.ville_depart_id = agv.id THEN va.nom ELSE vd.nom END) AS nom
                  FROM itineraires i
                  JOIN villes vd ON vd.id = i.ville_depart_id
                  JOIN villes va ON va.id = i.ville_arrivee_id
+                 JOIN agences a ON a.id = ?
+                 JOIN villes agv ON agv.id = a.ville_id
                  WHERE i.actif = 1
-                 ORDER BY vd.nom, va.nom`,
+                   AND (i.ville_depart_id = agv.id OR i.ville_arrivee_id = agv.id)
+                 ORDER BY ville_arrivee_nom`,
             )
-            .all() as ItineraireRow[];
+            .all(agenceId) as ItineraireRow[];
     }
 
     chauffeurs(_agenceId: number): ChauffeurRow[] {
@@ -122,14 +138,23 @@ export class ReferentielRepository {
             .all() as VehiculeRow[];
     }
 
+    // Ville de l'agence à gauche (voir TrajetRepository.resoudreBidirectionnel) :
+    // un trajet est bidirectionnel en base, "tr.nom" seul afficherait parfois
+    // le sens inverse selon l'agence propriétaire du tarif.
     tarifsAgence(agenceId: number): TarifCatalogueRow[] {
         return getDb()
             .prepare(
-                `SELECT t.uuid, tr.nom AS trajet, t.type_billet, t.tarification, t.montant, t.actif
+                `SELECT t.uuid,
+                        (agv.nom || ' - ' || CASE WHEN tr.ville_depart_id = agv.id THEN vva.nom ELSE vvd.nom END) AS trajet,
+                        t.type_billet, t.tarification, t.montant, t.actif
                  FROM tarifs t
                  JOIN trajets tr ON tr.id = t.trajet_id
+                 JOIN villes vvd ON vvd.id = tr.ville_depart_id
+                 JOIN villes vva ON vva.id = tr.ville_arrivee_id
+                 JOIN agences a ON a.id = t.agence_id
+                 JOIN villes agv ON agv.id = a.ville_id
                  WHERE t.agence_id = ?
-                 ORDER BY tr.nom, t.tarification, t.type_billet`,
+                 ORDER BY trajet, t.tarification, t.type_billet`,
             )
             .all(agenceId) as TarifCatalogueRow[];
     }

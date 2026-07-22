@@ -401,4 +401,14 @@ export const migrations: { nom: string; sql: string }[] = [
             ALTER TABLE vehicules ADD COLUMN disposition_sieges TEXT;
         `,
     },
+    {
+        nom: '0016_commission_sur_tickets',
+        sql: `
+            -- Commission due à un courtier ayant envoyé le client, saisie
+            -- manuellement par la caissière après la vente. Ne fait pas
+            -- partie du total encaissé auprès du client (timbre + montant) :
+            -- elle est déduite côté gare, pas payée par le passager.
+            ALTER TABLE tickets ADD COLUMN commission REAL NOT NULL DEFAULT 0;
+        `,
+    },
 ];

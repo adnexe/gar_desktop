@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { Activity, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, Package, Send, Ticket } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
+import { choisirSalutation } from '@/composables/useSalutation';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 
@@ -35,6 +36,8 @@ const dateDuJour = new Intl.DateTimeFormat('fr-FR', {
     month: 'long',
     year: 'numeric',
 }).format(new Date());
+
+const salutation = choisirSalutation();
 
 // Les agents ne voient que leurs propres opérations ; admin et chef de gare
 // voient tout (même règle que les écrans vente/bagages/courrier).
@@ -76,7 +79,7 @@ onMounted(async () => {
                                 <BadgeCheck class="size-4" />
                                 Poste prêt
                             </p>
-                            <h1 class="mt-1 text-2xl font-semibold">Bonjour {{ session.nom }}</h1>
+                            <h1 class="mt-1 text-2xl font-semibold">{{ salutation }}, {{ session.nom }}</h1>
                             <p class="mt-1 text-[0.95rem] text-muted-foreground">
                                 {{ config.agence ? `${config.agence.nom} - ${config.agence.ville_nom}` : 'Agence locale' }}
                                 <span class="mx-1">·</span>

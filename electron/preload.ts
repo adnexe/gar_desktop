@@ -88,6 +88,16 @@ const api = {
     diagnostic: {
         log: (niveau: 'info' | 'warn', message: string, contexte?: unknown) => ipcRenderer.invoke('diagnostic:log', niveau, message, contexte),
     },
+    miseAJour: {
+        // Le main process pousse cet événement quand une mise à jour a été
+        // téléchargée (voir UpdateService) — pas d'appel invoke, c'est le
+        // main qui initie. Retourne une fonction pour se désabonner.
+        surMiseAJourPrete: (callback: (version: string) => void) => {
+            const gestionnaire = (_event: unknown, version: string) => callback(version);
+            ipcRenderer.on('mise-a-jour:prete', gestionnaire);
+            return () => ipcRenderer.removeListener('mise-a-jour:prete', gestionnaire);
+        },
+    },
 };
 
 contextBridge.exposeInMainWorld('api', api);

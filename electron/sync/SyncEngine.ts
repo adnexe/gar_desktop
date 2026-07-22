@@ -212,7 +212,7 @@ export class SyncEngine {
         const ligne = getDb()
             .prepare(
                 `SELECT t.uuid, t.numero_ticket, t.agent_id, t.user_id, t.trajet_id,
-                        t.type_billet, t.numero_place, t.montant, t.timbre, t.tarification,
+                        t.type_billet, t.numero_place, t.montant, t.timbre, t.commission, t.tarification,
                         t.statut_paiement, t.statut_ticket, t.created_at, t.updated_at,
                         v.uuid AS voyage_uuid, c.uuid AS client_uuid
                  FROM tickets t

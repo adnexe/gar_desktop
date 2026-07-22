@@ -122,17 +122,24 @@ export interface VoyageServeur {
 
 export class VoyageRepository {
     // Liste des voyages de l'agence pour l'écran "Voyages" : aujourd'hui par défaut.
+    // Nom d'itinéraire réorienté (ville de l'agence à gauche) : voir
+    // ReferentielRepository.itineraires() pour l'explication complète.
     liste(agenceId: number, date?: string): VoyageListe[] {
         const dateRecherche = date ?? dateDuJour();
 
         return getDb()
             .prepare(
                 `SELECT v.id, v.uuid, v.date_depart, v.heure_depart, v.numero_depart, v.statut,
-                        i.nom AS itineraire_nom, veh.immatriculation AS vehicule_immatriculation, veh.nombre_places,
+                        (agv.nom || ' - ' || CASE WHEN i.ville_depart_id = agv.id THEN va.nom ELSE vd.nom END) AS itineraire_nom,
+                        veh.immatriculation AS vehicule_immatriculation, veh.nombre_places,
                         c.nom AS chauffeur_nom,
                         (SELECT COUNT(*) FROM tickets t WHERE t.voyage_id = v.id AND t.statut_ticket = 'valide') AS tickets_vendus
                  FROM voyages v
                  JOIN itineraires i ON i.id = v.itineraire_id
+                 JOIN villes vd ON vd.id = i.ville_depart_id
+                 JOIN villes va ON va.id = i.ville_arrivee_id
+                 JOIN agences a ON a.id = v.agence_depart_id
+                 JOIN villes agv ON agv.id = a.ville_id
                  JOIN vehicules veh ON veh.id = v.vehicule_id
                  LEFT JOIN chauffeurs c ON c.id = v.chauffeur_id
                  WHERE v.agence_depart_id = ? AND date(v.date_depart) = date(?)
@@ -150,11 +157,16 @@ export class VoyageRepository {
         const voyages = db
             .prepare(
                 `SELECT v.id, v.uuid, v.date_depart, v.heure_depart, v.numero_depart, v.statut,
-                        v.itineraire_id, i.nom AS itineraire_nom,
+                        v.itineraire_id,
+                        (agv.nom || ' - ' || CASE WHEN i.ville_depart_id = agv.id THEN va.nom ELSE vd.nom END) AS itineraire_nom,
                         veh.immatriculation AS vehicule_immatriculation, veh.nombre_places, veh.disposition_sieges,
                         c.nom AS chauffeur_nom
                  FROM voyages v
                  JOIN itineraires i ON i.id = v.itineraire_id
+                 JOIN villes vd ON vd.id = i.ville_depart_id
+                 JOIN villes va ON va.id = i.ville_arrivee_id
+                 JOIN agences a ON a.id = v.agence_depart_id
+                 JOIN villes agv ON agv.id = a.ville_id
                  JOIN itineraire_trajet it ON it.itineraire_id = v.itineraire_id AND it.trajet_id = ?
                  JOIN vehicules veh ON veh.id = v.vehicule_id
                  LEFT JOIN chauffeurs c ON c.id = v.chauffeur_id

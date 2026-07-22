@@ -5,6 +5,7 @@ import { Check, Mail, Package, Plus, Printer, Send, Trash2, UserRound, X } from 
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
+import { Spinner } from '@/Components/ui/spinner';
 import {
     Select,
     SelectContent,
@@ -40,6 +41,8 @@ const config = useConfigStore();
 const session = useSessionStore();
 
 const villes = ref<Ville[]>([]);
+// On ne peut pas envoyer un courrier vers la ville où l'on se trouve déjà.
+const villesDestinationsPossibles = computed(() => villes.value.filter((v) => v.id !== config.agence?.ville_id));
 const villeArriveeId = ref<number | null>(null);
 const agencesDestination = ref<Agence[]>([]);
 const agenceArriveeId = ref<number | null>(null);
@@ -350,7 +353,7 @@ async function envoyer() {
         };
 
         if (!reponse.ok || !reponse.courrier) {
-            erreur.value = reponse.erreur ?? "L'enregistrement a échoué.";
+            erreur.value = reponse.erreur ?? "L'enregistrement n'a pas abouti. Réessaie, rien n'a été perdu.";
             confirmationOuverte.value = false;
             return;
         }
@@ -441,7 +444,7 @@ async function envoyer() {
 
         resetSaisie();
     } catch (e) {
-        erreur.value = messageErreurInconnue(e, "Une erreur est survenue lors de l'enregistrement.");
+        erreur.value = messageErreurInconnue(e, "L'enregistrement n'a pas abouti. Réessaie, rien n'a été perdu.");
         confirmationOuverte.value = false;
     } finally {
         enregistrement.value = false;
@@ -464,7 +467,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     <Select v-model="villeArriveeId">
                         <SelectTrigger class="h-10 w-full"><SelectValue placeholder="Choisir une ville" /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem v-for="ville in villes" :key="ville.id" :value="ville.id">{{ ville.nom }}</SelectItem>
+                            <SelectItem v-for="ville in villesDestinationsPossibles" :key="ville.id" :value="ville.id">{{ ville.nom }}</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -695,7 +698,8 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                         Fermer
                     </Button>
                     <Button :disabled="enregistrement" @click="envoyer">
-                        <Check />
+                        <Spinner v-if="enregistrement" />
+                        <Check v-else />
                         {{ enregistrement ? 'Enregistrement…' : 'Confirmer' }}
                     </Button>
                 </div>
