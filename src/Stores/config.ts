@@ -35,6 +35,7 @@ export interface CompagnieLocale {
     pied_ticket: string | null;
     logo_url: string | null;
     logo_data_uri: string | null;
+    modules_actifs: string[];
 }
 
 export interface ReponseLicence {
@@ -49,6 +50,11 @@ export const useConfigStore = defineStore('config', () => {
     const agence = ref<AgenceLocale | null>(null);
     const compagnie = ref<CompagnieLocale | null>(null);
     const licence = ref<LicenceLocale | null>(null);
+
+    // Réglage de l'entreprise (pas de l'agent) : masque/bloque les écrans
+    // liés à un module que l'entreprise n'utilise pas du tout. Tant que rien
+    // n'est encore chargé, on ne restreint rien (fail open, comme l'admin).
+    const moduleActif = (module: 'ticket' | 'bagage' | 'courrier') => compagnie.value?.modules_actifs.includes(module) ?? true;
 
     const licenceValide = computed(() => {
         if (!licence.value || !licence.value.actif) return false;
@@ -108,5 +114,5 @@ export const useConfigStore = defineStore('config', () => {
         return `${maintenant.getFullYear()}-${pad(maintenant.getMonth() + 1)}-${pad(maintenant.getDate())}`;
     }
 
-    return { configuree, agence, compagnie, licence, licenceValide, charger, chargerLicence, rafraichirEtat, verifierLicence, reclamerLicence, configurer };
+    return { configuree, agence, compagnie, licence, licenceValide, moduleActif, charger, chargerLicence, rafraichirEtat, verifierLicence, reclamerLicence, configurer };
 });

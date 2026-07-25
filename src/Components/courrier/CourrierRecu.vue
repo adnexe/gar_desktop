@@ -15,6 +15,7 @@ defineProps<{
         numero_courrier: string;
         destination: string;
         agence_arrivee: string | null;
+        agence_arrivee_code: string | null;
         voyage: string | null;
         expediteur: string;
         expediteur_nom: string;
@@ -27,6 +28,7 @@ defineProps<{
         montant_colis: number;
         montant_total: number;
         agence_depart: string | null;
+        agence_depart_code: string | null;
         agent: string | null;
         created_at: string;
         compagnie?: CompagnieRecu | null;
@@ -78,7 +80,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             </div>
             <div class="ligne">
                 <span>Agence :</span>
-                <span>{{ recu.agence_depart || '-' }}</span>
+                <span>{{ recu.agence_depart || '-' }}<template v-if="recu.agence_depart_code"> ({{ recu.agence_depart_code }})</template></span>
             </div>
             <div class="ligne">
                 <span>Agent :</span>
@@ -101,7 +103,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 <span>Destination :</span>
                 <strong>{{ recu.destination }}</strong>
             </div>
-            <p v-if="recu.agence_arrivee" class="petit">{{ recu.agence_arrivee }}</p>
+            <p v-if="recu.agence_arrivee" class="petit">
+                {{ recu.agence_arrivee }}<template v-if="recu.agence_arrivee_code"> ({{ recu.agence_arrivee_code }})</template>
+            </p>
             <p v-if="recu.voyage" class="petit">Voyage : {{ recu.voyage }}</p>
         </div>
 
@@ -128,7 +132,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         <div class="destination-etiquette">
             {{ recu.destination }}
         </div>
-        <p v-if="recu.agence_arrivee" class="agence-etiquette">{{ recu.agence_arrivee }}</p>
+        <p v-if="recu.agence_arrivee" class="agence-etiquette">
+            {{ recu.agence_arrivee }}<template v-if="recu.agence_arrivee_code"> ({{ recu.agence_arrivee_code }})</template>
+        </p>
 
         <div class="bloc">
             <p class="titre">Destinataire</p>
@@ -149,7 +155,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
         <div class="bas-etiquette">
             <span>{{ recu.created_at }}</span>
-            <span>{{ recu.agence_depart || '-' }}</span>
+            <span>{{ recu.agence_depart || '-' }}<template v-if="recu.agence_depart_code"> ({{ recu.agence_depart_code }})</template></span>
         </div>
     </div>
 </template>
@@ -163,8 +169,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     margin: 0 auto;
     color: #000;
     font-family: Arial, 'Helvetica Neue', sans-serif;
-    font-size: 13px;
-    line-height: 1.35;
+    font-size: 14px;
+    line-height: 1.4;
     padding: 1mm;
 }
 
@@ -176,7 +182,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 }
 
 .compagnie {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
     text-transform: uppercase;
 }
@@ -185,7 +191,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .petit,
 .note,
 .pied {
-    font-size: 11px;
+    font-size: 12px;
 }
 
 .numero-recu,
@@ -236,7 +242,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 }
 
 .nom {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 700;
     text-transform: uppercase;
 }

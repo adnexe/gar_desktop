@@ -137,6 +137,7 @@ export interface CompagnieApi {
     pied_ticket: string | null;
     logo_url: string | null;
     logo_data_uri: string | null;
+    modules_actifs: string[];
 }
 
 export interface BootstrapResponse {

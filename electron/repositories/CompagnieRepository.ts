@@ -11,6 +11,7 @@ export interface CompagnieLocale {
     pied_ticket: string | null;
     logo_url: string | null;
     logo_data_uri: string | null;
+    modules_actifs: string[];
 }
 
 export class CompagnieRepository {
@@ -21,6 +22,10 @@ export class CompagnieRepository {
             const v = this.config.obtenir(cle);
             return v && v.length > 0 ? v : null;
         };
+
+        // Pas encore synchronisé (ou admin plus ancien sans ce réglage) :
+        // on ne restreint rien par défaut, comme côté admin.
+        const modulesActifs = valeur('compagnie_modules_actifs');
 
         return {
             nom: valeur('compagnie_nom'),
@@ -33,6 +38,7 @@ export class CompagnieRepository {
             pied_ticket: valeur('compagnie_pied_ticket'),
             logo_url: valeur('compagnie_logo_url'),
             logo_data_uri: valeur('compagnie_logo_data_uri'),
+            modules_actifs: modulesActifs ? modulesActifs.split(',') : ['ticket', 'bagage', 'courrier'],
         };
     }
 }

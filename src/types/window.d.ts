@@ -20,6 +20,7 @@ declare global {
                     pied_ticket: string | null;
                     logo_url: string | null;
                     logo_data_uri: string | null;
+                    modules_actifs: string[];
                 }>;
                 licenceActuelle: () => Promise<{
                     uuid: string;

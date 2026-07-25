@@ -10,6 +10,9 @@ const moduleParRoute: Record<string, 'ticket' | 'bagage' | 'courrier'> = {
 const rolesParRoute: Record<string, string[]> = {
     agents: ['chef_gare', 'super_admin'],
 };
+// Écrans liés au module ticket (bus) : réglage de l'entreprise, pas de
+// l'agent — distinct de moduleParRoute qui vérifie l'accès de l'agent.
+const routesModuleTicket = ['voyages', 'tarifs', 'vehicules', 'chauffeurs'];
 
 const router = createRouter({
     history: createWebHashHistory(),
@@ -61,6 +64,9 @@ router.beforeEach(async (to) => {
     }
 
     if (typeof to.name === 'string' && moduleParRoute[to.name] && !session.peutModule(moduleParRoute[to.name])) {
+        return { name: 'dashboard' };
+    }
+    if (typeof to.name === 'string' && routesModuleTicket.includes(to.name) && !config.moduleActif('ticket')) {
         return { name: 'dashboard' };
     }
     if (typeof to.name === 'string' && rolesParRoute[to.name] && !rolesParRoute[to.name].includes(session.role)) {

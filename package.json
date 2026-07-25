@@ -1,5 +1,7 @@
 {
     "name": "gar-desktop",
+    "author": "Adnexe",
+    "description": "Application de caisse de l'agence de transport Adnexe",
     "productName": "Adnexe Transport",
     "private": true,
     "version": "0.1.1",

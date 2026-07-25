@@ -49,6 +49,7 @@ export interface AgenceOption {
     uuid: string;
     nom: string;
     ville_id: number;
+    code_ticket: string | null;
 }
 
 export interface VoyageOption {
@@ -68,7 +69,7 @@ export class ReferentielRepository {
     // Adjamé...) : on les propose une fois la ville de destination choisie.
     agencesParVille(villeId: number): AgenceOption[] {
         return getDb()
-            .prepare('SELECT id, uuid, nom, ville_id FROM agences WHERE ville_id = ? AND actif = 1 ORDER BY nom')
+            .prepare('SELECT id, uuid, nom, ville_id, code_ticket FROM agences WHERE ville_id = ? AND actif = 1 ORDER BY nom')
             .all(villeId) as AgenceOption[];
     }
 

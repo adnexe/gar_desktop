@@ -142,6 +142,7 @@ export class CourrierRepository {
         numero_courrier: string;
         destination: string;
         agence_arrivee: string | null;
+        agence_arrivee_code: string | null;
         voyage: string | null;
         expediteur_nom: string;
         expediteur_telephone: string;
@@ -151,6 +152,7 @@ export class CourrierRepository {
         montant_colis: number;
         montant_total: number;
         agence_depart: string | null;
+        agence_depart_code: string | null;
         agent: string | null;
         created_at: string;
         colis: { nom: string; type: string; quantite: number; montant: number }[];
@@ -159,7 +161,7 @@ export class CourrierRepository {
         const ligne = db
             .prepare(
                 `SELECT c.id, c.uuid, c.numero_courrier, v.nom AS destination,
-                        aa.nom AS agence_arrivee,
+                        aa.nom AS agence_arrivee, aa.code_ticket AS agence_arrivee_code,
                         CASE WHEN vy.id IS NULL THEN NULL
                              ELSE vy.date_depart || ' ' || substr(vy.heure_depart, 1, 5) END AS voyage,
                         TRIM(COALESCE(ex.prenoms, '') || ' ' || COALESCE(ex.nom, '')) AS expediteur_nom,
@@ -167,7 +169,7 @@ export class CourrierRepository {
                         TRIM(COALESCE(cl.prenoms, '') || ' ' || COALESCE(cl.nom, '')) AS destinataire_nom,
                         COALESCE(cl.telephone, '') AS destinataire_telephone,
                         c.prix_expedition, c.montant_colis, c.montant_total,
-                        ad.nom AS agence_depart, u.name AS agent, c.created_at
+                        ad.nom AS agence_depart, ad.code_ticket AS agence_depart_code, u.name AS agent, c.created_at
                  FROM courriers c
                  JOIN villes v ON v.id = c.ville_arrivee_id
                  JOIN clients ex ON ex.id = c.expediteur_id

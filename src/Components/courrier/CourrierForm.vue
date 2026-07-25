@@ -20,7 +20,7 @@ import { useSessionStore } from '@/Stores/session';
 import type { CourrierDuJour } from '@/types/courrier';
 
 interface Ville { id: number; uuid: string; nom: string }
-interface Agence { id: number; uuid: string; nom: string; ville_id: number }
+interface Agence { id: number; uuid: string; nom: string; ville_id: number; code_ticket: string | null }
 interface VoyageOption { id: number; uuid: string; date_depart: string; heure_depart: string; itineraire_nom: string | null }
 interface LigneColis { nom: string; type: string; quantite: number; prix: number }
 
@@ -73,6 +73,7 @@ const recu = ref<{
     numero_courrier: string;
     destination: string;
     agence_arrivee: string | null;
+    agence_arrivee_code: string | null;
     voyage: string | null;
     expediteur: string;
     expediteur_nom: string;
@@ -85,6 +86,7 @@ const recu = ref<{
     montant_colis: number;
     montant_total: number;
     agence_depart: string | null;
+    agence_depart_code: string | null;
     agent: string | null;
     created_at: string;
     compagnie: CompagnieLocale | null;
@@ -361,13 +363,14 @@ async function envoyer() {
         confirmationOuverte.value = false;
 
         const destination = villes.value.find((v) => v.id === villeArriveeIdActuelle)?.nom ?? '';
-        const agenceNom = agencesDestination.value.find((a) => a.id === agenceArriveeIdActuelle)?.nom ?? null;
+        const agenceDestination = agencesDestination.value.find((a) => a.id === agenceArriveeIdActuelle) ?? null;
         const voyageLabel = voyageSelectionne.value ? libelleVoyage(voyageSelectionne.value) : null;
 
         const dernierRecu = {
             numero_courrier: reponse.courrier.numeroCourrier,
             destination,
-            agence_arrivee: agenceNom,
+            agence_arrivee: agenceDestination?.nom ?? null,
+            agence_arrivee_code: agenceDestination?.code_ticket ?? null,
             voyage: voyageLabel,
             expediteur: `${nomComplet(expediteur)} (${expediteur.telephone})`.trim(),
             expediteur_nom: nomComplet(expediteur),
@@ -385,6 +388,7 @@ async function envoyer() {
             montant_colis: reponse.courrier.montantColis,
             montant_total: reponse.courrier.montantTotal,
             agence_depart: agenceActuelle.nom,
+            agence_depart_code: agenceActuelle.code_ticket,
             agent: session.nom || null,
             created_at: dateHeureRecu(),
             compagnie: config.compagnie,

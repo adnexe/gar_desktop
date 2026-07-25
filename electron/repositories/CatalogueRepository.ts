@@ -60,6 +60,7 @@ export class CatalogueRepository {
                 compagnie_pied_ticket: compagnie.pied_ticket,
                 compagnie_logo_url: compagnie.logo_url,
                 compagnie_logo_data_uri: compagnie.logo_data_uri,
+                compagnie_modules_actifs: (compagnie.modules_actifs ?? []).join(','),
             })) {
                 configStmt.run(cle, valeur ?? '');
             }
