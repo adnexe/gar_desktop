@@ -8,7 +8,7 @@ declare global {
         api: {
             config: {
                 estConfiguree: () => Promise<boolean>;
-                agenceActuelle: () => Promise<{ id: number; uuid: string; reference: string; code_ticket: string | null; nom: string; ville_id: number; ville_nom: string } | null>;
+                agenceActuelle: () => Promise<{ id: number; uuid: string; reference: string; telephone: string | null; nom: string; ville_id: number; ville_nom: string } | null>;
                 compagnieActuelle: () => Promise<{
                     nom: string | null;
                     slogan: string | null;

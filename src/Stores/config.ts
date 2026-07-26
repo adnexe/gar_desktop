@@ -5,7 +5,7 @@ export interface AgenceLocale {
     id: number;
     uuid: string;
     reference: string;
-    code_ticket: string | null;
+    telephone: string | null;
     nom: string;
     ville_id: number;
     ville_nom: string;

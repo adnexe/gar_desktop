@@ -168,7 +168,7 @@ interface DetailsCourrier {
     numero_courrier: string;
     destination: string;
     agence_arrivee: string | null;
-    agence_arrivee_code: string | null;
+    agence_arrivee_telephone: string | null;
     voyage: string | null;
     expediteur_nom: string;
     expediteur_telephone: string;
@@ -178,7 +178,7 @@ interface DetailsCourrier {
     montant_colis: number;
     montant_total: number;
     agence_depart: string | null;
-    agence_depart_code: string | null;
+    agence_depart_telephone: string | null;
     agent: string | null;
     created_at: string;
     colis: { nom: string; type: string; quantite: number; montant: number }[];
@@ -208,7 +208,7 @@ const recuReimpression = computed(() => {
         numero_courrier: c.numero_courrier,
         destination: c.destination,
         agence_arrivee: c.agence_arrivee,
-        agence_arrivee_code: c.agence_arrivee_code,
+        agence_arrivee_telephone: c.agence_arrivee_telephone,
         voyage: c.voyage,
         expediteur: `${c.expediteur_nom} (${c.expediteur_telephone})`.trim(),
         expediteur_nom: c.expediteur_nom,
@@ -221,7 +221,7 @@ const recuReimpression = computed(() => {
         montant_colis: c.montant_colis,
         montant_total: c.montant_total,
         agence_depart: c.agence_depart,
-        agence_depart_code: c.agence_depart_code,
+        agence_depart_telephone: c.agence_depart_telephone,
         agent: c.agent,
         created_at: formatDateHeure(c.created_at),
         compagnie: config.compagnie,

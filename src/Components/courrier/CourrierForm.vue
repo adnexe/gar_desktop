@@ -20,7 +20,7 @@ import { useSessionStore } from '@/Stores/session';
 import type { CourrierDuJour } from '@/types/courrier';
 
 interface Ville { id: number; uuid: string; nom: string }
-interface Agence { id: number; uuid: string; nom: string; ville_id: number; code_ticket: string | null }
+interface Agence { id: number; uuid: string; nom: string; ville_id: number; telephone: string | null }
 interface VoyageOption { id: number; uuid: string; date_depart: string; heure_depart: string; itineraire_nom: string | null }
 interface LigneColis { nom: string; type: string; quantite: number; prix: number }
 
@@ -73,7 +73,7 @@ const recu = ref<{
     numero_courrier: string;
     destination: string;
     agence_arrivee: string | null;
-    agence_arrivee_code: string | null;
+    agence_arrivee_telephone: string | null;
     voyage: string | null;
     expediteur: string;
     expediteur_nom: string;
@@ -86,7 +86,7 @@ const recu = ref<{
     montant_colis: number;
     montant_total: number;
     agence_depart: string | null;
-    agence_depart_code: string | null;
+    agence_depart_telephone: string | null;
     agent: string | null;
     created_at: string;
     compagnie: CompagnieLocale | null;
@@ -370,7 +370,7 @@ async function envoyer() {
             numero_courrier: reponse.courrier.numeroCourrier,
             destination,
             agence_arrivee: agenceDestination?.nom ?? null,
-            agence_arrivee_code: agenceDestination?.code_ticket ?? null,
+            agence_arrivee_telephone: agenceDestination?.telephone ?? null,
             voyage: voyageLabel,
             expediteur: `${nomComplet(expediteur)} (${expediteur.telephone})`.trim(),
             expediteur_nom: nomComplet(expediteur),
@@ -388,7 +388,7 @@ async function envoyer() {
             montant_colis: reponse.courrier.montantColis,
             montant_total: reponse.courrier.montantTotal,
             agence_depart: agenceActuelle.nom,
-            agence_depart_code: agenceActuelle.code_ticket,
+            agence_depart_telephone: agenceActuelle.telephone,
             agent: session.nom || null,
             created_at: dateHeureRecu(),
             compagnie: config.compagnie,
