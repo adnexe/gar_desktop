@@ -34,6 +34,7 @@ export interface CourrierDuJour {
     destination: string;
     destinataire: string;
     montant_total: number;
+    montant_colis: number;
 }
 
 export class CourrierRepository {
@@ -56,7 +57,8 @@ export class CourrierRepository {
             .prepare(
                 `SELECT c.uuid, c.numero_courrier, time(c.created_at) AS heure, v.nom AS destination,
                         (cl.prenoms || ' ' || cl.nom) AS destinataire, cl.telephone AS destinataire_telephone,
-                        (ex.prenoms || ' ' || ex.nom) AS expediteur, ex.telephone AS expediteur_telephone, c.montant_total
+                        (ex.prenoms || ' ' || ex.nom) AS expediteur, ex.telephone AS expediteur_telephone,
+                        c.montant_total, c.montant_colis
                  FROM courriers c
                  JOIN villes v ON v.id = c.ville_arrivee_id
                  JOIN clients cl ON cl.id = c.destinataire_id

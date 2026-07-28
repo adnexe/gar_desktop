@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { ClipboardList, Plus, Printer, Receipt, Ticket } from '@lucide/vue';
+import { BriefcaseBusiness, ClipboardList, Plus, Printer, Receipt, Stamp, Ticket } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import VenteForm from '@/Components/vente/VenteForm.vue';
 import FinDeCaisseRecu, { type RapportFinDeCaisse } from '@/Components/vente/FinDeCaisseRecu.vue';
@@ -59,6 +59,7 @@ const ventesAffichees = computed(() => {
     );
 });
 const totalDuJour = computed(() => ventesDuJour.value.reduce((total, vente) => total + vente.total, 0));
+const timbreDuJour = computed(() => ventesDuJour.value.reduce((total, vente) => total + vente.timbre, 0));
 
 async function chargerVentes() {
     if (!session.agenceId) {
@@ -165,14 +166,46 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 </div>
             </div>
 
+            <section class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div class="rounded-lg border border-sky-200/70 bg-card p-4 shadow-sm dark:border-sky-900/60">
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm font-medium text-muted-foreground">Tickets</p>
+                        <span class="rounded-md bg-sky-500/10 p-2 text-sky-600 dark:text-sky-300">
+                            <Ticket class="size-5" />
+                        </span>
+                    </div>
+                    <p class="mt-3 text-2xl font-semibold">{{ ventesDuJour.length }}</p>
+                    <p class="mt-1 text-sm text-muted-foreground">{{ dateFiltre === aujourdhui() ? "Aujourd'hui" : dateFiltre }}</p>
+                </div>
+
+                <div class="rounded-lg border border-emerald-200/70 bg-card p-4 shadow-sm dark:border-emerald-900/60">
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm font-medium text-muted-foreground">Montant total</p>
+                        <span class="rounded-md bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-300">
+                            <BriefcaseBusiness class="size-5" />
+                        </span>
+                    </div>
+                    <p class="mt-3 text-2xl font-semibold">{{ formatMontant(totalDuJour) }}</p>
+                    <p class="mt-1 text-sm text-muted-foreground">Prix + timbre encaissés</p>
+                </div>
+
+                <div class="rounded-lg border border-amber-200/80 bg-card p-4 shadow-sm dark:border-amber-900/60">
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm font-medium text-muted-foreground">Timbre total</p>
+                        <span class="rounded-md bg-amber-500/10 p-2 text-amber-600 dark:text-amber-300">
+                            <Stamp class="size-5" />
+                        </span>
+                    </div>
+                    <p class="mt-3 text-2xl font-semibold">{{ formatMontant(timbreDuJour) }}</p>
+                    <p class="mt-1 text-sm text-muted-foreground">Timbre fiscal encaissé</p>
+                </div>
+            </section>
+
             <div class="overflow-hidden rounded-lg border bg-card p-5 shadow-sm">
                 <div class="mb-3 flex items-center justify-between">
                     <p class="flex items-center gap-2 text-base font-medium">
                         <Receipt class="size-4" /> Ventes du {{ dateFiltre === aujourdhui() ? "jour" : dateFiltre }}
                     </p>
-                    <span class="text-lg font-semibold">
-                        Total : {{ formatMontant(totalDuJour) }}
-                    </span>
                 </div>
 
                 <Input v-model="recherche" placeholder="Rechercher : n° ticket, client, téléphone…" class="mb-3 h-10 max-w-md text-base" />

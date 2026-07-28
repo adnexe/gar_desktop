@@ -8,4 +8,5 @@ export interface CourrierDuJour {
     expediteur?: string | null;
     expediteur_telephone?: string | null;
     montant_total: number;
+    montant_colis: number;
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { ClipboardList, Package, Plus, Printer } from '@lucide/vue';
+import { BriefcaseBusiness, ClipboardList, Package, Plus, Printer, Tag } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import BagageForm from '@/Components/bagage/BagageForm.vue';
 import BagageRecu from '@/Components/bagage/BagageRecu.vue';
@@ -65,6 +65,7 @@ const bagagesAffiches = computed(() => {
     );
 });
 const totalDuJour = computed(() => bagages.value.reduce((s, b) => s + b.montant, 0));
+const valeurDuJour = computed(() => bagages.value.reduce((s, b) => s + (b.valeur ?? 0), 0));
 
 const dialogOuvert = ref(false);
 const bagageForm = ref<InstanceType<typeof BagageForm> | null>(null);
@@ -257,12 +258,42 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 </div>
             </div>
 
-            <div class="overflow-hidden rounded-lg border bg-card p-5 shadow-sm">
-                <div class="mb-3 flex items-center justify-between">
-                    <p class="text-base font-medium">Bagages du {{ dateFiltre === aujourdhui() ? 'jour' : dateFiltre }}</p>
-                    <span class="text-lg font-semibold">Total : {{ formatMontant(totalDuJour) }}</span>
+            <section class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div class="rounded-lg border border-violet-200/70 bg-card p-4 shadow-sm dark:border-violet-900/60">
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm font-medium text-muted-foreground">Bagages</p>
+                        <span class="rounded-md bg-violet-500/10 p-2 text-violet-600 dark:text-violet-300">
+                            <Package class="size-5" />
+                        </span>
+                    </div>
+                    <p class="mt-3 text-2xl font-semibold">{{ bagages.length }}</p>
+                    <p class="mt-1 text-sm text-muted-foreground">{{ dateFiltre === aujourdhui() ? "Aujourd'hui" : dateFiltre }}</p>
                 </div>
 
+                <div class="rounded-lg border border-emerald-200/70 bg-card p-4 shadow-sm dark:border-emerald-900/60">
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm font-medium text-muted-foreground">Montant total</p>
+                        <span class="rounded-md bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-300">
+                            <BriefcaseBusiness class="size-5" />
+                        </span>
+                    </div>
+                    <p class="mt-3 text-2xl font-semibold">{{ formatMontant(totalDuJour) }}</p>
+                    <p class="mt-1 text-sm text-muted-foreground">Montant encaissé</p>
+                </div>
+
+                <div class="rounded-lg border border-amber-200/80 bg-card p-4 shadow-sm dark:border-amber-900/60">
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm font-medium text-muted-foreground">Valeur déclarée</p>
+                        <span class="rounded-md bg-amber-500/10 p-2 text-amber-600 dark:text-amber-300">
+                            <Tag class="size-5" />
+                        </span>
+                    </div>
+                    <p class="mt-3 text-2xl font-semibold">{{ formatMontant(valeurDuJour) }}</p>
+                    <p class="mt-1 text-sm text-muted-foreground">Valeur déclarée, non encaissée</p>
+                </div>
+            </section>
+
+            <div class="overflow-hidden rounded-lg border bg-card p-5 shadow-sm">
                 <Input v-model="recherche" placeholder="Rechercher : n° bagage, n° ticket, client, téléphone…" class="mb-3 h-10 max-w-md text-base" />
 
                 <p v-if="bagagesAffiches.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">{{ recherche ? 'Aucun résultat pour cette recherche.' : 'Aucun bagage pour cette date.' }}</p>
