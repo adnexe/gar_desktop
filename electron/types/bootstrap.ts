@@ -2,6 +2,17 @@ export interface VilleApi {
     id: number;
     uuid: string;
     nom: string;
+    pays_id?: number | null;
+    actif: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PaysApi {
+    id: number;
+    uuid: string;
+    nom: string;
+    code: string;
     actif: boolean;
     created_at: string;
     updated_at: string;
@@ -42,6 +53,11 @@ export interface TarifApi {
     actif: boolean;
     created_at: string;
     updated_at: string;
+    // Le serveur charge cette relation (voir DesktopBootstrapController) : un
+    // tarif peut référencer un trajet qui n'apparaît dans aucun itinéraire
+    // actif (trajet non rattaché, ou itinéraire désactivé après coup) — sans
+    // ce trajet imbriqué, l'insertion du tarif viole la FK locale.
+    trajet?: TrajetApi | null;
 }
 
 export interface ChauffeurApi {
@@ -144,6 +160,7 @@ export interface BootstrapResponse {
     agence: AgenceApi;
     agences?: AgenceApi[];
     compagnie: CompagnieApi;
+    pays?: PaysApi[];
     villes: VilleApi[];
     itineraires: ItineraireApi[];
     tarifs: TarifApi[];

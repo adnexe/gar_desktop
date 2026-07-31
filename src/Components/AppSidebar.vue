@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router';
-import { Bus, Car, History, LayoutGrid, Luggage, Mail, Settings, Tags, Ticket, UserCog, Users } from '@lucide/vue';
+import { Bus, Car, Globe2, History, LayoutGrid, Luggage, Mail, Settings, Tags, Ticket, UserCog, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/Components/AppLogo.vue';
 import NavMain from '@/Components/NavMain.vue';
@@ -24,9 +24,10 @@ const config = useConfigStore();
 const mainNavItems = computed<NavItem[]>(() => {
     const items: NavItem[] = [{ title: 'Tableau de bord', routeName: 'dashboard', icon: LayoutGrid }];
 
-    if (session.peutModule('ticket')) items.push({ title: 'Vente de tickets', routeName: 'vente', icon: Ticket });
-    if (session.peutModule('bagage')) items.push({ title: 'Bagages', routeName: 'bagages', icon: Luggage });
-    if (session.peutModule('courrier')) items.push({ title: 'Courrier', routeName: 'courrier', icon: Mail });
+    if (session.peutModule('ticket') && config.moduleActif('ticket')) items.push({ title: 'Vente de tickets', routeName: 'vente', icon: Ticket });
+    if (session.peutModule('bagage') && config.moduleActif('bagage')) items.push({ title: 'Bagages', routeName: 'bagages', icon: Luggage });
+    if (session.peutModule('courrier') && config.moduleActif('courrier')) items.push({ title: 'Courrier', routeName: 'courrier', icon: Mail });
+    if (session.peutModule('courrier_international') && config.moduleActif('courrier_international')) items.push({ title: 'Courrier international', routeName: 'courrier-international', icon: Globe2 });
 
     return items;
 });

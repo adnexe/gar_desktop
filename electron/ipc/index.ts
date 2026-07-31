@@ -42,6 +42,7 @@ import { ReferentielController } from '../controllers/ReferentielController';
 import { VenteController } from '../controllers/VenteController';
 import { BagageController } from '../controllers/BagageController';
 import { CourrierController } from '../controllers/CourrierController';
+import { CourrierInternationalController } from '../controllers/CourrierInternationalController';
 import { VoyageController } from '../controllers/VoyageController';
 import { HistoriqueController } from '../controllers/HistoriqueController';
 import { logger } from '../logger';
@@ -473,6 +474,8 @@ export function enregistrerIpc(): void {
     gerer('agents:supprimerLocalement', AgentController.supprimerLocalement);
 
     gerer('referentiel:villes', ReferentielController.villes);
+    gerer('referentiel:pays', ReferentielController.pays);
+    gerer('referentiel:villesParPays', ReferentielController.villesParPays);
     gerer('referentiel:agencesParVille', ReferentielController.agencesParVille);
     gerer('referentiel:voyagesDeAgence', ReferentielController.voyagesDeAgence);
     gerer('referentiel:tarifsAgence', ReferentielController.tarifsAgence);
@@ -523,12 +526,21 @@ export function enregistrerIpc(): void {
     gerer('bagage:details', BagageController.details);
     gerer('bagage:finDeCaisse', BagageController.finDeCaisse);
 
+    gerer('courrier:preparerNumero', CourrierController.preparerNumero);
     gerer('courrier:enregistrer', CourrierController.enregistrer);
     gerer('courrier:confirmerImpression', CourrierController.confirmerImpression);
     gerer('courrier:annulerImpression', CourrierController.annulerImpression);
     gerer('courrier:duJour', CourrierController.duJour);
     gerer('courrier:details', CourrierController.details);
     gerer('courrier:finDeCaisse', CourrierController.finDeCaisse);
+
+    gerer('courrierInternational:preparerNumero', CourrierInternationalController.preparerNumero);
+    gerer('courrierInternational:enregistrer', CourrierInternationalController.enregistrer);
+    gerer('courrierInternational:confirmerImpression', CourrierInternationalController.confirmerImpression);
+    gerer('courrierInternational:annulerImpression', CourrierInternationalController.annulerImpression);
+    gerer('courrierInternational:duJour', CourrierInternationalController.duJour);
+    gerer('courrierInternational:details', CourrierInternationalController.details);
+    gerer('courrierInternational:finDeCaisse', CourrierInternationalController.finDeCaisse);
 
     gerer('voyage:formulaire', VoyageController.formulaire);
     gerer('voyage:creer', VoyageController.creer);

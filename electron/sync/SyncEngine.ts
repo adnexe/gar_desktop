@@ -182,6 +182,8 @@ export class SyncEngine {
                 return this.bagagePayload(ligne.entite_uuid);
             case 'courriers':
                 return this.courrierPayload(ligne.entite_uuid);
+            case 'courriers_internationaux':
+                return this.courrierInternationalPayload(ligne.entite_uuid);
             case 'users':
                 return JSON.parse(ligne.payload) as Record<string, unknown>;
             default:
@@ -280,6 +282,42 @@ export class SyncEngine {
                 `SELECT uuid, nom, type, quantite, prix, montant, created_at, updated_at
                  FROM colis
                  WHERE courrier_id = (SELECT id FROM courriers WHERE uuid = ?)
+                 ORDER BY id ASC`,
+            )
+            .all(uuid) as Record<string, unknown>[];
+
+        return {
+            ...ligne,
+            expediteur: typeof ligne.expediteur_uuid === 'string' ? this.clientPayload(ligne.expediteur_uuid) : null,
+            destinataire: typeof ligne.destinataire_uuid === 'string' ? this.clientPayload(ligne.destinataire_uuid) : null,
+            colis,
+        };
+    }
+
+    private courrierInternationalPayload(uuid: string): Record<string, unknown> | null {
+        const ligne = getDb()
+            .prepare(
+                `SELECT c.uuid, c.numero_courrier, c.agence_depart_id, c.pays_destination_id, c.ville_destination_id,
+                        c.user_id, c.agent_id, c.pays_destination, c.ville_destination, c.adresse_destination,
+                        c.transporteur, c.tracking_externe, c.mode_facturation, c.pourcentage_frais,
+                        c.frais_expedition, c.valeur_colis, c.montant_total, c.statut,
+                        c.observation, c.created_at, c.updated_at,
+                        exp.uuid AS expediteur_uuid,
+                        dest.uuid AS destinataire_uuid
+                 FROM courriers_internationaux c
+                 JOIN clients exp ON exp.id = c.expediteur_id
+                 JOIN clients dest ON dest.id = c.destinataire_id
+                 WHERE c.uuid = ?`,
+            )
+            .get(uuid) as Record<string, unknown> | undefined;
+
+        if (!ligne) return null;
+
+        const colis = getDb()
+            .prepare(
+                `SELECT uuid, nom, type, quantite, poids_kg, prix, montant, frais_unitaire, frais_expedition, created_at, updated_at
+                 FROM colis_internationaux
+                 WHERE courrier_international_id = (SELECT id FROM courriers_internationaux WHERE uuid = ?)
                  ORDER BY id ASC`,
             )
             .all(uuid) as Record<string, unknown>[];

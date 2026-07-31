@@ -281,7 +281,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     <DialogTitle class="flex items-center gap-2"><ClipboardList class="size-5" /> Fin de caisse — {{ dateFiltre }}</DialogTitle>
                 </DialogHeader>
 
-                <p class="text-sm text-muted-foreground">{{ salutationFinDeCaisse }}, {{ session.nom }} ! Voici le récap.</p>
+                <p class="text-sm text-muted-foreground">{{ salutationFinDeCaisse }}, {{ session.nom }} ! Voici le récap 🎟️</p>
 
                 <Select v-model="voyageFinDeCaisseId">
                     <SelectTrigger class="w-full max-w-full [&>span]:truncate"><SelectValue placeholder="Tous les voyages" /></SelectTrigger>

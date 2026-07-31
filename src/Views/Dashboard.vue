@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { Activity, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, Package, Send, Ticket } from '@lucide/vue';
+import { Activity, ArrowRight, BadgeCheck, BriefcaseBusiness, CalendarDays, Globe2, Package, Send, Ticket } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { choisirSalutation } from '@/composables/useSalutation';
 import { useConfigStore } from '@/Stores/config';
@@ -10,14 +10,15 @@ import { useSessionStore } from '@/Stores/session';
 interface TicketDuJour { montant: number; timbre: number; total?: number }
 interface BagageDuJour { montant: number }
 interface CourrierDuJour { montant_total: number }
+interface CourrierInternationalDuJour { montant_total: number }
 
 const session = useSessionStore();
 const config = useConfigStore();
-const resume = ref({ tickets: 0, totalTickets: 0, bagages: 0, totalBagages: 0, courriers: 0, totalCourriers: 0 });
+const resume = ref({ tickets: 0, totalTickets: 0, bagages: 0, totalBagages: 0, courriers: 0, totalCourriers: 0, courriersInternationaux: 0, totalCourriersInternationaux: 0 });
 
 const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + ' FCFA';
-const totalOperations = computed(() => resume.value.tickets + resume.value.bagages + resume.value.courriers);
-const totalEncaisse = computed(() => resume.value.totalTickets + resume.value.totalBagages + resume.value.totalCourriers);
+const totalOperations = computed(() => resume.value.tickets + resume.value.bagages + resume.value.courriers + resume.value.courriersInternationaux);
+const totalEncaisse = computed(() => resume.value.totalTickets + resume.value.totalBagages + resume.value.totalCourriers + resume.value.totalCourriersInternationaux);
 const roles: Record<string, string> = {
     super_admin: 'Super admin',
     admin: 'Admin',
@@ -25,9 +26,10 @@ const roles: Record<string, string> = {
     agent: 'Agent',
 };
 const modulesActifs = computed(() => [
-    session.peutModule('ticket') ? 'Ticket' : null,
-    session.peutModule('bagage') ? 'Bagage' : null,
-    session.peutModule('courrier') ? 'Courrier' : null,
+    session.peutModule('ticket') && config.moduleActif('ticket') ? 'Ticket' : null,
+    session.peutModule('bagage') && config.moduleActif('bagage') ? 'Bagage' : null,
+    session.peutModule('courrier') && config.moduleActif('courrier') ? 'Courrier' : null,
+    session.peutModule('courrier_international') && config.moduleActif('courrier_international') ? 'International' : null,
 ].filter(Boolean).join(' · '));
 const roleLabel = computed(() => roles[session.role] ?? session.role);
 const dateDuJour = new Intl.DateTimeFormat('fr-FR', {
@@ -45,15 +47,18 @@ const userIdFiltre = computed(() => ['super_admin', 'admin', 'chef_gare'].includ
 
 onMounted(async () => {
     if (!session.agenceId) return;
-    const [tickets, bagages, courriers] = await Promise.all([
-        session.peutModule('ticket')
+    const [tickets, bagages, courriers, courriersInternationaux] = await Promise.all([
+        session.peutModule('ticket') && config.moduleActif('ticket')
             ? window.api.vente.ventesDuJour(session.agenceId, undefined, userIdFiltre.value) as Promise<TicketDuJour[]>
             : Promise.resolve([]),
-        session.peutModule('bagage')
+        session.peutModule('bagage') && config.moduleActif('bagage')
             ? window.api.bagage.duJour(session.agenceId, undefined, userIdFiltre.value) as Promise<BagageDuJour[]>
             : Promise.resolve([]),
-        session.peutModule('courrier')
+        session.peutModule('courrier') && config.moduleActif('courrier')
             ? window.api.courrier.duJour(session.agenceId, undefined, userIdFiltre.value) as Promise<CourrierDuJour[]>
+            : Promise.resolve([]),
+        session.peutModule('courrier_international') && config.moduleActif('courrier_international')
+            ? window.api.courrierInternational.duJour(session.agenceId, undefined, userIdFiltre.value) as Promise<CourrierInternationalDuJour[]>
             : Promise.resolve([]),
     ]);
 
@@ -64,6 +69,8 @@ onMounted(async () => {
         totalBagages: bagages.reduce((s, b) => s + b.montant, 0),
         courriers: courriers.length,
         totalCourriers: courriers.reduce((s, c) => s + c.montant_total, 0),
+        courriersInternationaux: courriersInternationaux.length,
+        totalCourriersInternationaux: courriersInternationaux.reduce((s, c) => s + c.montant_total, 0),
     };
 });
 </script>
@@ -147,7 +154,7 @@ onMounted(async () => {
 
             <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
                 <RouterLink
-                    v-if="session.peutModule('ticket')"
+                    v-if="session.peutModule('ticket') && config.moduleActif('ticket')"
                     :to="{ name: 'vente' }"
                     class="group rounded-lg border border-sky-200/70 bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md dark:border-sky-900/60"
                 >
@@ -162,7 +169,7 @@ onMounted(async () => {
                     <p class="mt-1 text-[0.95rem] font-medium text-sky-700 dark:text-sky-300">{{ formatMontant(resume.totalTickets) }}</p>
                 </RouterLink>
                 <RouterLink
-                    v-if="session.peutModule('bagage')"
+                    v-if="session.peutModule('bagage') && config.moduleActif('bagage')"
                     :to="{ name: 'bagages' }"
                     class="group rounded-lg border border-amber-200/80 bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md dark:border-amber-900/60"
                 >
@@ -177,7 +184,7 @@ onMounted(async () => {
                     <p class="mt-1 text-[0.95rem] font-medium text-amber-700 dark:text-amber-300">{{ formatMontant(resume.totalBagages) }}</p>
                 </RouterLink>
                 <RouterLink
-                    v-if="session.peutModule('courrier')"
+                    v-if="session.peutModule('courrier') && config.moduleActif('courrier')"
                     :to="{ name: 'courrier' }"
                     class="group rounded-lg border border-violet-200/70 bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-md dark:border-violet-900/60"
                 >
@@ -190,6 +197,21 @@ onMounted(async () => {
                     <p class="mt-4 text-[0.95rem] text-muted-foreground">Courriers du jour</p>
                     <p class="mt-1 text-3xl font-semibold">{{ resume.courriers }}</p>
                     <p class="mt-1 text-[0.95rem] font-medium text-violet-700 dark:text-violet-300">{{ formatMontant(resume.totalCourriers) }}</p>
+                </RouterLink>
+                <RouterLink
+                    v-if="session.peutModule('courrier_international') && config.moduleActif('courrier_international')"
+                    :to="{ name: 'courrier-international' }"
+                    class="group rounded-lg border border-emerald-200/70 bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md dark:border-emerald-900/60"
+                >
+                    <div class="flex items-start justify-between gap-3">
+                        <span class="rounded-lg bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-300">
+                            <Globe2 class="size-6" />
+                        </span>
+                        <ArrowRight class="size-5 text-muted-foreground transition group-hover:translate-x-1 group-hover:text-emerald-600" />
+                    </div>
+                    <p class="mt-4 text-[0.95rem] text-muted-foreground">Courriers internationaux</p>
+                    <p class="mt-1 text-3xl font-semibold">{{ resume.courriersInternationaux }}</p>
+                    <p class="mt-1 text-[0.95rem] font-medium text-emerald-700 dark:text-emerald-300">{{ formatMontant(resume.totalCourriersInternationaux) }}</p>
                 </RouterLink>
             </div>
         </div>

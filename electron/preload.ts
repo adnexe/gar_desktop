@@ -31,6 +31,8 @@ const api = {
     },
     referentiel: {
         villes: () => ipcRenderer.invoke('referentiel:villes'),
+        pays: () => ipcRenderer.invoke('referentiel:pays'),
+        villesParPays: (paysId: number) => ipcRenderer.invoke('referentiel:villesParPays', paysId),
         agencesParVille: (villeId: number) => ipcRenderer.invoke('referentiel:agencesParVille', villeId),
         voyagesDeAgence: (agenceId: number) => ipcRenderer.invoke('referentiel:voyagesDeAgence', agenceId),
         tarifsAgence: (agenceId: number) => ipcRenderer.invoke('referentiel:tarifsAgence', agenceId),
@@ -76,6 +78,15 @@ const api = {
         duJour: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('courrier:duJour', agenceId, date, userId),
         details: (uuid: string) => ipcRenderer.invoke('courrier:details', uuid),
         finDeCaisse: (agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) => ipcRenderer.invoke('courrier:finDeCaisse', agenceId, date, voyageId, userId),
+    },
+    courrierInternational: {
+        preparerNumero: (agenceId: number) => ipcRenderer.invoke('courrierInternational:preparerNumero', agenceId),
+        enregistrer: (demande: unknown) => ipcRenderer.invoke('courrierInternational:enregistrer', demande),
+        confirmerImpression: (uuid: string) => ipcRenderer.invoke('courrierInternational:confirmerImpression', uuid),
+        annulerImpression: (uuid: string, motif: string) => ipcRenderer.invoke('courrierInternational:annulerImpression', uuid, motif),
+        duJour: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('courrierInternational:duJour', agenceId, date, userId),
+        details: (uuid: string) => ipcRenderer.invoke('courrierInternational:details', uuid),
+        finDeCaisse: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('courrierInternational:finDeCaisse', agenceId, date, userId),
     },
     voyage: {
         formulaire: (agenceId: number) => ipcRenderer.invoke('voyage:formulaire', agenceId),

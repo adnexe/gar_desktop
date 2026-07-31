@@ -39,8 +39,13 @@ async function valider() {
         messageLicence.value = licence.message;
         await config.configurer(referenceAgence, 'poste-caisse', code);
         router.push({ name: 'connexion' });
-    } catch {
-        erreur.value = "Référence agence introuvable, agence désactivée, ou pas de connexion internet pour ce premier réglage.";
+    } catch (e) {
+        // Le message de succès de la licence (ci-dessus) ne doit pas rester
+        // affiché en même temps qu'une erreur survenue après coup (bootstrap) :
+        // sinon on voit "licence active" et l'erreur en même temps, trompeur.
+        messageLicence.value = '';
+        licenceBloquee.value = false;
+        erreur.value = messageErreurConfiguration(e);
     } finally {
         enCours.value = false;
     }
@@ -48,6 +53,19 @@ async function valider() {
 
 function normaliserCodePoste(valeur: string) {
     return valeur.trim().padStart(3, '0');
+}
+
+// L'erreur traverse l'IPC Electron : le message d'origine (déjà précis,
+// voir BootstrapService.messageErreurBootstrap) survit dans e.message, mais
+// préfixé par Electron ("Error invoking remote method ...: Error: ...").
+function messageErreurConfiguration(e: unknown): string {
+    if (!(e instanceof Error)) {
+        return "Référence agence introuvable, agence désactivée, ou pas de connexion internet pour ce premier réglage.";
+    }
+
+    return e.message
+        .replace(/^Error invoking remote method '[^']+': Error: /, '')
+        .replace(/^Error invoking remote method "[^"]+": Error: /, '');
 }
 
 </script>

@@ -164,6 +164,10 @@ export function prevoirNumeroCourrier(db: Database.Database, codePoste?: string 
     return prevoirNumeroPrefixe(db, 'courriers', 'numero_courrier', 'courrier_sequence', codePoste, codeAgence);
 }
 
+export function prevoirNumeroCourrierInternational(db: Database.Database, codePoste?: string | null, codeAgence?: string | null): string | null {
+    return prevoirNumeroPrefixe(db, 'courriers_internationaux', 'numero_courrier', 'courrier_international_sequence', codePoste, codeAgence);
+}
+
 export function genererNumeroTicket(db: Database.Database, codePoste?: string | null, codeAgence?: string | null, numeroPrepare?: string | null): string {
     return utiliserNumeroPrepare(db, 'tickets', 'numero_ticket', 'ticket_sequence', codePoste, codeAgence, numeroPrepare)
         ?? utiliserNumeroPrepareExterne(db, 'tickets', 'numero_ticket', numeroPrepare)
@@ -185,4 +189,10 @@ export function genererNumeroCourrier(db: Database.Database, codePoste?: string 
     return utiliserNumeroPrepare(db, 'courriers', 'numero_courrier', 'courrier_sequence', codePoste, codeAgence, numeroPrepare)
         ?? genererNumeroPrefixe(db, 'courriers', 'numero_courrier', 'courrier_sequence', codePoste, codeAgence)
         ?? genererNumeroUnique(db, 'courriers', 'numero_courrier');
+}
+
+export function genererNumeroCourrierInternational(db: Database.Database, codePoste?: string | null, codeAgence?: string | null, numeroPrepare?: string | null): string {
+    return utiliserNumeroPrepare(db, 'courriers_internationaux', 'numero_courrier', 'courrier_international_sequence', codePoste, codeAgence, numeroPrepare)
+        ?? genererNumeroPrefixe(db, 'courriers_internationaux', 'numero_courrier', 'courrier_international_sequence', codePoste, codeAgence)
+        ?? genererNumeroUnique(db, 'courriers_internationaux', 'numero_courrier');
 }

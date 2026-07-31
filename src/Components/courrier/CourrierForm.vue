@@ -148,7 +148,6 @@ const nbColis = computed(() => colisListe.value.reduce((s, c) => s + c.quantite,
 const peutEnvoyer = computed(() =>
     !!config.agence &&
     !!villeArriveeId.value &&
-    !!agenceArriveeId.value &&
     expediteur.nom.trim().length > 0 &&
     expediteur.telephone.trim().length > 0 &&
     destinataire.nom.trim().length > 0 &&
@@ -320,8 +319,8 @@ async function reimprimer(partie: 'recu' | 'etiquette') {
 }
 
 async function envoyer() {
-    if (!config.agence || !villeArriveeId.value || !agenceArriveeId.value || !session.userId) {
-        erreur.value = "Choisissez la ville et l'agence de destination.";
+    if (!config.agence || !villeArriveeId.value || !session.userId) {
+        erreur.value = 'Choisissez la ville de destination.';
         return;
     }
 
@@ -476,15 +475,16 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     </Select>
                 </div>
                 <div class="space-y-1.5">
-                    <Label>Agence de destination</Label>
+                    <Label>Agence de destination <span class="text-muted-foreground">(facultatif)</span></Label>
                     <Select v-model="agenceArriveeId" :disabled="!villeArriveeId">
-                        <SelectTrigger class="h-10 w-full"><SelectValue placeholder="Choisir une agence" /></SelectTrigger>
+                        <SelectTrigger class="h-10 w-full"><SelectValue placeholder="Aucune agence précise" /></SelectTrigger>
                         <SelectContent>
+                            <SelectItem :value="null">Aucune agence précise</SelectItem>
                             <SelectItem v-for="a in agencesDestination" :key="a.id" :value="a.id">{{ a.nom }}</SelectItem>
                         </SelectContent>
                     </Select>
                     <p v-if="villeArriveeId && agencesDestination.length === 0" class="text-xs text-muted-foreground">
-                        Aucune agence dans cette ville.
+                        Aucune agence dans cette ville — le colis sera retirable dans n'importe laquelle.
                     </p>
                 </div>
                 <div class="space-y-1.5">

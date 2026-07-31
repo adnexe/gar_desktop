@@ -411,4 +411,68 @@ export const migrations: { nom: string; sql: string }[] = [
             ALTER TABLE tickets ADD COLUMN commission REAL NOT NULL DEFAULT 0;
         `,
     },
+    {
+        nom: '0017_courriers_internationaux',
+        sql: `
+            CREATE TABLE IF NOT EXISTS pays (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                nom TEXT NOT NULL,
+                code TEXT NOT NULL UNIQUE,
+                actif INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            ALTER TABLE villes ADD COLUMN pays_id INTEGER REFERENCES pays(id);
+            CREATE INDEX IF NOT EXISTS idx_villes_pays_id ON villes(pays_id);
+
+            CREATE TABLE IF NOT EXISTS courriers_internationaux (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                numero_courrier TEXT NOT NULL UNIQUE,
+                agence_depart_id INTEGER NOT NULL REFERENCES agences(id),
+                pays_destination_id INTEGER REFERENCES pays(id),
+                ville_destination_id INTEGER REFERENCES villes(id),
+                expediteur_id INTEGER NOT NULL REFERENCES clients(id),
+                destinataire_id INTEGER NOT NULL REFERENCES clients(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                agent_id INTEGER REFERENCES agents(id),
+                pays_destination TEXT NOT NULL,
+                ville_destination TEXT NOT NULL,
+                adresse_destination TEXT,
+                transporteur TEXT,
+                tracking_externe TEXT,
+                mode_facturation TEXT NOT NULL DEFAULT 'par_colis',
+                pourcentage_frais REAL,
+                frais_expedition REAL NOT NULL DEFAULT 0,
+                valeur_colis REAL NOT NULL DEFAULT 0,
+                montant_total REAL NOT NULL DEFAULT 0,
+                statut TEXT NOT NULL DEFAULT 'enregistre',
+                observation TEXT,
+                impression_confirmee_at TEXT,
+                annule_at TEXT,
+                motif_annulation TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_courriers_internationaux_agence_date ON courriers_internationaux(agence_depart_id, created_at);
+
+            CREATE TABLE IF NOT EXISTS colis_internationaux (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                courrier_international_id INTEGER NOT NULL REFERENCES courriers_internationaux(id) ON DELETE CASCADE,
+                nom TEXT NOT NULL,
+                type TEXT NOT NULL,
+                quantite INTEGER NOT NULL DEFAULT 1,
+                poids_kg REAL,
+                prix REAL NOT NULL,
+                montant REAL NOT NULL,
+                frais_unitaire REAL,
+                frais_expedition REAL,
+                created_at TEXT,
+                updated_at TEXT
+            );
+        `,
+    },
 ];

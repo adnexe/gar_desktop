@@ -27,12 +27,20 @@ export class CatalogueRepository {
             db.prepare('UPDATE agents SET actif = 0 WHERE agence_id = ?').run(bootstrap.agence.id);
             db.prepare('UPDATE users SET actif = 0').run();
 
+            const paysStmt = db.prepare(
+                `INSERT OR REPLACE INTO pays (id, uuid, nom, code, actif, created_at, updated_at)
+                 VALUES (@id, @uuid, @nom, @code, @actif, @created_at, @updated_at)`,
+            );
+            for (const pays of bootstrap.pays ?? []) {
+                paysStmt.run({ ...pays, actif: pays.actif ? 1 : 0 });
+            }
+
             const villeStmt = db.prepare(
-                `INSERT OR REPLACE INTO villes (id, uuid, nom, actif, created_at, updated_at)
-                 VALUES (@id, @uuid, @nom, @actif, @created_at, @updated_at)`,
+                `INSERT OR REPLACE INTO villes (id, uuid, nom, pays_id, actif, created_at, updated_at)
+                 VALUES (@id, @uuid, @nom, @pays_id, @actif, @created_at, @updated_at)`,
             );
             for (const v of bootstrap.villes) {
-                villeStmt.run({ ...v, actif: v.actif ? 1 : 0 });
+                villeStmt.run({ ...v, pays_id: v.pays_id ?? null, actif: v.actif ? 1 : 0 });
             }
 
             const agenceStmt = db.prepare(
@@ -90,11 +98,28 @@ export class CatalogueRepository {
                 }
             }
 
+            // IGNORE et non REPLACE : ce trajet peut déjà avoir été inséré
+            // (et lié à un itinéraire) juste au-dessus. Le REPLACE supprime
+            // puis réinsère la ligne pour résoudre le conflit de PK, ce qui
+            // déclenche le ON DELETE CASCADE de itineraire_trajet.trajet_id
+            // et efface silencieusement le lien pivot qu'on vient de créer.
+            const trajetIgnoreStmt = db.prepare(
+                `INSERT OR IGNORE INTO trajets (id, uuid, ville_depart_id, ville_arrivee_id, nom, actif, created_at, updated_at)
+                 VALUES (@id, @uuid, @ville_depart_id, @ville_arrivee_id, @nom, @actif, @created_at, @updated_at)`,
+            );
             const tarifStmt = db.prepare(
                 `INSERT OR REPLACE INTO tarifs (id, uuid, agence_id, trajet_id, type_billet, tarification, montant, actif, created_at, updated_at)
                  VALUES (@id, @uuid, @agence_id, @trajet_id, @type_billet, @tarification, @montant, @actif, @created_at, @updated_at)`,
             );
             for (const t of bootstrap.tarifs) {
+                // Un tarif peut référencer un trajet non rattaché à un
+                // itinéraire actif (voire à aucun itinéraire) : la boucle
+                // itinéraires ci-dessus ne l'aurait alors jamais inséré, et
+                // ce tarif violerait la FK locale au commit — on l'insère
+                // ici au besoin, depuis la relation chargée par le serveur.
+                if (t.trajet) {
+                    trajetIgnoreStmt.run({ ...t.trajet, actif: t.trajet.actif ? 1 : 0 });
+                }
                 tarifStmt.run({ ...t, montant: Number(t.montant), actif: t.actif ? 1 : 0 });
             }
 

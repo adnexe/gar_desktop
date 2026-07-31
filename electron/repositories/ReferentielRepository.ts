@@ -4,6 +4,14 @@ export interface VilleRow {
     id: number;
     uuid: string;
     nom: string;
+    pays_id?: number | null;
+}
+
+export interface PaysRow {
+    id: number;
+    uuid: string;
+    nom: string;
+    code: string;
 }
 
 export interface ItineraireRow {
@@ -62,7 +70,17 @@ export interface VoyageOption {
 
 export class ReferentielRepository {
     villes(): VilleRow[] {
-        return getDb().prepare('SELECT id, uuid, nom FROM villes WHERE actif = 1 ORDER BY nom').all() as VilleRow[];
+        return getDb().prepare('SELECT id, uuid, nom, pays_id FROM villes WHERE actif = 1 ORDER BY nom').all() as VilleRow[];
+    }
+
+    pays(): PaysRow[] {
+        return getDb().prepare('SELECT id, uuid, nom, code FROM pays WHERE actif = 1 ORDER BY nom').all() as PaysRow[];
+    }
+
+    villesParPays(paysId: number): VilleRow[] {
+        return getDb()
+            .prepare('SELECT id, uuid, nom, pays_id FROM villes WHERE actif = 1 AND pays_id = ? ORDER BY nom')
+            .all(paysId) as VilleRow[];
     }
 
     // Une ville peut contenir plusieurs agences (ex : Abidjan → Yopougon,

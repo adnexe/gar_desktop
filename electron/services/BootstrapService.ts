@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { bootstrap as appelBootstrap, reclamerLicence as appelLicence, type LicenceDesktop, type ReponseLicenceDesktop } from '../apiClient';
 import { AgenceRepository } from '../repositories/AgenceRepository';
 import { CatalogueRepository } from '../repositories/CatalogueRepository';
@@ -10,6 +11,37 @@ import { logger } from '../logger';
 // Statuts renvoyés par le serveur qui doivent bloquer le poste (par
 // opposition à une simple panne réseau, qui ne bloque jamais).
 const STATUTS_LICENCE_BLOQUANTS = ['expiree', 'desactivee', 'aucune_licence', 'inexistante', 'agence_desactivee'];
+
+// bootstrap() (contrairement à reclamerLicence()) laisse axios lever une
+// exception sur tout code non-2xx : un 429 (trop de tentatives) ou un 500
+// remontait donc jusqu'à l'écran de config comme "agence introuvable ou
+// pas de connexion", un message faux qui égare l'utilisateur. On distingue
+// ici la vraie cause pour renvoyer un message exploitable.
+function messageErreurBootstrap(erreur: unknown): string {
+    if (axios.isAxiosError(erreur)) {
+        if (!erreur.response) {
+            return 'Pas de connexion internet pour ce premier réglage.';
+        }
+
+        const status = erreur.response.status;
+        const donnees = erreur.response.data as { message?: string } | undefined;
+
+        if (status === 429) {
+            const retryAfter = erreur.response.headers?.['retry-after'];
+            return retryAfter
+                ? `Trop de tentatives : réessaie dans ${retryAfter} seconde(s).`
+                : 'Trop de tentatives : réessaie dans quelques instants.';
+        }
+
+        if (status === 404) {
+            return donnees?.message ?? 'Référence agence introuvable ou agence désactivée.';
+        }
+
+        return donnees?.message ?? `Le serveur a refusé la demande (code ${status}).`;
+    }
+
+    return 'Une erreur inattendue est survenue.';
+}
 
 export class BootstrapService {
     private readonly config = new ConfigRepository();
@@ -148,7 +180,12 @@ export class BootstrapService {
             throw new Error('LICENCE_INDISPONIBLE');
         }
 
-        const donnees = await appelBootstrap(reference, appareil);
+        let donnees;
+        try {
+            donnees = await appelBootstrap(reference, appareil);
+        } catch (erreur) {
+            throw new Error(messageErreurBootstrap(erreur));
+        }
 
         this.catalogue.seed(donnees);
         this.config.definir('agence_reference', donnees.agence.reference);
@@ -176,7 +213,12 @@ export class BootstrapService {
             throw new Error('NON_CONFIGUREE');
         }
 
-        const donnees = await appelBootstrap(reference, 'poste-caisse', timeoutMs);
+        let donnees;
+        try {
+            donnees = await appelBootstrap(reference, 'poste-caisse', timeoutMs);
+        } catch (erreur) {
+            throw new Error(messageErreurBootstrap(erreur));
+        }
 
         this.catalogue.seed(donnees);
         this.config.definir('api_token', donnees.token);

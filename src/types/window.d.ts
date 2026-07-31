@@ -140,6 +140,8 @@ declare global {
             };
             referentiel: {
                 villes: () => Promise<{ id: number; uuid: string; nom: string }[]>;
+                pays: () => Promise<{ id: number; uuid: string; nom: string; code: string }[]>;
+                villesParPays: (paysId: number) => Promise<{ id: number; uuid: string; nom: string; pays_id: number | null }[]>;
                 agencesParVille: (villeId: number) => Promise<{ id: number; uuid: string; nom: string; ville_id: number }[]>;
                 voyagesDeAgence: (agenceId: number) => Promise<{ id: number; uuid: string; date_depart: string; heure_depart: string; itineraire_nom: string | null }[]>;
                 tarifsAgence: (agenceId: number) => Promise<{
@@ -213,6 +215,15 @@ declare global {
                 duJour: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown[]>;
                 details: (uuid: string) => Promise<unknown>;
                 finDeCaisse: (agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) => Promise<unknown>;
+            };
+            courrierInternational: {
+                preparerNumero: (agenceId: number) => Promise<string | null>;
+                enregistrer: (demande: unknown) => Promise<{ ok: boolean; courrier?: unknown; erreur?: string }>;
+                confirmerImpression: (uuid: string) => Promise<{ ok: boolean; erreur?: string }>;
+                annulerImpression: (uuid: string, motif: string) => Promise<{ ok: boolean }>;
+                duJour: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown[]>;
+                details: (uuid: string) => Promise<unknown>;
+                finDeCaisse: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown>;
             };
             voyage: {
                 formulaire: (agenceId: number) => Promise<unknown>;

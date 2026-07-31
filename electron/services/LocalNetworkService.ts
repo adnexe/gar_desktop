@@ -12,6 +12,7 @@ import { ReferentielController } from '../controllers/ReferentielController';
 import { VenteController } from '../controllers/VenteController';
 import { BagageController } from '../controllers/BagageController';
 import { CourrierController } from '../controllers/CourrierController';
+import { CourrierInternationalController } from '../controllers/CourrierInternationalController';
 import { VoyageController } from '../controllers/VoyageController';
 import { HistoriqueController } from '../controllers/HistoriqueController';
 import { VoyageRepository, type VoyageServeur } from '../repositories/VoyageRepository';
@@ -56,6 +57,8 @@ const SECRET_HEADER = 'x-gar-local-secret';
 const handlers: Record<string, (...args: never[]) => unknown> = {
     'auth:connecter': AuthController.connecter,
     'referentiel:villes': ReferentielController.villes,
+    'referentiel:pays': ReferentielController.pays,
+    'referentiel:villesParPays': ReferentielController.villesParPays,
     'referentiel:agencesParVille': ReferentielController.agencesParVille,
     'referentiel:voyagesDeAgence': ReferentielController.voyagesDeAgence,
     'referentiel:tarifsAgence': ReferentielController.tarifsAgence,
@@ -85,6 +88,13 @@ const handlers: Record<string, (...args: never[]) => unknown> = {
     'courrier:duJour': CourrierController.duJour,
     'courrier:details': CourrierController.details,
     'courrier:finDeCaisse': CourrierController.finDeCaisse,
+    'courrierInternational:preparerNumero': CourrierInternationalController.preparerNumero,
+    'courrierInternational:enregistrer': CourrierInternationalController.enregistrer,
+    'courrierInternational:confirmerImpression': CourrierInternationalController.confirmerImpression,
+    'courrierInternational:annulerImpression': CourrierInternationalController.annulerImpression,
+    'courrierInternational:duJour': CourrierInternationalController.duJour,
+    'courrierInternational:details': CourrierInternationalController.details,
+    'courrierInternational:finDeCaisse': CourrierInternationalController.finDeCaisse,
     'voyage:formulaire': VoyageController.formulaire,
     'voyage:creer': VoyageController.creer,
     'voyage:details': VoyageController.details,
