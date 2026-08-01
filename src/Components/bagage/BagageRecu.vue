@@ -55,21 +55,21 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             </p>
         </div>
 
-        <div class="numero-recu">
+        <div class="numero-recu numero-encadre">
             <span>N° REÇU BAGAGES</span>
             <strong>{{ recu.numero_bagage }}</strong>
         </div>
 
-        <div class="bloc">
-            <p class="titre">N° TICKET</p>
+        <div class="bloc section-recu">
+            <p class="titre section-titre">N° TICKET</p>
             <p class="numero-ticket">{{ recu.numero_ticket || 'Sans ticket' }}</p>
             <p v-if="recu.numero_place" class="petit">Siège N° {{ recu.numero_place }}</p>
             <p v-if="recu.destination" class="destination">{{ recu.destination }}</p>
             <p v-if="recu.voyage" class="petit">Voyage : {{ recu.voyage }}</p>
         </div>
 
-        <div class="bloc">
-            <p class="titre">CLIENT</p>
+        <div class="bloc section-recu">
+            <p class="titre section-titre">CLIENT</p>
             <p class="nom-client">{{ recu.client || 'Client anonyme' }}</p>
             <p v-if="recu.client_telephone" class="petit">{{ recu.client_telephone }}</p>
             <div class="ligne montant">
@@ -94,8 +94,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             </div>
         </div>
 
-        <div class="bloc contenu">
-            <p class="titre">{{ recu.description || 'Bagage' }}</p>
+        <div class="bloc contenu section-recu">
+            <p class="titre section-titre">{{ recu.description || 'Bagage' }}</p>
         </div>
 
         <hr v-if="recu.compagnie?.pied_ticket" />
@@ -252,11 +252,11 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     padding: 2px;
 }
 
-.recu-bagage .bloc {
+.recu-bagage .section-recu {
     padding: 1px;
 }
 
-.recu-bagage .titre {
+.recu-bagage .section-titre {
     background: #fff;
     border-bottom: 1px solid #000;
     margin: -1px -1px 2px;

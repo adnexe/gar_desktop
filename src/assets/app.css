@@ -394,40 +394,6 @@
     margin-top: 0 !important;
 }
 
-.zone-impression .ticket-recu.recu-bagage {
-    padding-top: 0.8mm !important;
-}
-
-.zone-impression .ticket-recu.recu-bagage .compagnie {
-    font-size: min(13px, 3.8mm) !important;
-    line-height: 1.1 !important;
-    padding-left: 1mm;
-    padding-right: 1mm;
-    text-align: center;
-    word-break: break-word !important;
-}
-
-.zone-impression .ticket-recu.recu-bagage .contact {
-    font-size: min(10px, 3mm) !important;
-    line-height: 1.1 !important;
-}
-
-.zone-impression .ticket-recu.recu-bagage .numero-recu {
-    display: grid !important;
-    grid-template-columns: auto minmax(0, 1fr) !important;
-    padding: 1px !important;
-}
-
-.zone-impression .ticket-recu.recu-bagage .numero-recu span {
-    font-size: min(12px, 3.5mm) !important;
-    line-height: 1.1 !important;
-}
-
-.zone-impression .ticket-recu.recu-bagage .numero-recu strong {
-    font-size: min(16px, 4.8mm) !important;
-    line-height: 1.1 !important;
-}
-
 .zone-impression .ticket-recu,
 .zone-impression .ticket-recu * {
     max-width: 100%;
