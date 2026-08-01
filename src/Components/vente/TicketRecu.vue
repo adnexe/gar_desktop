@@ -211,7 +211,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 
 .ticket-principal,
 .talon-controle {
-    padding: 1mm;
+    padding: 0.5mm;
 }
 
 .nom-agence {
@@ -246,18 +246,18 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 .ligne {
     align-items: start;
     display: grid;
-    gap: 1mm 2mm;
-    grid-template-columns: minmax(14mm, 34%) minmax(0, 1fr);
+    gap: 0.5mm 1.5mm;
+    grid-template-columns: minmax(11mm, 30%) minmax(0, 1fr);
 }
 
 .numero-encadre {
     align-items: start;
     border: 1px solid #000;
     display: grid;
-    gap: 8px;
+    gap: 1.5mm;
     grid-template-columns: auto minmax(0, 1fr);
     margin: 4px 0;
-    padding: 4px 2px;
+    padding: 3px 2px;
 }
 
 .numero-encadre strong {
@@ -269,16 +269,16 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 
 .section-recu {
     border: 1px solid #000;
-    margin: 4px 0;
-    padding: 3px;
+    margin: 3px 0;
+    padding: 2px;
 }
 
 .section-titre {
     background: #fff;
     border-bottom: 1px solid #000;
     font-weight: 700;
-    margin: -3px -3px 3px;
-    padding: 1px 3px;
+    margin: -2px -2px 2px;
+    padding: 1px 2px;
     text-transform: uppercase;
 }
 
@@ -312,10 +312,10 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     align-items: start;
     border: 1px solid #000;
     display: grid;
-    gap: 6px;
+    gap: 1.5mm;
     grid-template-columns: auto minmax(0, 1fr);
     margin: 8px 0 6px;
-    padding: 6px 4px;
+    padding: 4px 3px;
 }
 
 .talon-numero strong {
@@ -329,7 +329,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     align-items: start;
     display: grid;
     font-size: 13px;
-    gap: 1mm 2mm;
+    gap: 0.5mm 1.5mm;
     grid-template-columns: minmax(0, 1fr) auto;
     margin: 4px 0;
 }

@@ -172,7 +172,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-family: Arial, 'Helvetica Neue', sans-serif;
     font-size: 14px;
     line-height: 1.4;
-    padding: 1mm;
+    padding: 0.5mm;
 }
 
 .ticket-recu,
@@ -208,15 +208,15 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .numero-recu,
 .numero-etiquette {
     border: 1px solid #000;
-    margin: 5px 0;
-    padding: 5px;
+    margin: 3px 0;
+    padding: 3px;
 }
 
 .numero-recu {
     align-items: start;
     display: grid;
-    gap: 1mm 2mm;
-    grid-template-columns: minmax(20mm, 40%) minmax(0, 1fr);
+    gap: 0.5mm 1.5mm;
+    grid-template-columns: minmax(17mm, 34%) minmax(0, 1fr);
 }
 
 .numero-recu span,
@@ -239,15 +239,15 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .bloc {
     border: 1px solid #000;
-    margin: 5px 0;
-    padding: 5px;
+    margin: 3px 0;
+    padding: 3px;
 }
 
 .ligne {
     align-items: start;
     display: grid;
-    gap: 1mm 2mm;
-    grid-template-columns: minmax(14mm, 34%) minmax(0, 1fr);
+    gap: 0.5mm 1.5mm;
+    grid-template-columns: minmax(11mm, 30%) minmax(0, 1fr);
 }
 
 .ligne span:last-child,
@@ -297,7 +297,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .bas-etiquette {
     border-top: 1px dashed #000;
     display: grid;
-    gap: 1mm 2mm;
+    gap: 0.5mm 1.5mm;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     margin-top: 8px;
     padding-top: 5px;

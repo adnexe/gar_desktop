@@ -445,7 +445,13 @@
 .zone-impression .ticket-recu .talon-numero,
 .zone-impression .ticket-recu .talon-route,
 .zone-impression .ticket-recu .bas-etiquette,
-.zone-impression .ticket-recu .bas-talon,
+.zone-impression .ticket-recu .bas-talon {
+    align-items: flex-start !important;
+    gap: 1mm 2mm !important;
+    min-width: 0;
+    width: 100%;
+}
+
 .zone-impression .ticket-recu [style*="display:flex"] {
     align-items: flex-start !important;
     display: flex !important;

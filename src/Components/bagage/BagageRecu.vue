@@ -171,7 +171,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-family: Arial, 'Helvetica Neue', sans-serif;
     font-size: 13px;
     line-height: 1.35;
-    padding: 1mm;
+    padding: 0.5mm;
 }
 
 .ticket-recu,
@@ -208,10 +208,10 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     align-items: start;
     border: 1px solid #000;
     display: grid;
-    gap: 1mm 2mm;
-    grid-template-columns: minmax(18mm, 38%) minmax(0, 1fr);
-    margin: 5px 0;
-    padding: 5px;
+    gap: 0.5mm 1.5mm;
+    grid-template-columns: minmax(15mm, 32%) minmax(0, 1fr);
+    margin: 3px 0;
+    padding: 3px;
 }
 
 .numero-recu span,
@@ -230,8 +230,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .bloc {
     border: 1px solid #000;
-    margin: 5px 0;
-    padding: 5px;
+    margin: 3px 0;
+    padding: 3px;
 }
 
 .numero-ticket {
@@ -260,8 +260,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .ligne {
     align-items: start;
     display: grid;
-    gap: 1mm 2mm;
-    grid-template-columns: minmax(14mm, 34%) minmax(0, 1fr);
+    gap: 0.5mm 1.5mm;
+    grid-template-columns: minmax(11mm, 30%) minmax(0, 1fr);
 }
 
 .ligne span:last-child,
@@ -294,7 +294,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .bas-talon {
     border-top: 1px dashed #000;
     display: grid;
-    gap: 1mm 2mm;
+    gap: 0.5mm 1.5mm;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     margin-top: 8px;
     padding-top: 5px;
