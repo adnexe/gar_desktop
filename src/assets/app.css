@@ -368,7 +368,28 @@
 }
 
 .zone-impression .ticket-recu {
+    box-sizing: border-box !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    max-width: var(--impression-largeur-contenu) !important;
     width: var(--impression-largeur-contenu) !important;
+}
+
+.zone-impression .ticket-recu,
+.zone-impression .ticket-recu * {
+    max-width: 100%;
+}
+
+.zone-impression .ticket-recu *,
+.zone-impression .ticket-recu *::before,
+.zone-impression .ticket-recu *::after {
+    box-sizing: border-box;
+}
+
+.zone-impression .ticket-recu p,
+.zone-impression .ticket-recu span,
+.zone-impression .ticket-recu strong {
+    overflow-wrap: anywhere;
 }
 
 /* Impression des tickets thermiques 80mm : masque tout sauf la zone
