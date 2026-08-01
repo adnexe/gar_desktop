@@ -365,19 +365,33 @@
     --impression-largeur-papier: 80mm;
     --impression-largeur-contenu: 70mm;
     --impression-decalage-x: 0mm;
+    --impression-marge-gauche: clamp(
+        0mm,
+        calc((var(--impression-largeur-papier) - var(--impression-largeur-contenu)) / 2 + var(--impression-decalage-x)),
+        calc(var(--impression-largeur-papier) - var(--impression-largeur-contenu))
+    );
 }
 
 .zone-impression .ticket-recu {
     box-sizing: border-box !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
+    margin-left: var(--impression-marge-gauche) !important;
+    margin-right: 0 !important;
     max-width: var(--impression-largeur-contenu) !important;
+    overflow: hidden;
+    padding-left: 1mm;
+    padding-right: 1mm;
+    transform: none !important;
     width: var(--impression-largeur-contenu) !important;
 }
 
 .zone-impression .ticket-recu,
 .zone-impression .ticket-recu * {
     max-width: 100%;
+}
+
+.zone-impression .ticket-recu div,
+.zone-impression .ticket-recu section {
+    min-width: 0;
 }
 
 .zone-impression .ticket-recu *,
@@ -390,6 +404,41 @@
 .zone-impression .ticket-recu span,
 .zone-impression .ticket-recu strong {
     overflow-wrap: anywhere;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.zone-impression .ticket-recu .ligne,
+.zone-impression .ticket-recu .numero-recu,
+.zone-impression .ticket-recu .numero-talon,
+.zone-impression .ticket-recu .talon-route,
+.zone-impression .ticket-recu .bas-etiquette,
+.zone-impression .ticket-recu .bas-talon,
+.zone-impression .ticket-recu [style*="display:flex"] {
+    align-items: flex-start !important;
+    min-width: 0;
+    width: 100%;
+}
+
+.zone-impression .ticket-recu .ligne > *,
+.zone-impression .ticket-recu .numero-recu > *,
+.zone-impression .ticket-recu .numero-talon > *,
+.zone-impression .ticket-recu .talon-route > *,
+.zone-impression .ticket-recu .bas-etiquette > *,
+.zone-impression .ticket-recu .bas-talon > *,
+.zone-impression .ticket-recu [style*="display:flex"] > * {
+    min-width: 0;
+}
+
+.zone-impression .ticket-recu .ligne > :last-child,
+.zone-impression .ticket-recu .numero-recu > :last-child,
+.zone-impression .ticket-recu .numero-talon > :last-child,
+.zone-impression .ticket-recu .talon-route > :last-child,
+.zone-impression .ticket-recu .bas-etiquette > :last-child,
+.zone-impression .ticket-recu .bas-talon > :last-child,
+.zone-impression .ticket-recu [style*="display:flex"] > :last-child {
+    flex: 1 1 auto;
+    text-align: right;
 }
 
 /* Impression des tickets thermiques 80mm : masque tout sauf la zone
@@ -410,9 +459,9 @@
            plus étroit et centré dedans (voir composants), pour absorber les
            petits décalages de marge propres à chaque modèle d'imprimante
            (Epson vs Xprinter...) au lieu d'être rogné d'un côté. */
+        clip-path: inset(0);
+        overflow: hidden;
         width: var(--impression-largeur-papier);
-        transform: translateX(var(--impression-decalage-x));
-        transform-origin: top left;
     }
     .ticket-recu {
         break-inside: avoid;

@@ -37,7 +37,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 </script>
 
 <template>
-    <div v-if="rapport" class="ticket-recu" style="width: 70mm; margin: 0 auto">
+    <div v-if="rapport" class="ticket-recu" style="width: var(--impression-largeur-contenu, 70mm); margin: 0">
         <p class="text-center font-bold">{{ agence }}</p>
         <p class="text-center font-bold">{{ voyage ? 'FIN DE CAISSE — VOYAGE' : 'FIN DE CAISSE' }}</p>
         <p style="border-top: 1px dashed #000; margin: 4px 0" />

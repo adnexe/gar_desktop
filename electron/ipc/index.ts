@@ -415,8 +415,22 @@ async function imprimerTicketTest(): Promise<ResultatImpression> {
             <style>
                 @page { size: ${calibration.largeurPapierMm}mm auto; margin: 0; }
                 body { width: ${calibration.largeurPapierMm}mm; margin: 0; font-family: Arial, sans-serif; color: #000; }
-                .page { width: ${calibration.largeurPapierMm}mm; transform: translateX(${calibration.decalageXMm}mm); transform-origin: top left; }
-                .ticket { width: ${calibration.largeurContenuMm}mm; box-sizing: border-box; border: 1px solid #000; padding: 8px; margin: 0 auto; font-size: 13px; }
+                .page { width: ${calibration.largeurPapierMm}mm; overflow: hidden; clip-path: inset(0); }
+                .ticket {
+                    width: ${calibration.largeurContenuMm}mm;
+                    box-sizing: border-box;
+                    border: 1px solid #000;
+                    padding: 8px;
+                    margin-left: ${Math.min(
+                        Math.max((calibration.largeurPapierMm - calibration.largeurContenuMm) / 2 + calibration.decalageXMm, 0),
+                        calibration.largeurPapierMm - calibration.largeurContenuMm,
+                    )}mm;
+                    margin-right: 0;
+                    font-size: 13px;
+                    overflow-wrap: anywhere;
+                    word-break: break-word;
+                }
+                .ticket * { box-sizing: border-box; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
                 h1 { margin: 0 0 8px; text-align: center; font-size: 18px; }
                 p { margin: 5px 0; }
                 .ligne { display: flex; justify-content: space-between; border-top: 1px dashed #000; padding-top: 6px; margin-top: 8px; }
