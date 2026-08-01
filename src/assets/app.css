@@ -403,19 +403,50 @@
 .zone-impression .ticket-recu p,
 .zone-impression .ticket-recu span,
 .zone-impression .ticket-recu strong {
-    overflow-wrap: anywhere;
-    white-space: normal;
-    word-break: break-word;
+    line-break: anywhere;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+}
+
+.zone-impression .ticket-recu .compagnie,
+.zone-impression .ticket-recu .nom-agence,
+.zone-impression .ticket-recu .numero-ticket,
+.zone-impression .ticket-recu .destination,
+.zone-impression .ticket-recu .destination-talon,
+.zone-impression .ticket-recu .destination-etiquette,
+.zone-impression .ticket-recu .trajet,
+.zone-impression .ticket-recu .nom,
+.zone-impression .ticket-recu .nom-client,
+.zone-impression .ticket-recu .etiquette-nom,
+.zone-impression .ticket-recu .telephone,
+.zone-impression .ticket-recu .talon-valeur,
+.zone-impression .ticket-recu .numero-recu strong,
+.zone-impression .ticket-recu .numero-talon strong,
+.zone-impression .ticket-recu .numero-encadre strong,
+.zone-impression .ticket-recu .numero-etiquette strong,
+.zone-impression .ticket-recu .talon-numero strong {
+    line-break: anywhere;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
+    word-break: break-all !important;
 }
 
 .zone-impression .ticket-recu .ligne,
 .zone-impression .ticket-recu .numero-recu,
 .zone-impression .ticket-recu .numero-talon,
+.zone-impression .ticket-recu .numero-encadre,
+.zone-impression .ticket-recu .numero-etiquette,
+.zone-impression .ticket-recu .talon-numero,
 .zone-impression .ticket-recu .talon-route,
 .zone-impression .ticket-recu .bas-etiquette,
 .zone-impression .ticket-recu .bas-talon,
 .zone-impression .ticket-recu [style*="display:flex"] {
     align-items: flex-start !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 1mm 2mm !important;
+    justify-content: space-between !important;
     min-width: 0;
     width: 100%;
 }
@@ -423,22 +454,55 @@
 .zone-impression .ticket-recu .ligne > *,
 .zone-impression .ticket-recu .numero-recu > *,
 .zone-impression .ticket-recu .numero-talon > *,
+.zone-impression .ticket-recu .numero-encadre > *,
+.zone-impression .ticket-recu .numero-etiquette > *,
+.zone-impression .ticket-recu .talon-numero > *,
 .zone-impression .ticket-recu .talon-route > *,
 .zone-impression .ticket-recu .bas-etiquette > *,
 .zone-impression .ticket-recu .bas-talon > *,
 .zone-impression .ticket-recu [style*="display:flex"] > * {
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 100%;
 }
 
 .zone-impression .ticket-recu .ligne > :last-child,
 .zone-impression .ticket-recu .numero-recu > :last-child,
 .zone-impression .ticket-recu .numero-talon > :last-child,
+.zone-impression .ticket-recu .numero-encadre > :last-child,
+.zone-impression .ticket-recu .numero-etiquette > :last-child,
+.zone-impression .ticket-recu .talon-numero > :last-child,
 .zone-impression .ticket-recu .talon-route > :last-child,
 .zone-impression .ticket-recu .bas-etiquette > :last-child,
 .zone-impression .ticket-recu .bas-talon > :last-child,
 .zone-impression .ticket-recu [style*="display:flex"] > :last-child {
-    flex: 1 1 auto;
+    flex: 1 1 24mm;
     text-align: right;
+}
+
+.zone-impression .ticket-recu .ligne > :first-child {
+    flex: 0 0 auto;
+    max-width: 28mm;
+}
+
+.zone-impression .ticket-recu .numero-recu strong,
+.zone-impression .ticket-recu .numero-talon strong,
+.zone-impression .ticket-recu .numero-encadre strong,
+.zone-impression .ticket-recu .numero-etiquette strong,
+.zone-impression .ticket-recu .talon-numero strong,
+.zone-impression .ticket-recu .destination,
+.zone-impression .ticket-recu .destination-talon,
+.zone-impression .ticket-recu .destination-etiquette,
+.zone-impression .ticket-recu .numero-ticket {
+    font-size: min(18px, 5.4mm) !important;
+    letter-spacing: 0 !important;
+    line-height: 1.15 !important;
+}
+
+.zone-impression .ticket-recu .compagnie,
+.zone-impression .ticket-recu .nom-agence {
+    font-size: min(15px, 4.4mm) !important;
+    line-height: 1.15 !important;
 }
 
 /* Impression des tickets thermiques 80mm : masque tout sauf la zone
