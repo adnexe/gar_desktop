@@ -174,6 +174,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .ticket-recu,
 .ticket-recu * {
     box-sizing: border-box;
+    line-break: anywhere;
     max-width: 100%;
     min-width: 0;
     overflow-wrap: anywhere;
@@ -193,6 +194,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-weight: 700;
     line-height: 1.05;
     text-transform: uppercase;
+    word-break: break-all;
 }
 
 .contact,
@@ -232,7 +234,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .numero-recu strong,
 .numero-talon strong {
     font-size: 18px;
+    line-height: 1.12;
     min-width: 0;
+    overflow-wrap: anywhere;
     text-align: right;
     word-break: break-all;
 }
@@ -266,14 +270,20 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .numero-ticket {
     font-size: 20px;
     font-weight: 700;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
     text-align: center;
+    word-break: break-all;
 }
 
 .destination,
 .destination-talon {
     font-size: 20px;
     font-weight: 700;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
     text-transform: uppercase;
+    word-break: break-all;
 }
 
 .destination-talon {
@@ -283,7 +293,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .nom-client {
     font-size: 13px;
     font-weight: 700;
+    overflow-wrap: anywhere;
     text-transform: uppercase;
+    word-break: break-all;
 }
 
 .talon-bagage .ligne {
@@ -298,7 +310,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     align-items: start;
     display: grid;
     gap: 0.35mm 1mm;
-    grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
+    grid-template-columns: minmax(9mm, 26%) minmax(0, 1fr);
 }
 
 .talon-bagage .ligne span:first-child {
@@ -308,7 +320,17 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .ligne span:last-child,
 .ligne strong {
     min-width: 0;
+    overflow-wrap: anywhere;
     text-align: right;
+    word-break: break-all;
+}
+
+.recu-bagage p,
+.recu-bagage span,
+.recu-bagage strong {
+    line-break: anywhere;
+    overflow-wrap: anywhere;
+    white-space: normal;
     word-break: break-all;
 }
 
