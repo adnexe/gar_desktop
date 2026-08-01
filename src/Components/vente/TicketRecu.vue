@@ -187,9 +187,6 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 
 <style scoped>
 .ticket-recu {
-    /* 70mm centré dans les 80mm du papier (voir .zone-impression) : la
-       marge de 5mm de chaque côté absorbe les petits décalages propres à
-       chaque modèle d'imprimante (Epson, Xprinter...) sans rogner le texte. */
     box-sizing: border-box;
     width: var(--impression-largeur-contenu, 70mm);
     margin: 0 auto;
@@ -211,20 +208,21 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 
 .ticket-principal,
 .talon-controle {
-    padding: 0.5mm;
+    padding: 0 0.25mm 0.25mm;
 }
 
 .nom-agence {
     font-size: 14px;
     font-weight: 700;
+    line-height: 1.05;
     text-transform: uppercase;
 }
 
 .logo {
-    height: 36px;
+    height: 28px;
     max-width: 44mm;
     object-fit: contain;
-    margin: 0 auto 3px;
+    margin: 0 auto 1px;
 }
 
 .slogan,
@@ -246,18 +244,18 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 .ligne {
     align-items: start;
     display: grid;
-    gap: 0.5mm 1.5mm;
-    grid-template-columns: minmax(11mm, 30%) minmax(0, 1fr);
+    gap: 0.35mm 1mm;
+    grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
 }
 
 .numero-encadre {
     align-items: start;
     border: 1px solid #000;
     display: grid;
-    gap: 1.5mm;
+    gap: 1mm;
     grid-template-columns: auto minmax(0, 1fr);
     margin: 4px 0;
-    padding: 3px 2px;
+    padding: 2px 1px;
 }
 
 .numero-encadre strong {
@@ -270,15 +268,15 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 .section-recu {
     border: 1px solid #000;
     margin: 3px 0;
-    padding: 2px;
+    padding: 1px;
 }
 
 .section-titre {
     background: #fff;
     border-bottom: 1px solid #000;
     font-weight: 700;
-    margin: -2px -2px 2px;
-    padding: 1px 2px;
+    margin: -1px -1px 2px;
+    padding: 1px;
     text-transform: uppercase;
 }
 
@@ -314,7 +312,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     display: grid;
     gap: 1.5mm;
     grid-template-columns: auto minmax(0, 1fr);
-    margin: 8px 0 6px;
+    margin: 4px 0;
     padding: 4px 3px;
 }
 
@@ -329,7 +327,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     align-items: start;
     display: grid;
     font-size: 13px;
-    gap: 0.5mm 1.5mm;
+    gap: 0.35mm 1mm;
     grid-template-columns: minmax(0, 1fr) auto;
     margin: 4px 0;
 }

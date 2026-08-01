@@ -161,9 +161,6 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 <style scoped>
 .ticket-recu {
-    /* 70mm centré dans les 80mm du papier (voir .zone-impression) : la
-       marge de 5mm de chaque côté absorbe les petits décalages propres à
-       chaque modèle d'imprimante (Epson, Xprinter...) sans rogner le texte. */
     box-sizing: border-box;
     width: var(--impression-largeur-contenu, 70mm);
     margin: 0 auto;
@@ -171,7 +168,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-family: Arial, 'Helvetica Neue', sans-serif;
     font-size: 13px;
     line-height: 1.35;
-    padding: 0.5mm;
+    padding: 0 0.25mm 0.25mm;
 }
 
 .ticket-recu,
@@ -185,15 +182,16 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 }
 
 .logo {
-    height: 34px;
+    height: 26px;
     max-width: 44mm;
     object-fit: contain;
-    margin: 0 auto 3px;
+    margin: 0 auto 1px;
 }
 
 .compagnie {
     font-size: 14px;
     font-weight: 700;
+    line-height: 1.05;
     text-transform: uppercase;
 }
 
@@ -208,10 +206,10 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     align-items: start;
     border: 1px solid #000;
     display: grid;
-    gap: 0.5mm 1.5mm;
-    grid-template-columns: minmax(15mm, 32%) minmax(0, 1fr);
+    gap: 0.35mm 1mm;
+    grid-template-columns: minmax(14mm, 30%) minmax(0, 1fr);
     margin: 3px 0;
-    padding: 3px;
+    padding: 2px;
 }
 
 .numero-recu span,
@@ -231,7 +229,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .bloc {
     border: 1px solid #000;
     margin: 3px 0;
-    padding: 3px;
+    padding: 2px;
 }
 
 .numero-ticket {
@@ -260,8 +258,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .ligne {
     align-items: start;
     display: grid;
-    gap: 0.5mm 1.5mm;
-    grid-template-columns: minmax(11mm, 30%) minmax(0, 1fr);
+    gap: 0.35mm 1mm;
+    grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
 }
 
 .ligne span:last-child,
@@ -294,7 +292,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .bas-talon {
     border-top: 1px dashed #000;
     display: grid;
-    gap: 0.5mm 1.5mm;
+    gap: 0.35mm 1mm;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     margin-top: 8px;
     padding-top: 5px;

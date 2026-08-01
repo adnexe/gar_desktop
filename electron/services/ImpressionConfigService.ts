@@ -10,7 +10,7 @@ export type CalibrationImpression = {
 
 const CALIBRATION_DEFAUT: CalibrationImpression = {
     largeurPapierMm: 80,
-    largeurContenuMm: 70,
+    largeurContenuMm: 76,
     decalageXMm: 0,
 };
 
