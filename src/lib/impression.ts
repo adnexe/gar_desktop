@@ -13,6 +13,10 @@ export function hauteurZoneImpressionMm(): number | undefined {
     const zones = Array.from(document.querySelectorAll<HTMLElement>('.zone-impression'));
     if (zones.length === 0) return undefined;
 
+    const largeurPapier = getComputedStyle(document.documentElement)
+        .getPropertyValue('--impression-largeur-papier')
+        .trim() || '80mm';
+
     let px = 0;
     for (const zone of zones) {
         const style = zone.style;
@@ -28,7 +32,7 @@ export function hauteurZoneImpressionMm(): number | undefined {
         style.position = 'absolute';
         style.left = '-10000px';
         style.top = '0';
-        style.width = '80mm'; // largeur du papier ; chaque reçu (70mm) est centré dedans
+        style.width = largeurPapier; // largeur papier locale ; le reçu est centré dedans
 
         px = Math.max(px, zone.scrollHeight);
 

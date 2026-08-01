@@ -361,6 +361,16 @@
     }
 }
 
+:root {
+    --impression-largeur-papier: 80mm;
+    --impression-largeur-contenu: 70mm;
+    --impression-decalage-x: 0mm;
+}
+
+.zone-impression .ticket-recu {
+    width: var(--impression-largeur-contenu) !important;
+}
+
 /* Impression des tickets thermiques 80mm : masque tout sauf la zone
    d'impression ; chaque reçu sort sur son propre ticket (saut de page). */
 @media print {
@@ -379,7 +389,9 @@
            plus étroit et centré dedans (voir composants), pour absorber les
            petits décalages de marge propres à chaque modèle d'imprimante
            (Epson vs Xprinter...) au lieu d'être rogné d'un côté. */
-        width: 80mm;
+        width: var(--impression-largeur-papier);
+        transform: translateX(var(--impression-decalage-x));
+        transform-origin: top left;
     }
     .ticket-recu {
         break-inside: avoid;

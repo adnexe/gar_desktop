@@ -68,6 +68,20 @@ declare global {
                     adresses: string[];
                     agence: string | null;
                 }>;
+                calibrationImpression: () => Promise<{
+                    largeurPapierMm: number;
+                    largeurContenuMm: number;
+                    decalageXMm: number;
+                }>;
+                enregistrerCalibrationImpression: (params: {
+                    largeurPapierMm: number;
+                    largeurContenuMm: number;
+                    decalageXMm: number;
+                }) => Promise<{
+                    largeurPapierMm: number;
+                    largeurContenuMm: number;
+                    decalageXMm: number;
+                }>;
                 relancerServeurLocal: () => Promise<{
                     mode: 'autonome' | 'serveur' | 'client';
                     serveurUrl: string | null;

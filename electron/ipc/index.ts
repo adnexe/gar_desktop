@@ -47,6 +47,7 @@ import { VoyageController } from '../controllers/VoyageController';
 import { HistoriqueController } from '../controllers/HistoriqueController';
 import { logger } from '../logger';
 import { localNetworkService } from '../services/LocalNetworkService';
+import { lireCalibrationImpression } from '../services/ImpressionConfigService';
 
 type ImprimanteRuntime = Electron.PrinterInfo & {
     isDefault?: boolean;
@@ -163,10 +164,14 @@ function estImprimanteVirtuelle(imprimante: ImprimanteRuntime): boolean {
  */
 async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntime[], tentatives: string[], hauteurMm?: number): Promise<ResultatImpression> {
     const debutTotal = performance.now();
+    const calibration = lireCalibrationImpression();
     const chrono = {
         hauteur_mesuree_mm: hauteurMm ?? null,
         hauteur_page_pouces: 0,
         hauteur_papier_mm: 0,
+        largeur_papier_mm: calibration.largeurPapierMm,
+        largeur_contenu_mm: calibration.largeurContenuMm,
+        decalage_x_mm: calibration.decalageXMm,
         pdf_octets: 0,
         print_to_pdf_ms: 0,
         ecriture_pdf_ms: 0,
@@ -199,8 +204,7 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
             printBackground: true,
             preferCSSPageSize: true,
             margins: { top: 0, bottom: 0, left: 0, right: 0 },
-            // 80 mm de large (3,15 po) ; le @page du CSS prime s'il est défini.
-            pageSize: { width: 3.15, height: hauteurPouces },
+            pageSize: { width: calibration.largeurPapierMm / 25.4, height: hauteurPouces },
         });
         chrono.print_to_pdf_ms = dureeMs(debutPdf);
         chrono.pdf_octets = pdf.length;
@@ -226,7 +230,10 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
         const hauteurPapierMm = Math.round(hauteurPouces * 25.4);
         chrono.hauteur_papier_mm = hauteurPapierMm;
         const formats: { paperSize?: string; libelle: string }[] = [
-            { paperSize: `80mm x ${hauteurPapierMm}mm`, libelle: `80x${hauteurPapierMm}` },
+            {
+                paperSize: `${calibration.largeurPapierMm}mm x ${hauteurPapierMm}mm`,
+                libelle: `${calibration.largeurPapierMm}x${hauteurPapierMm}`,
+            },
             { libelle: 'papier pilote' },
         ];
 
@@ -398,6 +405,7 @@ async function imprimerTicketTest(): Promise<ResultatImpression> {
         },
     });
 
+    const calibration = lireCalibrationImpression();
     const date = new Date().toLocaleString('fr-FR');
     const html = `
         <!doctype html>
@@ -405,27 +413,30 @@ async function imprimerTicketTest(): Promise<ResultatImpression> {
         <head>
             <meta charset="utf-8" />
             <style>
-                @page { size: auto; margin: 0; }
-                body { width: 72mm; margin: 0; font-family: Arial, sans-serif; color: #000; }
-                .ticket { border: 1px solid #000; padding: 8px; font-size: 13px; }
+                @page { size: ${calibration.largeurPapierMm}mm auto; margin: 0; }
+                body { width: ${calibration.largeurPapierMm}mm; margin: 0; font-family: Arial, sans-serif; color: #000; }
+                .page { width: ${calibration.largeurPapierMm}mm; transform: translateX(${calibration.decalageXMm}mm); transform-origin: top left; }
+                .ticket { width: ${calibration.largeurContenuMm}mm; box-sizing: border-box; border: 1px solid #000; padding: 8px; margin: 0 auto; font-size: 13px; }
                 h1 { margin: 0 0 8px; text-align: center; font-size: 18px; }
                 p { margin: 5px 0; }
                 .ligne { display: flex; justify-content: space-between; border-top: 1px dashed #000; padding-top: 6px; margin-top: 8px; }
             </style>
         </head>
         <body>
-            <div class="ticket">
-                <h1>TEST IMPRESSION</h1>
-                <p>Adnexe Transport</p>
-                <p>Si ce ticket sort, l'imprimante est disponible pour l'application.</p>
-                <div class="ligne"><span>Date</span><strong>${date}</strong></div>
+            <div class="page">
+                <div class="ticket">
+                    <h1>TEST IMPRESSION</h1>
+                    <p>Adnexe Transport</p>
+                    <p>Papier ${calibration.largeurPapierMm}mm · contenu ${calibration.largeurContenuMm}mm · décalage ${calibration.decalageXMm}mm</p>
+                    <div class="ligne"><span>Date</span><strong>${date}</strong></div>
+                </div>
             </div>
         </body>
         </html>`;
 
     try {
         await fenetre.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-        return await imprimerDirect(fenetre.webContents);
+        return await imprimerDirect(fenetre.webContents, 90);
     } finally {
         if (!fenetre.isDestroyed()) fenetre.destroy();
     }
@@ -458,6 +469,8 @@ export function enregistrerIpc(): void {
     gerer('config:actualiser', ConfigController.actualiser);
     gerer('config:synchroniserMaintenant', ConfigController.synchroniserMaintenant);
     gerer('config:reseauLocal', ConfigController.reseauLocal);
+    gerer('config:calibrationImpression', ConfigController.calibrationImpression);
+    gerer('config:enregistrerCalibrationImpression', ConfigController.enregistrerCalibrationImpression);
     gerer('config:configurerReseauLocal', ConfigController.configurerReseauLocal);
     gerer('config:testerReseauLocal', ConfigController.testerReseauLocal);
     gerer('config:actualiserVoyagesServeurLocal', ConfigController.actualiserVoyagesServeurLocal);

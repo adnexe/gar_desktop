@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { CalendarDays, LoaderCircle, Monitor, Power, Printer, RefreshCw, Server, Trash2, Wifi } from '@lucide/vue';
+import { CalendarDays, LoaderCircle, Monitor, Power, Printer, RefreshCw, Server, SlidersHorizontal, Trash2, Wifi } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
+import { appliquerCalibrationImpression, CALIBRATION_IMPRESSION_DEFAUT, normaliserCalibrationImpression, type CalibrationImpression } from '@/lib/calibrationImpression';
 
 type ModeReseau = 'autonome' | 'serveur' | 'client';
 type StatutConnexion = 'connecte' | 'deconnecte' | 'verification';
@@ -40,6 +41,7 @@ const session = useSessionStore();
 const reseau = ref<ReseauLocal | null>(null);
 const roleMachine = ref<ModeReseau>('client');
 const imprimantes = ref<ImprimanteLocale[]>([]);
+const calibrationImpression = ref<CalibrationImpression>({ ...CALIBRATION_IMPRESSION_DEFAUT });
 const portServeur = ref(3750);
 const serveurUrl = ref('');
 const secretReseau = ref('');
@@ -48,6 +50,7 @@ const actionReseau = ref<ActionReseau | null>(null);
 const actualisation = ref(false);
 const chargementImprimantes = ref(false);
 const testImpression = ref(false);
+const sauvegardeCalibration = ref(false);
 const nettoyageDonnees = ref(false);
 const resetEnCours = ref(false);
 const synchroEnCours = ref(false);
@@ -204,7 +207,17 @@ onMounted(() => {
 });
 
 async function initialiser() {
-    await Promise.all([chargerReseau(), chargerImprimantes(), config.charger()]);
+    await Promise.all([chargerReseau(), chargerImprimantes(), chargerCalibrationImpression(), config.charger()]);
+}
+
+async function chargerCalibrationImpression() {
+    try {
+        const calibration = await window.api.config.calibrationImpression();
+        calibrationImpression.value = appliquerCalibrationImpression(calibration);
+    } catch (e) {
+        calibrationImpression.value = appliquerCalibrationImpression(CALIBRATION_IMPRESSION_DEFAUT);
+        erreurImpression.value = messageErreur(e, 'Impossible de charger la calibration impression.');
+    }
 }
 
 async function chargerReseau() {
@@ -421,6 +434,30 @@ async function testerImpression() {
     }
 }
 
+async function enregistrerCalibration() {
+    sauvegardeCalibration.value = true;
+    messageImpression.value = '';
+    erreurImpression.value = '';
+
+    try {
+        const calibration = normaliserCalibrationImpression(calibrationImpression.value);
+        const enregistree = await window.api.config.enregistrerCalibrationImpression(calibration);
+        calibrationImpression.value = appliquerCalibrationImpression(enregistree);
+        messageImpression.value = 'Calibration enregistrée sur cette machine.';
+    } catch (e) {
+        erreurImpression.value = messageErreur(e, "Impossible d'enregistrer la calibration.");
+    } finally {
+        sauvegardeCalibration.value = false;
+    }
+}
+
+async function testerCalibration() {
+    await enregistrerCalibration();
+    if (erreurImpression.value) return;
+
+    await testerImpression();
+}
+
 async function nettoyerDonneesTest() {
     if (!estSuperAdmin.value || !session.userId) {
         erreur.value = 'Seul un super admin peut nettoyer les données de cette machine.';
@@ -632,6 +669,62 @@ async function resetComplet() {
                     </div>
                     <p v-else class="bg-muted/30 px-4 py-5 text-sm text-muted-foreground">
                         L’application ne voit pas encore d’imprimante. Vérifiez l’installation système, allumez l’imprimante, puis actualisez.
+                    </p>
+                </div>
+
+                <div class="mt-4 rounded-lg border bg-muted/20 p-4">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="flex items-start gap-3">
+                            <div class="rounded-md bg-background p-2 shadow-sm">
+                                <SlidersHorizontal class="size-5 text-primary" />
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold">Calibration locale</h3>
+                                <p class="mt-1 text-sm text-muted-foreground">
+                                    Ajuste seulement cette machine si le reçu sort décalé ou coupé.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" :disabled="sauvegardeCalibration || testImpression" @click="enregistrerCalibration">
+                                <LoaderCircle v-if="sauvegardeCalibration" class="size-4 animate-spin" />
+                                {{ sauvegardeCalibration ? 'Enregistrement...' : 'Enregistrer' }}
+                            </Button>
+                            <Button type="button" :disabled="sauvegardeCalibration || testImpression" @click="testerCalibration">
+                                <Printer v-if="!testImpression" class="size-4" />
+                                <LoaderCircle v-else class="size-4 animate-spin" />
+                                {{ testImpression ? 'Test...' : 'Tester calibration' }}
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 grid gap-4 md:grid-cols-3">
+                        <div class="space-y-2">
+                            <Label for="largeur-papier">Largeur papier PDF</Label>
+                            <div class="flex items-center gap-2">
+                                <Input id="largeur-papier" v-model.number="calibrationImpression.largeurPapierMm" type="number" min="57" max="90" step="0.5" />
+                                <span class="text-sm text-muted-foreground">mm</span>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="largeur-contenu">Largeur du contenu</Label>
+                            <div class="flex items-center gap-2">
+                                <Input id="largeur-contenu" v-model.number="calibrationImpression.largeurContenuMm" type="number" min="45" max="90" step="0.5" />
+                                <span class="text-sm text-muted-foreground">mm</span>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="decalage-x">Décalage horizontal</Label>
+                            <div class="flex items-center gap-2">
+                                <Input id="decalage-x" v-model.number="calibrationImpression.decalageXMm" type="number" min="-12" max="12" step="0.5" />
+                                <span class="text-sm text-muted-foreground">mm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="mt-3 text-xs text-muted-foreground">
+                        Valeur normale : papier 80mm, contenu 70mm, décalage 0mm. Si ça coupe à droite, baisse le contenu ou mets un décalage négatif.
                     </p>
                 </div>
 

@@ -6,6 +6,7 @@ import { migrer } from '../database/migrate';
 import { logger } from '../logger';
 import { BootstrapService } from '../services/BootstrapService';
 import { localNetworkService, type ModeReseauLocal } from '../services/LocalNetworkService';
+import { enregistrerCalibrationImpression, lireCalibrationImpression, type CalibrationImpression } from '../services/ImpressionConfigService';
 import { UserRepository } from '../repositories/UserRepository';
 import { SyncQueueRepository } from '../repositories/SyncQueueRepository';
 import { syncEngine } from '../sync/SyncEngine';
@@ -97,6 +98,8 @@ export const ConfigController = {
         };
     },
     reseauLocal: () => localNetworkService.configuration(),
+    calibrationImpression: () => lireCalibrationImpression(),
+    enregistrerCalibrationImpression: (params: Partial<CalibrationImpression>) => enregistrerCalibrationImpression(params),
     relancerServeurLocal: () => localNetworkService.relancerServeurDepuisConfig(),
     configurerReseauLocal: (params: { mode: ModeReseauLocal; serveurUrl?: string | null; port?: number | null; secret?: string | null; acteurUserId?: number | null }) => {
         verifierSuperAdmin(params.acteurUserId);
