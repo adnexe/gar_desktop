@@ -205,9 +205,10 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .numero-talon {
     align-items: start;
     border: 1px solid #000;
-    display: grid;
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.35mm 1mm;
-    grid-template-columns: minmax(14mm, 30%) minmax(0, 1fr);
+    justify-content: space-between;
     margin: 3px 0;
     padding: 2px;
 }
@@ -222,8 +223,20 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .numero-recu strong,
 .numero-talon strong {
     font-size: 18px;
+    min-width: 0;
     text-align: right;
     word-break: break-all;
+}
+
+.numero-recu span,
+.numero-talon span {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.numero-recu strong,
+.numero-talon strong {
+    flex: 1 1 26mm;
 }
 
 .bloc {
@@ -257,13 +270,20 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .ligne {
     align-items: start;
-    display: grid;
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.35mm 1mm;
-    grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
+    justify-content: space-between;
+}
+
+.ligne span:first-child {
+    flex: 0 1 24mm;
 }
 
 .ligne span:last-child,
 .ligne strong {
+    flex: 1 1 24mm;
+    min-width: 0;
     text-align: right;
     word-break: break-all;
 }

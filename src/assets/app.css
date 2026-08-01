@@ -413,8 +413,9 @@
 }
 
 .zone-impression .ticket-recu.recu-bagage .numero-recu {
-    display: grid !important;
-    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr) !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: space-between !important;
     padding: 1px !important;
 }
 
