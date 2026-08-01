@@ -199,6 +199,16 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     color: #000;
 }
 
+.ticket-recu,
+.ticket-recu * {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    word-break: break-word;
+}
+
 .ticket-principal,
 .talon-controle {
     padding: 1mm;
@@ -234,24 +244,27 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 }
 
 .ligne {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
+    align-items: start;
+    display: grid;
+    gap: 1mm 2mm;
+    grid-template-columns: minmax(14mm, 34%) minmax(0, 1fr);
 }
 
 .numero-encadre {
-    align-items: center;
+    align-items: start;
     border: 1px solid #000;
-    display: flex;
+    display: grid;
     gap: 8px;
-    justify-content: center;
+    grid-template-columns: auto minmax(0, 1fr);
     margin: 4px 0;
     padding: 4px 2px;
 }
 
 .numero-encadre strong {
-    font-size: 20px;
-    letter-spacing: 1px;
+    font-size: 18px;
+    letter-spacing: 0;
+    text-align: right;
+    word-break: break-all;
 }
 
 .section-recu {
@@ -296,25 +309,36 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 }
 
 .talon-numero {
-    align-items: center;
+    align-items: start;
     border: 1px solid #000;
-    display: flex;
+    display: grid;
     gap: 6px;
+    grid-template-columns: auto minmax(0, 1fr);
     margin: 8px 0 6px;
     padding: 6px 4px;
 }
 
 .talon-numero strong {
-    font-size: 24px;
-    letter-spacing: 1px;
+    font-size: 18px;
+    letter-spacing: 0;
+    text-align: right;
+    word-break: break-all;
 }
 
 .talon-route {
-    align-items: center;
-    display: flex;
+    align-items: start;
+    display: grid;
     font-size: 13px;
-    justify-content: space-between;
+    gap: 1mm 2mm;
+    grid-template-columns: minmax(0, 1fr) auto;
     margin: 4px 0;
+}
+
+.ligne span:last-child,
+.ligne strong,
+.talon-route span:last-child {
+    text-align: right;
+    word-break: break-all;
 }
 
 .ligne-coupe {

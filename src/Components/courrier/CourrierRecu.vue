@@ -175,6 +175,16 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     padding: 1mm;
 }
 
+.ticket-recu,
+.ticket-recu * {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    word-break: break-word;
+}
+
 .logo {
     height: 34px;
     max-width: 44mm;
@@ -203,9 +213,10 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 }
 
 .numero-recu {
-    align-items: center;
-    display: flex;
-    justify-content: space-between;
+    align-items: start;
+    display: grid;
+    gap: 1mm 2mm;
+    grid-template-columns: minmax(20mm, 40%) minmax(0, 1fr);
 }
 
 .numero-recu span,
@@ -217,7 +228,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .numero-recu strong,
 .numero-etiquette strong {
-    font-size: 20px;
+    font-size: 18px;
+    text-align: right;
+    word-break: break-all;
 }
 
 .numero-etiquette {
@@ -231,15 +244,16 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 }
 
 .ligne {
-    align-items: baseline;
-    display: flex;
-    gap: 8px;
-    justify-content: space-between;
+    align-items: start;
+    display: grid;
+    gap: 1mm 2mm;
+    grid-template-columns: minmax(14mm, 34%) minmax(0, 1fr);
 }
 
 .ligne span:last-child,
 .ligne strong {
     text-align: right;
+    word-break: break-all;
 }
 
 .nom {
@@ -282,8 +296,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .bas-etiquette {
     border-top: 1px dashed #000;
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    gap: 1mm 2mm;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     margin-top: 8px;
     padding-top: 5px;
 }
