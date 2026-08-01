@@ -167,8 +167,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     color: #000;
     font-family: Arial, 'Helvetica Neue', sans-serif;
     font-size: 13px;
-    line-height: 1.4;
-    padding: 0 0.25mm 0.25mm;
+    line-height: 1.28;
+    padding: 0;
 }
 
 .ticket-recu,
@@ -207,10 +207,10 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     align-items: start;
     border: 1px solid #000;
     display: grid;
-    gap: 1mm;
+    gap: 0.5mm;
     grid-template-columns: auto minmax(0, 1fr);
-    margin: 4px 0;
-    padding: 2px 1px;
+    margin: 2px 0;
+    padding: 1px;
 }
 
 .numero-talon {
@@ -252,23 +252,23 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .bloc {
     border: 1px solid #000;
-    margin: 3px 0;
-    padding: 2px;
+    margin: 2px 0;
+    padding: 1px;
 }
 
 .recu-bagage .section-recu {
-    padding: 1px;
+    padding: 0.5px;
 }
 
 .recu-bagage .section-titre {
     background: #fff;
     border-bottom: 1px solid #000;
-    margin: -1px -1px 2px;
-    padding: 1px;
+    margin: -0.5px -0.5px 1px;
+    padding: 0.5px;
 }
 
 .numero-ticket {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     line-height: 1.1;
     overflow-wrap: anywhere;
@@ -278,7 +278,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .destination,
 .destination-talon {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     line-height: 1.1;
     overflow-wrap: anywhere;
@@ -309,7 +309,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .recu-bagage .ligne {
     align-items: start;
     display: grid;
-    gap: 0.35mm 1mm;
+    gap: 0.2mm 0.6mm;
     grid-template-columns: minmax(9mm, 26%) minmax(0, 1fr);
 }
 
@@ -340,8 +340,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 }
 
 .montant {
-    font-size: 15px;
-    margin: 8px 0;
+    font-size: 14px;
+    margin: 2px 0;
 }
 
 .importante strong {
@@ -349,7 +349,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 }
 
 .contenu {
-    min-height: 20mm;
+    min-height: 12mm;
 }
 
 .pied {
