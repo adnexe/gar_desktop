@@ -5,6 +5,16 @@
 // La zone est en display:none à l'écran (classe `hidden`, visible seulement en
 // @media print) : sa hauteur vaut donc 0 telle quelle. On la révèle hors-écran
 // le temps de la mesure — invisible pour l'utilisateur.
+function journaliserCalibrationImpression(contexte: {
+    largeurPapier: string;
+    largeurContenu: string;
+    decalageX: string;
+    hauteurMm?: number;
+    zones: number;
+}) {
+    void window.api.diagnostic?.log?.('info', 'Calibration impression renderer', contexte);
+}
+
 export function hauteurZoneImpressionMm(): number | undefined {
     // Une page peut porter plusieurs zones (fin de caisse dans la page, reçu
     // du formulaire dans un dialog portalé en fin de body…) : on mesure
@@ -13,12 +23,17 @@ export function hauteurZoneImpressionMm(): number | undefined {
     const zones = Array.from(document.querySelectorAll<HTMLElement>('.zone-impression'));
     if (zones.length === 0) return undefined;
 
-    const largeurPapier = getComputedStyle(document.documentElement)
-        .getPropertyValue('--impression-largeur-papier')
-        .trim() || '80mm';
+    const stylesRacine = getComputedStyle(document.documentElement);
+    const largeurPapier = stylesRacine.getPropertyValue('--impression-largeur-papier').trim() || '80mm';
+    const largeurContenu = stylesRacine.getPropertyValue('--impression-largeur-contenu').trim() || '70mm';
+    const decalageX = stylesRacine.getPropertyValue('--impression-decalage-x').trim() || '0mm';
 
     let px = 0;
     for (const zone of zones) {
+        zone.style.setProperty('--impression-largeur-papier', largeurPapier);
+        zone.style.setProperty('--impression-largeur-contenu', largeurContenu);
+        zone.style.setProperty('--impression-decalage-x', decalageX);
+
         const style = zone.style;
         const memo = {
             display: style.display,
@@ -43,10 +58,16 @@ export function hauteurZoneImpressionMm(): number | undefined {
         style.width = memo.width;
     }
 
-    if (!px) return undefined;
+    if (!px) {
+        journaliserCalibrationImpression({ largeurPapier, largeurContenu, decalageX, zones: zones.length });
+        return undefined;
+    }
 
     // Marge de sécurité : arrondis de rendu, marge basse propre à certains
     // pilotes (Epson...) qui coupent sinon la dernière ligne — mieux vaut
     // 2-3mm de blanc en trop qu'un reçu incomplet.
-    return Math.ceil((px * 25.4) / 96) + 10;
+    const hauteurMm = Math.ceil((px * 25.4) / 96) + 10;
+    journaliserCalibrationImpression({ largeurPapier, largeurContenu, decalageX, hauteurMm, zones: zones.length });
+
+    return hauteurMm;
 }
