@@ -95,7 +95,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         </div>
 
         <div class="bloc contenu section-recu">
-            <p class="titre section-titre">{{ recu.description || 'Bagage' }}</p>
+            <p class="titre section-titre">CONTENU</p>
+            <p class="description-bagage">{{ recu.description || 'Bagage' }}</p>
         </div>
 
         <hr v-if="recu.compagnie?.pied_ticket" />
@@ -208,7 +209,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     border: 1px solid #000;
     display: grid;
     gap: 0.5mm;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(31mm, 0.9fr) minmax(0, 1fr);
     margin: 2px 0;
     padding: 1px;
 }
@@ -233,11 +234,11 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .numero-recu strong,
 .numero-talon strong {
-    font-size: 18px;
+    font-size: 16px;
     line-height: 1.12;
     min-width: 0;
     overflow-wrap: anywhere;
-    text-align: right;
+    text-align: left;
     word-break: break-all;
 }
 
@@ -310,7 +311,14 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     align-items: start;
     display: grid;
     gap: 0.2mm 0.6mm;
-    grid-template-columns: minmax(9mm, 26%) minmax(0, 1fr);
+    grid-template-columns: 26mm minmax(0, 1fr);
+}
+
+.recu-bagage .ligne span:first-child {
+    line-break: auto;
+    overflow-wrap: normal;
+    white-space: nowrap;
+    word-break: normal;
 }
 
 .talon-bagage .ligne span:first-child {
@@ -321,8 +329,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .ligne strong {
     min-width: 0;
     overflow-wrap: anywhere;
-    text-align: right;
-    word-break: break-all;
+    text-align: left;
+    word-break: break-word;
 }
 
 .recu-bagage p,
@@ -331,7 +339,20 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     line-break: anywhere;
     overflow-wrap: anywhere;
     white-space: normal;
+    word-break: break-word;
+}
+
+.recu-bagage .numero-recu strong,
+.recu-bagage .numero-ticket,
+.recu-bagage .destination,
+.recu-bagage .nom-client,
+.recu-bagage .description-bagage {
     word-break: break-all;
+}
+
+.recu-bagage .montant strong {
+    font-size: 15px;
+    font-weight: 700;
 }
 
 .talon-bagage .ligne span:last-child,
