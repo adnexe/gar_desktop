@@ -39,7 +39,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 </script>
 
 <template>
-    <div v-if="mode === 'recu'" class="ticket-recu recu-bagage">
+    <div v-if="mode !== 'talon'" class="ticket-recu recu-bagage">
         <div class="text-center">
             <img
                 v-if="recu.compagnie?.logo_data_uri || recu.compagnie?.logo_url"
@@ -102,7 +102,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         <p v-if="recu.compagnie?.pied_ticket" class="pied">{{ recu.compagnie.pied_ticket }}</p>
     </div>
 
-    <div v-else class="ticket-recu talon-bagage">
+    <div v-if="mode !== 'recu'" class="ticket-recu talon-bagage">
         <div class="text-center">
             <p class="compagnie">{{ recu.compagnie?.nom || recu.agence }}</p>
             <p class="contact">Talon bagage à coller</p>
@@ -167,7 +167,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     color: #000;
     font-family: Arial, 'Helvetica Neue', sans-serif;
     font-size: 13px;
-    line-height: 1.35;
+    line-height: 1.4;
     padding: 0 0.25mm 0.25mm;
 }
 
@@ -201,7 +201,16 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-size: 11px;
 }
 
-.numero-recu,
+.numero-recu {
+    align-items: start;
+    border: 1px solid #000;
+    display: grid;
+    gap: 1mm;
+    grid-template-columns: auto minmax(0, 1fr);
+    margin: 4px 0;
+    padding: 2px 1px;
+}
+
 .numero-talon {
     align-items: start;
     border: 1px solid #000;
@@ -228,13 +237,11 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     word-break: break-all;
 }
 
-.numero-recu span,
 .numero-talon span {
     flex: 0 1 auto;
     min-width: 0;
 }
 
-.numero-recu strong,
 .numero-talon strong {
     flex: 1 1 26mm;
 }
@@ -243,6 +250,17 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     border: 1px solid #000;
     margin: 3px 0;
     padding: 2px;
+}
+
+.recu-bagage .bloc {
+    padding: 1px;
+}
+
+.recu-bagage .titre {
+    background: #fff;
+    border-bottom: 1px solid #000;
+    margin: -1px -1px 2px;
+    padding: 1px;
 }
 
 .numero-ticket {
@@ -268,7 +286,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     text-transform: uppercase;
 }
 
-.ligne {
+.talon-bagage .ligne {
     align-items: start;
     display: flex;
     flex-wrap: wrap;
@@ -276,16 +294,27 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     justify-content: space-between;
 }
 
-.ligne span:first-child {
+.recu-bagage .ligne {
+    align-items: start;
+    display: grid;
+    gap: 0.35mm 1mm;
+    grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
+}
+
+.talon-bagage .ligne span:first-child {
     flex: 0 1 24mm;
 }
 
 .ligne span:last-child,
 .ligne strong {
-    flex: 1 1 24mm;
     min-width: 0;
     text-align: right;
     word-break: break-all;
+}
+
+.talon-bagage .ligne span:last-child,
+.talon-bagage .ligne strong {
+    flex: 1 1 24mm;
 }
 
 .montant {

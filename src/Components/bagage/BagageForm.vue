@@ -109,7 +109,7 @@ const recu = ref<{
     created_at: string;
     compagnie: CompagnieLocale | null;
 } | null>(null);
-const modeImpression = ref<'recu' | 'talon'>('recu');
+const modeImpression = ref<'tout' | 'recu' | 'talon'>('tout');
 const confirmationOuverte = ref(false);
 let intervalleVoyages: ReturnType<typeof setInterval> | null = null;
 
@@ -219,7 +219,7 @@ function resetSaisie() {
 function resetTout() {
     resetSaisie();
     recu.value = null;
-    modeImpression.value = 'recu';
+    modeImpression.value = 'tout';
     void chargerVoyagesAgence();
 }
 
@@ -235,24 +235,23 @@ function messageErreurInconnue(e: unknown, defaut: string) {
         .replace(/^Error invoking remote method "[^"]+": Error: /, '');
 }
 
-async function lancerImpression(): Promise<ResultatImpression> {
-    await nextTick();
-    return await window.api.impression.imprimerRecu(hauteurZoneImpressionMm());
-}
-
-async function imprimerRecu(): Promise<ResultatImpression> {
-    modeImpression.value = 'recu';
-    return await lancerImpression();
+async function imprimer(partie: 'recu' | 'talon'): Promise<ResultatImpression> {
+    modeImpression.value = partie;
+    try {
+        await nextTick();
+        return await window.api.impression.imprimerRecu(hauteurZoneImpressionMm());
+    } finally {
+        modeImpression.value = 'tout';
+    }
 }
 
 async function imprimerTalon() {
     if (!recu.value) return;
 
     erreur.value = '';
-    modeImpression.value = 'talon';
 
     try {
-        const impression = await lancerImpression();
+        const impression = await imprimer('talon');
         if (!impression.ok) {
             erreur.value = `Talon non imprimé : ${impression.erreur ?? 'Impression non confirmée par le système.'}`;
         }
@@ -322,7 +321,7 @@ async function enregistrer() {
 
         let impression: ResultatImpression;
         try {
-            impression = await imprimerRecu();
+            impression = await imprimer('recu');
         } catch (e) {
             impression = {
                 ok: false,
@@ -348,15 +347,15 @@ async function enregistrer() {
         // second job (l'imprimante coupe entre les deux). Son échec n'annule
         // pas l'enregistrement, on avertit simplement.
         try {
-            modeImpression.value = 'talon';
-            const talon = await lancerImpression();
+            await window.api.diagnostic?.log?.('info', 'Impression talon bagage automatique', {
+                numero_bagage: reponse.bagage.numero_bagage,
+            });
+            const talon = await imprimer('talon');
             if (!talon.ok) {
                 erreur.value = `Le reçu est imprimé, mais le talon n'est pas sorti : ${talon.erreur ?? 'erreur inconnue'}. Utilisez « Réimprimer talon ».`;
             }
         } catch (e) {
             erreur.value = `Le reçu est imprimé, mais le talon n'est pas sorti : ${messageErreurInconnue(e, 'erreur inconnue')}. Utilisez « Réimprimer talon ».`;
-        } finally {
-            modeImpression.value = 'recu';
         }
 
         const confirmation = await window.api.bagage.confirmerImpression(reponse.bagage.uuid);
