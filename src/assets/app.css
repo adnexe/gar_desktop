@@ -365,10 +365,15 @@
     --impression-largeur-papier: 80mm;
     --impression-largeur-contenu: 70mm;
     --impression-decalage-x: 0mm;
+    --impression-garde-laterale: 4mm;
+    --impression-largeur-recu: min(
+        var(--impression-largeur-contenu),
+        calc(var(--impression-largeur-papier) - var(--impression-garde-laterale))
+    );
     --impression-marge-gauche: clamp(
         0mm,
-        calc((var(--impression-largeur-papier) - var(--impression-largeur-contenu)) / 2 + var(--impression-decalage-x)),
-        calc(var(--impression-largeur-papier) - var(--impression-largeur-contenu))
+        calc((var(--impression-largeur-papier) - var(--impression-largeur-recu)) / 2 + var(--impression-decalage-x)),
+        calc(var(--impression-largeur-papier) - var(--impression-largeur-recu))
     );
 }
 
@@ -376,12 +381,12 @@
     box-sizing: border-box !important;
     margin-left: var(--impression-marge-gauche) !important;
     margin-right: 0 !important;
-    max-width: var(--impression-largeur-contenu) !important;
+    max-width: var(--impression-largeur-recu) !important;
     overflow: hidden;
     padding-left: 1mm;
     padding-right: 1mm;
     transform: none !important;
-    width: var(--impression-largeur-contenu) !important;
+    width: var(--impression-largeur-recu) !important;
 }
 
 .zone-impression .ticket-recu,

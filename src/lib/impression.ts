@@ -63,9 +63,7 @@ export function hauteurZoneImpressionMm(): number | undefined {
         return undefined;
     }
 
-    // Marge de sécurité : arrondis de rendu, marge basse propre à certains
-    // pilotes (Epson...) qui coupent sinon la dernière ligne — mieux vaut
-    // 2-3mm de blanc en trop qu'un reçu incomplet.
+    // Marge de sécurité verticale pour les arrondis de rendu des pilotes.
     const hauteurMm = Math.ceil((px * 25.4) / 96) + 10;
     journaliserCalibrationImpression({ largeurPapier, largeurContenu, decalageX, hauteurMm, zones: zones.length });
 
