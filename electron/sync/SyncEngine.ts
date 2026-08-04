@@ -40,6 +40,13 @@ export class SyncEngine {
         if (this.demarre) return;
 
         this.demarre = true;
+        // L'écran de connexion (Login.vue) fait déjà un check-in silencieux à
+        // son montage, à chaque lancement de l'app. Sans ce seed, ce premier
+        // cycle (2s après demarrer()) déclenchait un DEUXIÈME appel bootstrap
+        // quasi simultané à chaque démarrage — deux requêtes pour un seul
+        // besoin, ce qui use inutilement le quota anti-abus côté admin.
+        this.derniereVerificationLicence = Date.now();
+        this.derniereActualisationCatalogue = Date.now();
         eventBus.ecouter('file:ajout', () => this.planifier(300));
         this.intervalle = setInterval(() => this.planifier(0), 30_000);
         this.planifier(2_000);

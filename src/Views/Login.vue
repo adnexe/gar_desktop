@@ -45,7 +45,7 @@ async function actualiser(silencieux = false) {
         // Le nom/la ville de l'agence ont pu changer côté admin.
         await config.charger();
     } else if (!silencieux) {
-        messageActualisation.value = "Serveur injoignable — l'app utilise les données locales.";
+        messageActualisation.value = resultat.erreur ?? "Serveur injoignable — l'app utilise les données locales.";
     }
 }
 

@@ -209,7 +209,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     border: 1px solid #000;
     display: grid;
     gap: 0.5mm;
-    grid-template-columns: minmax(31mm, 0.9fr) minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
     margin: 2px 0;
     padding: 1px;
 }
@@ -311,7 +311,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     align-items: start;
     display: grid;
     gap: 0.2mm 0.6mm;
-    grid-template-columns: 26mm minmax(0, 1fr);
+    grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
 }
 
 .recu-bagage .ligne span:first-child {

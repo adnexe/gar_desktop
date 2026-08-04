@@ -1,4 +1,3 @@
-import axios from 'axios';
 import type Database from 'better-sqlite3';
 import { apiBaseUrl } from '../apiClient';
 import { getDb } from '../database/connection';
@@ -15,36 +14,14 @@ const service = new BootstrapService();
 const users = new UserRepository();
 const fileSync = new SyncQueueRepository();
 
+// BootstrapService.actualiser() calcule déjà le message précis (429, 404,
+// réseau...) via messageErreurBootstrap() et le renvoie dans un Error simple :
+// on le réutilise tel quel plutôt que de re-tenter une détection axios ici,
+// qui échoue toujours puisque l'erreur d'origine n'est plus un AxiosError à
+// ce stade (elle a été ré-emballée un niveau plus bas).
 function messageErreurActualisation(erreur: unknown): string {
-    if (axios.isAxiosError(erreur)) {
-        const status = erreur.response?.status;
-        if (status === 429) {
-            return "Trop d'actualisations en peu de temps. Réessayez dans une minute.";
-        }
-
-        if (status === 404) {
-            return "L'agence n'a pas été trouvée ou elle est désactivée côté admin.";
-        }
-
-        if (status === 401 || status === 403) {
-            return "L'accès à admin n'est pas autorisé. Relancez la configuration si le problème continue.";
-        }
-
-        if (status && status >= 500) {
-            return "Admin rencontre une erreur. Réessayez dans quelques instants.";
-        }
-
-        if (erreur.code === 'ECONNREFUSED') {
-            return "Admin n'est pas disponible. Vérifiez qu'il est lancé, puis réessayez.";
-        }
-        if (erreur.code === 'ECONNABORTED' || erreur.code === 'ETIMEDOUT') {
-            return "Admin met trop de temps à répondre. Réessayez dans quelques instants.";
-        }
-        if (erreur.code === 'ENOTFOUND' || erreur.code === 'EAI_AGAIN') {
-            return "Adresse admin introuvable. Vérifiez la connexion internet ou la configuration.";
-        }
-
-        return "Impossible d'actualiser depuis admin. Les données locales restent disponibles.";
+    if (erreur instanceof Error && erreur.message) {
+        return erreur.message;
     }
 
     return "Impossible d'actualiser depuis admin. Les données locales restent disponibles.";
