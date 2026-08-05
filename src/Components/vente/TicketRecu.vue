@@ -248,6 +248,16 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
 }
 
+/* !important nécessaire : la règle globale (app.css) force overflow-wrap:
+ * anywhere + word-break: break-word sur tout span du reçu, pour ne jamais
+ * dépasser la zone imprimable. Sur une étiquette, ça coupe au milieu du mot
+ * dès que la colonne est étroite. keep-all autorise toujours le retour à la
+ * ligne (entre les mots), juste plus jamais en plein milieu d'un mot. */
+.ligne span:first-child {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+
 .numero-encadre {
     align-items: start;
     border: 1px solid #000;
@@ -256,6 +266,15 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     grid-template-columns: auto minmax(0, 1fr);
     margin: 4px 0;
     padding: 2px 1px;
+}
+
+/* Étiquette fixe (« N° »), jamais une valeur : retour à la ligne entre les
+ * mots uniquement, jamais en plein milieu — voir .ligne span:first-child
+ * plus haut pour le détail du !important. */
+.numero-encadre span,
+.talon-numero span {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
 }
 
 .numero-encadre strong {

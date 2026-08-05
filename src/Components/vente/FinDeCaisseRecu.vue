@@ -120,3 +120,16 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         </div>
     </div>
 </template>
+
+<style scoped>
+/* !important nécessaire : une règle globale (app.css) force overflow-wrap:
+ * anywhere + word-break: break-word sur tout span du reçu, pour ne jamais
+ * dépasser la zone imprimable. Sur une étiquette longue (« Montant global
+ * encaissé »), ça coupe en plein milieu d'un mot dès que la place manque.
+ * keep-all autorise toujours le retour à la ligne (entre les mots), juste
+ * plus jamais en plein milieu d'un mot. */
+.ligne span:first-child {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+</style>

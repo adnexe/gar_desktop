@@ -214,7 +214,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     align-items: start;
     display: grid;
     gap: 0.35mm 1mm;
-    grid-template-columns: minmax(15mm, 31%) minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
 }
 
 .numero-recu span,
@@ -222,6 +222,14 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-weight: 700;
     text-decoration: underline;
     text-transform: uppercase;
+}
+
+/* Étiquette fixe (« N° COURRIER »), jamais une valeur : retour à la ligne
+ * entre les mots uniquement, jamais en plein milieu — voir .ligne span:first-child
+ * ci-dessous pour l'explication complète du !important. */
+.numero-recu span {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
 }
 
 .numero-recu strong,
@@ -246,6 +254,16 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     display: grid;
     gap: 0.35mm 1mm;
     grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
+}
+
+/* !important nécessaire : la règle globale (app.css) force overflow-wrap:
+ * anywhere + word-break: break-word sur tout span du reçu, pour ne jamais
+ * dépasser la zone imprimable. Sur une étiquette, ça coupe au milieu du mot
+ * dès que la colonne est étroite. keep-all autorise toujours le retour à la
+ * ligne (entre les mots), juste plus jamais en plein milieu d'un mot. */
+.ligne span:first-child {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
 }
 
 .ligne span:last-child,

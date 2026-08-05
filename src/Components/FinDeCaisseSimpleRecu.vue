@@ -51,3 +51,17 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         <div style="display:flex;justify-content:space-between;font-weight:700"><span>Montant total</span><span>{{ formatMontant(montantTotal) }}</span></div>
     </div>
 </template>
+
+<style scoped>
+/* !important nécessaire : une règle globale (app.css) force overflow-wrap:
+ * anywhere + word-break: break-word sur tout span du reçu, pour ne jamais
+ * dépasser la zone imprimable. Sur une étiquette longue, ça coupe en plein
+ * milieu d'un mot dès que la place manque. keep-all autorise toujours le
+ * retour à la ligne (entre les mots), juste plus jamais en plein milieu
+ * d'un mot. Ciblage par attribut (comme app.css) : ce composant n'a que des
+ * styles inline, pas de classe dédiée sur les lignes label/valeur. */
+div[style*="justify-content:space-between"] > span:first-child {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+</style>

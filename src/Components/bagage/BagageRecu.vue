@@ -232,6 +232,15 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     text-transform: uppercase;
 }
 
+/* Étiquettes fixes (« N° REÇU BAGAGES », « N° BAGAGE »), jamais une valeur :
+ * retour à la ligne entre les mots uniquement, jamais en plein milieu — voir
+ * .recu-bagage .ligne span:first-child plus bas pour le détail du !important. */
+.numero-recu span,
+.numero-talon span {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+
 .numero-recu strong,
 .numero-talon strong {
     font-size: 16px;
@@ -314,15 +323,21 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
 }
 
+/* !important nécessaire : la règle globale (app.css) force overflow-wrap:
+ * anywhere + word-break: break-word sur tout span du reçu, pour ne jamais
+ * dépasser la zone imprimable. Sur une étiquette (« Enregistré le : »),
+ * ça coupe au milieu du mot (« Enregis »/« tré le : ») dès que la colonne
+ * est un peu étroite. keep-all autorise toujours le retour à la ligne
+ * (entre les mots), juste plus jamais en plein milieu d'un mot. */
 .recu-bagage .ligne span:first-child {
-    line-break: auto;
-    overflow-wrap: normal;
-    white-space: nowrap;
-    word-break: normal;
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
 }
 
 .talon-bagage .ligne span:first-child {
     flex: 0 1 24mm;
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
 }
 
 .ligne span:last-child,
