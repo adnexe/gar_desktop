@@ -245,7 +245,10 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     align-items: start;
     display: grid;
     gap: 0.35mm 1mm;
-    grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
+    /* auto : l'étiquette prend exactement la place de son texte, quelle que
+     * soit la calibration — un pourcentage fixe devient trop étroit sur les
+     * petites largeurs et force la coupure des étiquettes en plein mot. */
+    grid-template-columns: auto minmax(0, 1fr);
 }
 
 /* !important nécessaire : la règle globale (app.css) force overflow-wrap:

@@ -410,13 +410,19 @@
     box-sizing: border-box;
 }
 
+/* Politique unique pour TOUT texte de reçu : retour à la ligne entre les
+ * mots d'abord, coupure au milieu d'un mot UNIQUEMENT en dernier recours
+ * (mot seul plus large que sa colonne). Jamais de débordement du cadre.
+ * Surtout pas `line-break: anywhere` ni `word-break: break-all` : ils
+ * coupent en plein mot dès que la ligne est pleine (« Montan/t : ») même
+ * quand un retour à la ligne entre les mots aurait suffi. */
 .zone-impression .ticket-recu p,
 .zone-impression .ticket-recu span,
 .zone-impression .ticket-recu strong {
-    line-break: anywhere;
+    line-break: auto !important;
     overflow-wrap: anywhere !important;
     white-space: normal !important;
-    word-break: break-word !important;
+    word-break: normal !important;
 }
 
 .zone-impression .ticket-recu .compagnie,
@@ -436,10 +442,10 @@
 .zone-impression .ticket-recu .numero-encadre strong,
 .zone-impression .ticket-recu .numero-etiquette strong,
 .zone-impression .ticket-recu .talon-numero strong {
-    line-break: anywhere;
+    line-break: auto !important;
     overflow-wrap: anywhere !important;
     white-space: normal !important;
-    word-break: break-all !important;
+    word-break: normal !important;
 }
 
 .zone-impression .ticket-recu .ligne,

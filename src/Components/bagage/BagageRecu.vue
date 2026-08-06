@@ -175,12 +175,11 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .ticket-recu,
 .ticket-recu * {
     box-sizing: border-box;
-    line-break: anywhere;
     max-width: 100%;
     min-width: 0;
     overflow-wrap: anywhere;
     white-space: normal;
-    word-break: break-word;
+    word-break: normal;
 }
 
 .logo {
@@ -320,7 +319,10 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     align-items: start;
     display: grid;
     gap: 0.2mm 0.6mm;
-    grid-template-columns: minmax(10mm, 28%) minmax(0, 1fr);
+    /* auto : l'étiquette prend exactement la place de son texte, quelle que
+     * soit la calibration — un pourcentage fixe devient trop étroit sur les
+     * petites largeurs et force la coupure des étiquettes en plein mot. */
+    grid-template-columns: auto minmax(0, 1fr);
 }
 
 /* !important nécessaire : la règle globale (app.css) force overflow-wrap:
@@ -351,18 +353,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .recu-bagage p,
 .recu-bagage span,
 .recu-bagage strong {
-    line-break: anywhere;
     overflow-wrap: anywhere;
     white-space: normal;
-    word-break: break-word;
-}
-
-.recu-bagage .numero-recu strong,
-.recu-bagage .numero-ticket,
-.recu-bagage .destination,
-.recu-bagage .nom-client,
-.recu-bagage .description-bagage {
-    word-break: break-all;
+    word-break: normal;
 }
 
 .recu-bagage .montant strong {
