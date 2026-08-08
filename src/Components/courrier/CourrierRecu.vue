@@ -177,9 +177,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     box-sizing: border-box;
     max-width: 100%;
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     white-space: normal;
-    word-break: break-word;
+    word-break: normal;
 }
 
 .logo {
@@ -210,11 +210,15 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     padding: 3px;
 }
 
+/* flex-wrap et NON grid : quand l'étiquette est longue et la largeur réduite,
+ * une grille écrase la colonne du numéro et le coupe en deux. En flex, le
+ * numéro passe ENTIER à la ligne suivante — jamais tronqué. */
 .numero-recu {
     align-items: start;
-    display: grid;
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.35mm 1mm;
-    grid-template-columns: auto minmax(0, 1fr);
+    justify-content: space-between;
 }
 
 .numero-recu span,
@@ -236,7 +240,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .numero-etiquette strong {
     font-size: 18px;
     text-align: right;
-    word-break: break-all;
+    word-break: normal;
 }
 
 .numero-etiquette {
@@ -272,7 +276,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .ligne span:last-child,
 .ligne strong {
     text-align: right;
-    word-break: break-all;
+    word-break: normal;
 }
 
 .nom {

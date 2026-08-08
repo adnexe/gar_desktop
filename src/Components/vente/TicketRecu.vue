@@ -201,9 +201,9 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     box-sizing: border-box;
     max-width: 100%;
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     white-space: normal;
-    word-break: break-word;
+    word-break: normal;
 }
 
 .ticket-principal,
@@ -261,12 +261,16 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     word-break: keep-all !important;
 }
 
+/* flex-wrap et NON grid : quand l'étiquette est longue et la largeur réduite,
+ * une grille écrase la colonne du numéro et le coupe en deux. En flex, le
+ * numéro passe ENTIER à la ligne suivante — jamais tronqué. */
 .numero-encadre {
     align-items: start;
     border: 1px solid #000;
-    display: grid;
-    gap: 1mm;
-    grid-template-columns: auto minmax(0, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35mm 1mm;
+    justify-content: space-between;
     margin: 4px 0;
     padding: 2px 1px;
 }
@@ -284,7 +288,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     font-size: 18px;
     letter-spacing: 0;
     text-align: right;
-    word-break: break-all;
+    word-break: normal;
 }
 
 .section-recu {
@@ -331,9 +335,10 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 .talon-numero {
     align-items: start;
     border: 1px solid #000;
-    display: grid;
-    gap: 1.5mm;
-    grid-template-columns: auto minmax(0, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35mm 1.5mm;
+    justify-content: space-between;
     margin: 4px 0;
     padding: 4px 3px;
 }
@@ -342,7 +347,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
     font-size: 18px;
     letter-spacing: 0;
     text-align: right;
-    word-break: break-all;
+    word-break: normal;
 }
 
 .talon-route {
@@ -358,7 +363,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 .ligne strong,
 .talon-route span:last-child {
     text-align: right;
-    word-break: break-all;
+    word-break: normal;
 }
 
 .ligne-coupe {

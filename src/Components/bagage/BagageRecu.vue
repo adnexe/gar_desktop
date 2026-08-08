@@ -177,7 +177,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     box-sizing: border-box;
     max-width: 100%;
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     white-space: normal;
     word-break: normal;
 }
@@ -194,7 +194,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-weight: 700;
     line-height: 1.05;
     text-transform: uppercase;
-    word-break: break-all;
+    word-break: normal;
 }
 
 .contact,
@@ -203,12 +203,17 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-size: 11px;
 }
 
+/* flex-wrap et NON grid, exactement comme .numero-talon : quand l'étiquette
+ * est longue (« N° REÇU BAGAGES ») et la largeur réduite, une grille écrase la
+ * colonne du numéro et le coupe en deux (« 1012418 / 57 »). En flex, le numéro
+ * passe ENTIER à la ligne suivante — jamais tronqué. */
 .numero-recu {
     align-items: start;
     border: 1px solid #000;
-    display: grid;
-    gap: 0.5mm;
-    grid-template-columns: auto minmax(0, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35mm 1mm;
+    justify-content: space-between;
     margin: 2px 0;
     padding: 1px;
 }
@@ -245,9 +250,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-size: 16px;
     line-height: 1.12;
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     text-align: left;
-    word-break: break-all;
+    word-break: normal;
 }
 
 .numero-talon span {
@@ -280,9 +285,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-size: 18px;
     font-weight: 700;
     line-height: 1.1;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     text-align: center;
-    word-break: break-all;
+    word-break: normal;
 }
 
 .destination,
@@ -290,9 +295,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-size: 18px;
     font-weight: 700;
     line-height: 1.1;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     text-transform: uppercase;
-    word-break: break-all;
+    word-break: normal;
 }
 
 .destination-talon {
@@ -302,9 +307,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .nom-client {
     font-size: 13px;
     font-weight: 700;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     text-transform: uppercase;
-    word-break: break-all;
+    word-break: normal;
 }
 
 .talon-bagage .ligne {
@@ -345,15 +350,15 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .ligne span:last-child,
 .ligne strong {
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     text-align: left;
-    word-break: break-word;
+    word-break: normal;
 }
 
 .recu-bagage p,
 .recu-bagage span,
 .recu-bagage strong {
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     white-space: normal;
     word-break: normal;
 }

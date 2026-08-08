@@ -413,14 +413,20 @@
 /* Politique unique pour TOUT texte de reçu : retour à la ligne entre les
  * mots d'abord, coupure au milieu d'un mot UNIQUEMENT en dernier recours
  * (mot seul plus large que sa colonne). Jamais de débordement du cadre.
- * Surtout pas `line-break: anywhere` ni `word-break: break-all` : ils
- * coupent en plein mot dès que la ligne est pleine (« Montan/t : ») même
- * quand un retour à la ligne entre les mots aurait suffi. */
+ *
+ * `break-word` et NON `anywhere`, même si les deux coupent un mot trop long :
+ * `anywhere` fait aussi tomber la largeur mini du texte à UN caractère, donc
+ * grilles et flex croient pouvoir réduire n'importe quelle colonne à un
+ * sliver et y cassent le texte en plein mot (« Montan/t : », « 10124185/7 »)
+ * alors que la place existait. `break-word` garde la largeur mini = mot le
+ * plus long : la mise en page réserve la place du mot entier, et ne le coupe
+ * que s'il ne rentre vraiment pas. Ne jamais remettre `line-break: anywhere`
+ * ni `word-break: break-all` ici, pour la même raison. */
 .zone-impression .ticket-recu p,
 .zone-impression .ticket-recu span,
 .zone-impression .ticket-recu strong {
     line-break: auto !important;
-    overflow-wrap: anywhere !important;
+    overflow-wrap: break-word !important;
     white-space: normal !important;
     word-break: normal !important;
 }
@@ -443,7 +449,7 @@
 .zone-impression .ticket-recu .numero-etiquette strong,
 .zone-impression .ticket-recu .talon-numero strong {
     line-break: auto !important;
-    overflow-wrap: anywhere !important;
+    overflow-wrap: break-word !important;
     white-space: normal !important;
     word-break: normal !important;
 }
