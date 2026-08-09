@@ -1,14 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { CalendarDays, Monitor, Power, Printer, RefreshCw, Server, Wifi } from '@lucide/vue';
+import { CalendarDays, LoaderCircle, Monitor, Power, Printer, RefreshCw, Server, SlidersHorizontal, Trash2, Wifi } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
 import { useConfigStore } from '@/Stores/config';
+import { useSessionStore } from '@/Stores/session';
+import { appliquerCalibrationImpression, CALIBRATION_IMPRESSION_DEFAUT, normaliserCalibrationImpression, type CalibrationImpression } from '@/lib/calibrationImpression';
 
 type ModeReseau = 'autonome' | 'serveur' | 'client';
 type StatutConnexion = 'connecte' | 'deconnecte' | 'verification';
+type ActionReseau =
+    | 'activer_serveur'
+    | 'relancer_serveur'
+    | 'activer_client'
+    | 'tester_client'
+    | 'reconnecter_client'
+    | 'desactiver'
+    | 'actualiser_voyages';
 type ReseauLocal = {
     mode: ModeReseau;
     serveurUrl: string | null;
@@ -27,20 +37,29 @@ type ImprimanteLocale = {
 };
 
 const config = useConfigStore();
+const session = useSessionStore();
 const reseau = ref<ReseauLocal | null>(null);
+const roleMachine = ref<ModeReseau>('client');
 const imprimantes = ref<ImprimanteLocale[]>([]);
+const calibrationImpression = ref<CalibrationImpression>({ ...CALIBRATION_IMPRESSION_DEFAUT });
 const portServeur = ref(3750);
 const serveurUrl = ref('');
 const secretReseau = ref('');
 const enCours = ref(false);
+const actionReseau = ref<ActionReseau | null>(null);
 const actualisation = ref(false);
 const chargementImprimantes = ref(false);
 const testImpression = ref(false);
+const sauvegardeCalibration = ref(false);
+const nettoyageDonnees = ref(false);
+const resetEnCours = ref(false);
+const synchroEnCours = ref(false);
 const message = ref('');
 const erreur = ref('');
 const messageImpression = ref('');
 const erreurImpression = ref('');
 const statutConnexion = ref<StatutConnexion>('deconnecte');
+const estSuperAdmin = computed(() => session.role === 'super_admin');
 
 const libelleMode = computed(() => {
     if (reseau.value?.mode === 'serveur') return 'Caisse serveur';
@@ -109,6 +128,8 @@ const resumeAbonnement = computed(() => {
 
     return `${jours.toLocaleString('fr-FR')} j`;
 });
+
+const chargementReseau = (action: ActionReseau) => actionReseau.value === action;
 
 function badgeEtat(on: boolean) {
     return [
@@ -186,7 +207,17 @@ onMounted(() => {
 });
 
 async function initialiser() {
-    await Promise.all([chargerReseau(), chargerImprimantes(), config.charger()]);
+    await Promise.all([chargerReseau(), chargerImprimantes(), chargerCalibrationImpression(), config.charger()]);
+}
+
+async function chargerCalibrationImpression() {
+    try {
+        const calibration = await window.api.config.calibrationImpression();
+        calibrationImpression.value = appliquerCalibrationImpression(calibration);
+    } catch (e) {
+        calibrationImpression.value = appliquerCalibrationImpression(CALIBRATION_IMPRESSION_DEFAUT);
+        erreurImpression.value = messageErreur(e, 'Impossible de charger la calibration impression.');
+    }
 }
 
 async function chargerReseau() {
@@ -196,6 +227,7 @@ async function chargerReseau() {
 
     try {
         reseau.value = await window.api.config.reseauLocal();
+        roleMachine.value = reseau.value.mode;
         portServeur.value = reseau.value.port;
         serveurUrl.value = reseau.value.serveurUrl ?? '';
         secretReseau.value = reseau.value.secret ?? '';
@@ -228,8 +260,9 @@ async function verifierConnexionLocale() {
     statutConnexion.value = resultat.ok ? 'connecte' : 'deconnecte';
 }
 
-async function executer(action: () => Promise<void>) {
+async function executer(action: () => Promise<void>, actionKey: ActionReseau) {
     enCours.value = true;
+    actionReseau.value = actionKey;
     erreur.value = '';
     message.value = '';
 
@@ -239,28 +272,60 @@ async function executer(action: () => Promise<void>) {
         erreur.value = messageErreur(e, 'Action réseau impossible.');
     } finally {
         enCours.value = false;
+        actionReseau.value = null;
     }
 }
 
 async function activerServeurLocal() {
+    if (!estSuperAdmin.value || !session.userId) {
+        erreur.value = 'Seul un super admin peut modifier le rôle réseau de cette machine.';
+        return;
+    }
+
     await executer(async () => {
-        reseau.value = await window.api.config.configurerReseauLocal({ mode: 'serveur', port: portServeur.value });
+        reseau.value = await window.api.config.configurerReseauLocal({ mode: 'serveur', port: portServeur.value, acteurUserId: session.userId });
+        roleMachine.value = reseau.value.mode;
         secretReseau.value = reseau.value.secret ?? '';
-        statutConnexion.value = 'connecte';
+        statutConnexion.value = reseau.value.actif ? 'connecte' : 'deconnecte';
         message.value = 'Cette machine est maintenant la caisse serveur locale.';
-    });
+    }, 'activer_serveur');
+}
+
+async function relancerServeurLocal() {
+    if (reseau.value?.mode !== 'serveur') {
+        erreur.value = "Cette machine n'est pas configurée comme caisse serveur.";
+        return;
+    }
+
+    await executer(async () => {
+        reseau.value = await window.api.config.relancerServeurLocal();
+        roleMachine.value = reseau.value.mode;
+        portServeur.value = reseau.value.port;
+        secretReseau.value = reseau.value.secret ?? '';
+        statutConnexion.value = reseau.value.actif ? 'connecte' : 'deconnecte';
+        message.value = reseau.value.actif
+            ? 'Serveur local relancé. Les postes clients peuvent se reconnecter.'
+            : "Le serveur local n'a pas démarré.";
+    }, 'relancer_serveur');
 }
 
 async function activerClientLocal() {
+    if (!estSuperAdmin.value || !session.userId) {
+        erreur.value = 'Seul un super admin peut modifier le rôle réseau de cette machine.';
+        return;
+    }
+
     await executer(async () => {
         reseau.value = await window.api.config.configurerReseauLocal({
             mode: 'client',
             serveurUrl: serveurUrl.value,
             secret: secretReseau.value,
+            acteurUserId: session.userId,
         });
+        roleMachine.value = reseau.value.mode;
         await verifierConnexionLocale();
         message.value = 'Ce poste utilise maintenant la caisse serveur locale.';
-    });
+    }, 'activer_client');
 }
 
 async function testerClientLocal() {
@@ -275,20 +340,61 @@ async function testerClientLocal() {
         message.value = resultat.agence
             ? `${resultat.message} Agence : ${resultat.agence}.`
             : resultat.message;
-    });
+    }, 'tester_client');
+}
+
+async function reconnecterClientLocal() {
+    if (!clientOn.value || !serveurUrl.value || !secretReseau.value) {
+        erreur.value = "Ce poste client n'a pas encore de paramètres serveur enregistrés.";
+        return;
+    }
+
+    await executer(async () => {
+        statutConnexion.value = 'verification';
+        const test = await window.api.config.testerReseauLocal(serveurUrl.value, secretReseau.value);
+        if (!test.ok) {
+            statutConnexion.value = 'deconnecte';
+            throw new Error(test.message);
+        }
+
+        statutConnexion.value = 'connecte';
+        if (config.agence) {
+            const resultat = await window.api.config.actualiserVoyagesServeurLocal(config.agence.id);
+            message.value = `${test.message} ${resultat.message}`;
+        } else {
+            message.value = test.agence
+                ? `${test.message} Agence : ${test.agence}.`
+                : test.message;
+        }
+    }, 'reconnecter_client');
 }
 
 async function desactiverReseauLocal() {
+    if (!estSuperAdmin.value || !session.userId) {
+        erreur.value = 'Seul un super admin peut modifier le rôle réseau de cette machine.';
+        return;
+    }
+
     await executer(async () => {
         const etaitClient = clientOn.value;
-        reseau.value = await window.api.config.configurerReseauLocal({ mode: 'autonome' });
+        reseau.value = await window.api.config.configurerReseauLocal({ mode: 'autonome', acteurUserId: session.userId });
+        roleMachine.value = reseau.value.mode;
         serveurUrl.value = reseau.value.serveurUrl ?? '';
         secretReseau.value = reseau.value.secret ?? '';
         statutConnexion.value = 'deconnecte';
         message.value = etaitClient
             ? 'Ce poste est déconnecté de la caisse serveur locale.'
             : 'Mode autonome activé.';
-    });
+    }, 'desactiver');
+}
+
+async function actualiserVoyagesDepuisCaisse() {
+    if (!config.agence || !clientOn.value) return;
+
+    await executer(async () => {
+        const resultat = await window.api.config.actualiserVoyagesServeurLocal(config.agence!.id);
+        message.value = resultat.message;
+    }, 'actualiser_voyages');
 }
 
 async function chargerImprimantes() {
@@ -325,6 +431,121 @@ async function testerImpression() {
         erreurImpression.value = messageErreur(e, "Impossible de lancer l'impression test.");
     } finally {
         testImpression.value = false;
+    }
+}
+
+async function enregistrerCalibration() {
+    sauvegardeCalibration.value = true;
+    messageImpression.value = '';
+    erreurImpression.value = '';
+
+    try {
+        const calibration = normaliserCalibrationImpression(calibrationImpression.value);
+        const enregistree = await window.api.config.enregistrerCalibrationImpression(calibration);
+        calibrationImpression.value = appliquerCalibrationImpression(enregistree);
+        messageImpression.value = 'Calibration enregistrée sur cette machine.';
+    } catch (e) {
+        erreurImpression.value = messageErreur(e, "Impossible d'enregistrer la calibration.");
+    } finally {
+        sauvegardeCalibration.value = false;
+    }
+}
+
+async function testerCalibration() {
+    await enregistrerCalibration();
+    if (erreurImpression.value) return;
+
+    await testerImpression();
+}
+
+async function nettoyerDonneesTest() {
+    if (!estSuperAdmin.value || !session.userId) {
+        erreur.value = 'Seul un super admin peut nettoyer les données de cette machine.';
+        return;
+    }
+
+    const confirmer = window.confirm(
+        'Supprimer les données de test de cette machine ? Les voyages, tickets, bagages, courriers, clients et éléments en attente de synchronisation seront supprimés. La licence, la configuration, les agents, les utilisateurs et le catalogue seront conservés.',
+    );
+    if (!confirmer) return;
+
+    nettoyageDonnees.value = true;
+    erreur.value = '';
+    message.value = '';
+
+    try {
+        const resultat = await window.api.config.nettoyerDonneesTest(session.userId);
+        const total = Object.values(resultat.suppressions).reduce((somme, valeur) => somme + valeur, 0);
+        message.value = `${resultat.message} ${total.toLocaleString('fr-FR')} ligne${total > 1 ? 's' : ''} supprimée${total > 1 ? 's' : ''}.`;
+        await chargerReseau();
+    } catch (e) {
+        erreur.value = messageErreur(e, 'Impossible de nettoyer les données de test.');
+    } finally {
+        nettoyageDonnees.value = false;
+    }
+}
+
+// Force un cycle de synchro tout de suite au lieu d'attendre le déclenchement
+// automatique (toutes les 30s s'il y a des éléments en attente) — utile après
+// une coupure réseau, ou pour vérifier que la file n'est pas bloquée.
+async function synchroniserMaintenant() {
+    synchroEnCours.value = true;
+    erreur.value = '';
+    message.value = '';
+    const debut = Date.now();
+
+    try {
+        const resultat = await window.api.config.synchroniserMaintenant();
+        if (resultat.enAttente === 0) {
+            message.value = 'Synchronisation à jour : tout a été envoyé à admin.';
+        } else if (resultat.erreur) {
+            message.value = `${resultat.enAttente} élément(s) encore en attente.`;
+            erreur.value = `Ça bloque sur un(e) ${resultat.erreur.entite} : ${resultat.erreur.derniere_erreur ?? 'erreur inconnue'} (${resultat.erreur.tentatives} tentative(s)).`;
+        } else {
+            message.value = `${resultat.enAttente} élément(s) encore en attente, ça devrait continuer tout seul.`;
+        }
+    } catch (e) {
+        erreur.value = messageErreur(e, 'Impossible de lancer la synchronisation.');
+    } finally {
+        // Quand la caisse est hors-ligne ou que la file est vide, le cycle se
+        // termine en quelques millisecondes : sans ce délai minimum, le
+        // chargement clignote trop vite pour être visible.
+        const ecoule = Date.now() - debut;
+        if (ecoule < 500) {
+            await new Promise((resolve) => setTimeout(resolve, 500 - ecoule));
+        }
+        synchroEnCours.value = false;
+    }
+}
+
+// Contrairement au nettoyage ci-dessus, tout est effacé ici : licence,
+// configuration, agents, catalogue... Le poste redevient comme neuf et
+// redemande le numéro de gare + le numéro de poste. Purement local : ne
+// touche pas à l'admin (une licence déjà assignée reste assignée là-bas).
+async function resetComplet() {
+    if (!estSuperAdmin.value || !session.userId) {
+        erreur.value = 'Seul un super admin peut réinitialiser cette machine.';
+        return;
+    }
+
+    const confirmer = window.confirm(
+        'Réinitialiser complètement ce poste ? TOUT sera supprimé : configuration, licence, agents, utilisateurs, catalogue, voyages, ventes, et tout ce qui n\'a pas encore été synchronisé avec admin sera perdu. Le poste redémarrera comme neuf, en redemandant le numéro de gare et le numéro de poste. Cette action est irréversible.',
+    );
+    if (!confirmer) return;
+
+    resetEnCours.value = true;
+    erreur.value = '';
+    message.value = '';
+
+    try {
+        await window.api.config.resetComplet(session.userId);
+        // Rechargement complet : remet tous les stores (config, session...) à
+        // zéro et laisse le garde de navigation rediriger vers /configuration
+        // puisque le poste n'est plus configuré.
+        window.location.reload();
+    } catch (e) {
+        erreur.value = messageErreur(e, 'Impossible de réinitialiser ce poste.');
+        resetEnCours.value = false;
     }
 }
 </script>
@@ -425,7 +646,8 @@ async function testerImpression() {
                 </div>
 
                 <div class="mt-4 overflow-hidden rounded-md border">
-                    <table v-if="imprimantes.length > 0" class="w-full text-sm">
+                    <div v-if="imprimantes.length > 0" class="overflow-x-auto">
+                    <table class="w-full text-sm">
                         <thead class="bg-muted/40 text-left text-muted-foreground">
                             <tr>
                                 <th class="px-3 py-2 font-medium">Nom</th>
@@ -444,8 +666,65 @@ async function testerImpression() {
                             </tr>
                         </tbody>
                     </table>
+                    </div>
                     <p v-else class="bg-muted/30 px-4 py-5 text-sm text-muted-foreground">
                         L’application ne voit pas encore d’imprimante. Vérifiez l’installation système, allumez l’imprimante, puis actualisez.
+                    </p>
+                </div>
+
+                <div class="mt-4 rounded-lg border bg-muted/20 p-4">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="flex items-start gap-3">
+                            <div class="rounded-md bg-background p-2 shadow-sm">
+                                <SlidersHorizontal class="size-5 text-primary" />
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold">Calibration locale</h3>
+                                <p class="mt-1 text-sm text-muted-foreground">
+                                    Ajuste seulement cette machine si le reçu sort décalé ou coupé.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" :disabled="sauvegardeCalibration || testImpression" @click="enregistrerCalibration">
+                                <LoaderCircle v-if="sauvegardeCalibration" class="size-4 animate-spin" />
+                                {{ sauvegardeCalibration ? 'Enregistrement...' : 'Enregistrer' }}
+                            </Button>
+                            <Button type="button" :disabled="sauvegardeCalibration || testImpression" @click="testerCalibration">
+                                <Printer v-if="!testImpression" class="size-4" />
+                                <LoaderCircle v-else class="size-4 animate-spin" />
+                                {{ testImpression ? 'Test...' : 'Tester calibration' }}
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 grid gap-4 md:grid-cols-3">
+                        <div class="space-y-2">
+                            <Label for="largeur-papier">Largeur papier PDF</Label>
+                            <div class="flex items-center gap-2">
+                                <Input id="largeur-papier" v-model.number="calibrationImpression.largeurPapierMm" type="number" min="57" max="90" step="0.5" />
+                                <span class="text-sm text-muted-foreground">mm</span>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="largeur-contenu">Largeur du contenu</Label>
+                            <div class="flex items-center gap-2">
+                                <Input id="largeur-contenu" v-model.number="calibrationImpression.largeurContenuMm" type="number" min="45" max="90" step="0.5" />
+                                <span class="text-sm text-muted-foreground">mm</span>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="decalage-x">Décalage horizontal</Label>
+                            <div class="flex items-center gap-2">
+                                <Input id="decalage-x" v-model.number="calibrationImpression.decalageXMm" type="number" min="-12" max="12" step="0.5" />
+                                <span class="text-sm text-muted-foreground">mm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="mt-3 text-xs text-muted-foreground">
+                        Valeur normale : papier 80mm, contenu 70mm, décalage 0mm. Si ça coupe à droite, baisse le contenu ou mets un décalage négatif.
                     </p>
                 </div>
 
@@ -453,20 +732,132 @@ async function testerImpression() {
                 <p v-if="erreurImpression" class="mt-3 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">{{ erreurImpression }}</p>
             </section>
 
-            <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                <section class="space-y-4 rounded-lg border bg-card p-5 shadow-sm">
+            <section class="space-y-5 rounded-lg border bg-card p-5 shadow-sm">
+                <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <p class="text-sm text-muted-foreground">Rôle de cette machine</p>
+                        <h2 class="mt-1 text-base font-semibold">{{ libelleMode }}</h2>
+                    </div>
+                    <span :class="badgeConnexion(statutConnexion, reseauConnecte)">
+                        {{ libelleConnexion }}
+                    </span>
+                </div>
+
+                <div v-if="estSuperAdmin" class="grid gap-3 md:grid-cols-3">
+                    <button
+                        type="button"
+                        :class="[
+                            'rounded-lg border p-4 text-left transition',
+                            roleMachine === 'serveur' ? 'border-primary bg-primary/5 shadow-sm' : 'bg-background hover:bg-muted/30',
+                        ]"
+                        @click="roleMachine = 'serveur'"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <Server class="size-5 text-primary" />
+                            <span :class="badgeEtat(serveurOn)">{{ serveurOn ? 'ON' : 'OFF' }}</span>
+                        </div>
+                        <p class="mt-3 font-semibold">Machine serveur</p>
+                        <p class="mt-1 text-sm text-muted-foreground">Les postes clients récupèrent ici les voyages.</p>
+                    </button>
+
+                    <button
+                        type="button"
+                        :class="[
+                            'rounded-lg border p-4 text-left transition',
+                            roleMachine === 'client' ? 'border-primary bg-primary/5 shadow-sm' : 'bg-background hover:bg-muted/30',
+                        ]"
+                        @click="roleMachine = 'client'"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <Wifi class="size-5 text-primary" />
+                            <span :class="badgeConnexion(clientOn ? statutConnexion : 'deconnecte', clientConnecte)">{{ libelleClient }}</span>
+                        </div>
+                        <p class="mt-3 font-semibold">Machine cliente</p>
+                        <p class="mt-1 text-sm text-muted-foreground">Elle lit les voyages de la caisse serveur.</p>
+                    </button>
+
+                    <button
+                        type="button"
+                        :class="[
+                            'rounded-lg border p-4 text-left transition',
+                            roleMachine === 'autonome' ? 'border-primary bg-primary/5 shadow-sm' : 'bg-background hover:bg-muted/30',
+                        ]"
+                        @click="roleMachine = 'autonome'"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <Monitor class="size-5 text-primary" />
+                            <span :class="badgeEtat(autonomeOn)">{{ autonomeOn ? 'ON' : 'OFF' }}</span>
+                        </div>
+                        <p class="mt-3 font-semibold">Hors réseau local</p>
+                        <p class="mt-1 text-sm text-muted-foreground">Ce poste travaille sans caisse serveur locale.</p>
+                    </button>
+                </div>
+
+                <div v-else class="rounded-lg border bg-muted/20 p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="font-semibold">{{ libelleMode }}</p>
+                            <p class="text-sm text-muted-foreground">
+                                <template v-if="reseau?.mode === 'serveur'">
+                                    Cette machine démarre le serveur local quand l'application est ouverte.
+                                </template>
+                                <template v-else-if="reseau?.mode === 'client'">
+                                    Ce poste utilise les paramètres serveur enregistrés par le super admin.
+                                </template>
+                                <template v-else>
+                                    Seul un super admin peut changer le rôle réseau de cette machine.
+                                </template>
+                            </p>
+                        </div>
+                        <span :class="badgeEtat(reseauLocalOn)">
+                            Réseau local {{ reseauLocalOn ? 'ON' : 'OFF' }}
+                        </span>
+                    </div>
+                    <div v-if="reseau?.mode === 'serveur'" class="mt-4 flex flex-wrap items-center gap-2">
+                        <Button type="button" variant="outline" :disabled="enCours" @click="relancerServeurLocal">
+                            <RefreshCw :class="['size-4', chargementReseau('relancer_serveur') ? 'icone-tourne text-primary' : '']" />
+                            {{ chargementReseau('relancer_serveur') ? 'Relance...' : 'Relancer serveur local' }}
+                        </Button>
+                        <span :class="badgeConnexion(serveurOn ? 'connecte' : 'deconnecte', serveurConnecte)">
+                            {{ serveurConnecte ? 'Serveur actif' : 'Serveur arrêté' }}
+                        </span>
+                    </div>
+                    <div v-if="reseau?.mode === 'client'" class="mt-4 space-y-3 rounded-md border bg-background p-3">
+                        <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+                            <div class="min-w-0">
+                                <p class="font-semibold">Connexion caisse serveur</p>
+                                <p class="truncate text-muted-foreground">{{ serveurUrl || 'Adresse serveur non définie' }}</p>
+                            </div>
+                            <span :class="badgeConnexion(clientOn ? statutConnexion : 'deconnecte', clientConnecte)">
+                                {{ libelleClient }}
+                            </span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <Button type="button" variant="outline" :disabled="enCours || !serveurUrl || !secretReseau" @click="reconnecterClientLocal">
+                                <RefreshCw :class="['size-4', chargementReseau('reconnecter_client') ? 'icone-tourne text-primary' : '']" />
+                                {{ chargementReseau('reconnecter_client') ? 'Connexion...' : 'Reconnecter' }}
+                            </Button>
+                            <Button type="button" variant="outline" :disabled="enCours || !serveurUrl || !secretReseau" @click="testerClientLocal">
+                                <RefreshCw :class="['size-4', chargementReseau('tester_client') ? 'icone-tourne text-primary' : '']" />
+                                {{ chargementReseau('tester_client') ? 'Test...' : 'Tester' }}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="estSuperAdmin && roleMachine === 'serveur'" class="space-y-4 rounded-lg border bg-muted/20 p-4">
                     <div class="flex items-start gap-3">
-                        <div class="rounded-md bg-muted p-2">
+                        <div class="rounded-md bg-background p-2">
                             <Server class="size-5 text-muted-foreground" />
                         </div>
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center justify-between gap-3">
-                                <h2 class="text-base font-semibold">Caisse serveur</h2>
+                                <h3 class="text-base font-semibold">Machine serveur</h3>
                                 <span :class="badgeConnexion(serveurOn ? 'connecte' : 'deconnecte', serveurConnecte)">
                                     {{ serveurConnecte ? 'Connecté' : 'Non connecté' }}
                                 </span>
                             </div>
-                            <p class="text-sm text-muted-foreground">ON : les autres postes peuvent utiliser cette base pour les ventes et voyages.</p>
+                            <p class="text-sm text-muted-foreground">Cette machine ouvre l’accès local aux voyages.</p>
                         </div>
                     </div>
 
@@ -475,12 +866,25 @@ async function testerImpression() {
                         <Input id="port-serveur" v-model.number="portServeur" type="number" min="1" class="h-10" />
                     </div>
 
-                    <Button type="button" class="w-full" :disabled="enCours" @click="activerServeurLocal">
-                        <Power class="size-4" />
-                        Activer comme serveur
-                    </Button>
+                    <div class="grid gap-2 sm:grid-cols-2">
+                        <Button type="button" :disabled="enCours" @click="activerServeurLocal">
+                            <LoaderCircle v-if="chargementReseau('activer_serveur')" class="icone-tourne size-4" />
+                            <Power v-else class="size-4" />
+                            {{ chargementReseau('activer_serveur') ? 'Activation...' : 'Activer comme serveur' }}
+                        </Button>
+                        <Button type="button" variant="outline" :disabled="enCours || reseau?.mode !== 'serveur'" @click="relancerServeurLocal">
+                            <RefreshCw :class="['size-4', chargementReseau('relancer_serveur') ? 'icone-tourne text-primary' : '']" />
+                            {{ chargementReseau('relancer_serveur') ? 'Relance...' : 'Relancer serveur local' }}
+                        </Button>
+                    </div>
 
-                    <div v-if="reseau?.mode === 'serveur'" class="space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
+                    <div v-if="reseau?.mode === 'serveur'" class="space-y-2 rounded-md border bg-background p-3 text-sm">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-muted-foreground">État réel</span>
+                            <span :class="badgeConnexion(serveurOn ? 'connecte' : 'deconnecte', serveurConnecte)">
+                                {{ serveurConnecte ? 'Serveur démarré' : 'Serveur arrêté' }}
+                            </span>
+                        </div>
                         <div class="flex items-center justify-between gap-3">
                             <span class="text-muted-foreground">Code réseau</span>
                             <span class="font-mono font-semibold">{{ reseau.secret }}</span>
@@ -492,21 +896,21 @@ async function testerImpression() {
                             </p>
                         </div>
                     </div>
-                </section>
+                </div>
 
-                <section class="space-y-4 rounded-lg border bg-card p-5 shadow-sm">
+                <div v-if="estSuperAdmin && roleMachine === 'client'" class="space-y-4 rounded-lg border bg-muted/20 p-4">
                     <div class="flex items-start gap-3">
-                        <div class="rounded-md bg-muted p-2">
+                        <div class="rounded-md bg-background p-2">
                             <Wifi class="size-5 text-muted-foreground" />
                         </div>
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center justify-between gap-3">
-                                <h2 class="text-base font-semibold">Poste client</h2>
+                                <h3 class="text-base font-semibold">Machine cliente</h3>
                                 <span :class="badgeConnexion(clientOn ? statutConnexion : 'deconnecte', clientConnecte)">
                                     {{ libelleClient }}
                                 </span>
                             </div>
-                            <p class="text-sm text-muted-foreground">ON : ce poste lit les tickets et voyages de la caisse serveur. Ses bagages/courriers restent locaux et se synchronisent vers admin.</p>
+                            <p class="text-sm text-muted-foreground">Ce poste demande les voyages à la caisse serveur.</p>
                         </div>
                     </div>
 
@@ -519,33 +923,114 @@ async function testerImpression() {
                         <Input id="secret-reseau" v-model="secretReseau" placeholder="Code affiché sur la caisse" class="h-10" />
                     </div>
 
-                    <div class="grid grid-cols-2 gap-2">
+                    <div class="grid gap-2 sm:grid-cols-3">
                         <Button type="button" variant="outline" :disabled="enCours || !serveurUrl || !secretReseau" @click="testerClientLocal">
-                            Tester
+                            <RefreshCw :class="['size-4', chargementReseau('tester_client') ? 'icone-tourne text-primary' : '']" />
+                            {{ chargementReseau('tester_client') ? 'Test...' : 'Tester' }}
                         </Button>
                         <Button type="button" :disabled="enCours || !serveurUrl || !secretReseau" @click="activerClientLocal">
-                            Utiliser
+                            <LoaderCircle v-if="chargementReseau('activer_client')" class="icone-tourne size-4" />
+                            <Wifi v-else class="size-4" />
+                            {{ chargementReseau('activer_client') ? 'Connexion...' : 'Utiliser' }}
+                        </Button>
+                        <Button type="button" variant="outline" :disabled="enCours || !clientOn || !serveurUrl || !secretReseau" @click="reconnecterClientLocal">
+                            <RefreshCw :class="['size-4', chargementReseau('reconnecter_client') ? 'icone-tourne text-primary' : '']" />
+                            {{ chargementReseau('reconnecter_client') ? 'Connexion...' : 'Reconnecter' }}
                         </Button>
                     </div>
-                </section>
-            </div>
-
-            <section class="flex flex-col gap-3 rounded-lg border bg-card p-5 shadow-sm md:flex-row md:items-center md:justify-between">
-                <div class="flex items-start gap-3">
-                    <div class="rounded-md bg-muted p-2">
-                        <Monitor class="size-5 text-muted-foreground" />
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-3">
-                            <h2 class="text-base font-semibold">Mode autonome</h2>
-                            <span :class="badgeEtat(autonomeOn)">{{ autonomeOn ? 'ON' : 'OFF' }}</span>
-                        </div>
-                        <p class="text-sm text-muted-foreground">Ce poste ne se connecte pas à une caisse serveur locale. Il utilise seulement ses propres données locales.</p>
-                    </div>
                 </div>
-                <Button type="button" variant="outline" :disabled="enCours" @click="desactiverReseauLocal">
-                    {{ clientOn ? 'Déconnecter de la caisse serveur' : 'Activer le mode autonome' }}
-                </Button>
+
+                <div v-if="estSuperAdmin && roleMachine === 'autonome'" class="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex items-start gap-3">
+                        <div class="rounded-md bg-background p-2">
+                            <Monitor class="size-5 text-muted-foreground" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-3">
+                                <h3 class="text-base font-semibold">Hors réseau local</h3>
+                                <span :class="badgeEtat(autonomeOn)">{{ autonomeOn ? 'ON' : 'OFF' }}</span>
+                            </div>
+                            <p class="text-sm text-muted-foreground">Ce poste garde sa base locale et continue la synchronisation admin quand internet est disponible.</p>
+                        </div>
+                    </div>
+                    <Button type="button" variant="outline" :disabled="enCours" @click="desactiverReseauLocal">
+                        <LoaderCircle v-if="chargementReseau('desactiver')" class="icone-tourne size-4" />
+                        <Monitor v-else class="size-4" />
+                        {{ chargementReseau('desactiver') ? 'Activation...' : 'Activer hors réseau local' }}
+                    </Button>
+                </div>
+
+                <div v-if="!estSuperAdmin && clientOn" class="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 md:flex-row md:items-center md:justify-between">
+                    <div class="min-w-0">
+                        <p class="font-semibold">Données caisse serveur</p>
+                        <p class="truncate text-sm text-muted-foreground">{{ serveurUrl || 'Adresse serveur non définie' }}</p>
+                    </div>
+                    <Button type="button" variant="outline" :disabled="enCours" @click="actualiserVoyagesDepuisCaisse">
+                        <RefreshCw :class="['size-4', chargementReseau('actualiser_voyages') ? 'icone-tourne text-primary' : '']" />
+                        {{ chargementReseau('actualiser_voyages') ? 'Actualisation...' : 'Actualiser voyages' }}
+                    </Button>
+                </div>
+            </section>
+
+            <section v-if="estSuperAdmin" class="rounded-lg border border-destructive/20 bg-card p-5 shadow-sm">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex min-w-0 items-start gap-3">
+                        <div class="rounded-md bg-destructive/10 p-2">
+                            <Trash2 class="size-5 text-destructive" />
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-base font-semibold">Nettoyage local</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                Supprime les anciennes données de test de cette machine sans toucher à la licence, aux accès et au catalogue.
+                            </p>
+                        </div>
+                    </div>
+
+                    <Button type="button" variant="destructive" :disabled="nettoyageDonnees" @click="nettoyerDonneesTest">
+                        <RefreshCw v-if="nettoyageDonnees" class="icone-tourne size-4" />
+                        <Trash2 v-else class="size-4" />
+                        {{ nettoyageDonnees ? 'Nettoyage...' : 'Nettoyer les données de test' }}
+                    </Button>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-4 border-t pt-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex min-w-0 items-start gap-3">
+                        <div class="rounded-md bg-muted p-2">
+                            <RefreshCw class="size-5 text-foreground" />
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-base font-semibold">Synchronisation</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                Force l'envoi vers admin tout de suite au lieu d'attendre le déclenchement automatique — utile après une coupure réseau, ou pour vérifier que rien n'est bloqué.
+                            </p>
+                        </div>
+                    </div>
+
+                    <Button type="button" variant="outline" :disabled="synchroEnCours" @click="synchroniserMaintenant">
+                        <RefreshCw :class="['size-4', synchroEnCours ? 'icone-tourne' : '']" />
+                        {{ synchroEnCours ? 'Synchronisation...' : 'Synchroniser vers admin' }}
+                    </Button>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-4 border-t border-destructive/20 pt-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex min-w-0 items-start gap-3">
+                        <div class="rounded-md bg-destructive/10 p-2">
+                            <RefreshCw class="size-5 text-destructive" />
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-base font-semibold">Réinitialisation complète</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                Efface TOUT sur ce poste (configuration, licence, agents, catalogue, ventes...) et redemande le numéro de gare et de poste, comme à la première installation.
+                            </p>
+                        </div>
+                    </div>
+
+                    <Button type="button" variant="destructive" :disabled="resetEnCours" @click="resetComplet">
+                        <RefreshCw v-if="resetEnCours" class="icone-tourne size-4" />
+                        <RefreshCw v-else class="size-4" />
+                        {{ resetEnCours ? 'Réinitialisation...' : 'Réinitialiser ce poste' }}
+                    </Button>
+                </div>
             </section>
 
             <p v-if="message" class="rounded-md bg-muted/50 px-4 py-3 text-sm text-muted-foreground">{{ message }}</p>

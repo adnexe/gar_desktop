@@ -1,9 +1,10 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import { copyFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { enregistrerIpc } from './ipc';
 import { logger } from './logger';
 import { localNetworkService } from './services/LocalNetworkService';
+import { updateService } from './services/UpdateService';
 import { syncEngine } from './sync/SyncEngine';
 
 const estDev = !app.isPackaged;
@@ -44,6 +45,10 @@ function creerFenetre(): void {
         minHeight: 700,
         title: 'Adnexe Transport — Caisse',
         icon: cheminIcone,
+        // Fenêtre cachée tant que le renderer n'a pas fini son premier rendu :
+        // évite l'écran blanc au lancement (le temps que Vue + SQLite chargent).
+        show: false,
+        backgroundColor: '#0a0a0a',
         webPreferences: {
             preload: join(__dirname, '../preload/index.mjs'),
             contextIsolation: true,
@@ -53,6 +58,10 @@ function creerFenetre(): void {
             // contextIsolation reste actif, donc l'isolation renderer/main l'est aussi.
             sandbox: false,
         },
+    });
+
+    fenetre.once('ready-to-show', () => {
+        fenetre.show();
     });
 
     // Les erreurs JS du renderer (Vue, réseau...) sont invisibles dans le
@@ -72,6 +81,9 @@ function creerFenetre(): void {
 }
 
 app.whenReady().then(() => {
+    // Pas de barre de menu (File/Edit/View/Window) : app de caisse plein écran.
+    Menu.setApplicationMenu(null);
+
     migrerDonneesAncienNom();
 
     // En dev sur macOS, le Dock affiche l'icône Electron par défaut ;
@@ -84,7 +96,14 @@ app.whenReady().then(() => {
     void localNetworkService.demarrerDepuisConfig().catch((erreur) => {
         logger.warn('Serveur local non démarré.', erreur);
     });
+    void localNetworkService.connecterClientDepuisConfig().catch((erreur) => {
+        logger.warn('Connexion au poste client non tentée.', erreur);
+    });
     syncEngine.demarrer();
+    // Pas de vérification de mise à jour en dev : il n'y a rien à publier
+    // depuis un poste de développement, et ça éviterait des essais inutiles
+    // vers le serveur de production.
+    if (!estDev) updateService.demarrer();
     creerFenetre();
 
     app.on('activate', () => {

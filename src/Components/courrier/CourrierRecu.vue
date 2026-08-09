@@ -15,6 +15,7 @@ defineProps<{
         numero_courrier: string;
         destination: string;
         agence_arrivee: string | null;
+        agence_arrivee_telephone: string | null;
         voyage: string | null;
         expediteur: string;
         expediteur_nom: string;
@@ -27,6 +28,7 @@ defineProps<{
         montant_colis: number;
         montant_total: number;
         agence_depart: string | null;
+        agence_depart_telephone: string | null;
         agent: string | null;
         created_at: string;
         compagnie?: CompagnieRecu | null;
@@ -80,6 +82,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 <span>Agence :</span>
                 <span>{{ recu.agence_depart || '-' }}</span>
             </div>
+            <p v-if="recu.agence_depart_telephone" class="petit">Tél agence : {{ recu.agence_depart_telephone }}</p>
             <div class="ligne">
                 <span>Agent :</span>
                 <span>{{ recu.agent || '-' }}</span>
@@ -102,6 +105,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 <strong>{{ recu.destination }}</strong>
             </div>
             <p v-if="recu.agence_arrivee" class="petit">{{ recu.agence_arrivee }}</p>
+            <p v-if="recu.agence_arrivee_telephone" class="petit">Tél agence : {{ recu.agence_arrivee_telephone }}</p>
             <p v-if="recu.voyage" class="petit">Voyage : {{ recu.voyage }}</p>
         </div>
 
@@ -129,6 +133,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             {{ recu.destination }}
         </div>
         <p v-if="recu.agence_arrivee" class="agence-etiquette">{{ recu.agence_arrivee }}</p>
+        <p v-if="recu.agence_arrivee_telephone" class="petit">Tél agence : {{ recu.agence_arrivee_telephone }}</p>
 
         <div class="bloc">
             <p class="titre">Destinataire</p>
@@ -151,29 +156,43 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             <span>{{ recu.created_at }}</span>
             <span>{{ recu.agence_depart || '-' }}</span>
         </div>
+        <p v-if="recu.agence_depart_telephone" class="petit text-right">Tél agence : {{ recu.agence_depart_telephone }}</p>
     </div>
 </template>
 
 <style scoped>
 .ticket-recu {
-    width: 72mm;
+    box-sizing: border-box;
+    width: var(--impression-largeur-contenu, 70mm);
+    margin: 0 auto;
     color: #000;
     font-family: Arial, 'Helvetica Neue', sans-serif;
-    font-size: 13px;
-    line-height: 1.35;
-    padding: 1mm;
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 0 0.25mm 0.25mm;
+}
+
+.ticket-recu,
+.ticket-recu * {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: break-word;
+    white-space: normal;
+    word-break: normal;
 }
 
 .logo {
-    max-height: 34px;
+    height: 26px;
     max-width: 44mm;
     object-fit: contain;
-    margin: 0 auto 3px;
+    margin: 0 auto 1px;
 }
 
 .compagnie {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
+    line-height: 1.05;
     text-transform: uppercase;
 }
 
@@ -181,19 +200,24 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .petit,
 .note,
 .pied {
-    font-size: 11px;
+    font-size: 12px;
 }
 
 .numero-recu,
 .numero-etiquette {
     border: 1px solid #000;
-    margin: 5px 0;
-    padding: 5px;
+    margin: 3px 0;
+    padding: 3px;
 }
 
+/* flex-wrap et NON grid : quand l'étiquette est longue et la largeur réduite,
+ * une grille écrase la colonne du numéro et le coupe en deux. En flex, le
+ * numéro passe ENTIER à la ligne suivante — jamais tronqué. */
 .numero-recu {
-    align-items: center;
+    align-items: start;
     display: flex;
+    flex-wrap: wrap;
+    gap: 0.35mm 1mm;
     justify-content: space-between;
 }
 
@@ -204,9 +228,19 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     text-transform: uppercase;
 }
 
+/* Étiquette fixe (« N° COURRIER »), jamais une valeur : retour à la ligne
+ * entre les mots uniquement, jamais en plein milieu — voir .ligne span:first-child
+ * ci-dessous pour l'explication complète du !important. */
+.numero-recu span {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+
 .numero-recu strong,
 .numero-etiquette strong {
-    font-size: 20px;
+    font-size: 18px;
+    text-align: right;
+    word-break: normal;
 }
 
 .numero-etiquette {
@@ -215,24 +249,38 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .bloc {
     border: 1px solid #000;
-    margin: 5px 0;
-    padding: 5px;
+    margin: 3px 0;
+    padding: 2px;
 }
 
 .ligne {
-    align-items: baseline;
-    display: flex;
-    gap: 8px;
-    justify-content: space-between;
+    align-items: start;
+    display: grid;
+    gap: 0.35mm 1mm;
+    /* auto : l'étiquette prend exactement la place de son texte, quelle que
+     * soit la calibration — un pourcentage fixe devient trop étroit sur les
+     * petites largeurs et force la coupure des étiquettes en plein mot. */
+    grid-template-columns: auto minmax(0, 1fr);
+}
+
+/* !important nécessaire : la règle globale (app.css) force overflow-wrap:
+ * anywhere + word-break: break-word sur tout span du reçu, pour ne jamais
+ * dépasser la zone imprimable. Sur une étiquette, ça coupe au milieu du mot
+ * dès que la colonne est étroite. keep-all autorise toujours le retour à la
+ * ligne (entre les mots), juste plus jamais en plein milieu d'un mot. */
+.ligne span:first-child {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
 }
 
 .ligne span:last-child,
 .ligne strong {
     text-align: right;
+    word-break: normal;
 }
 
 .nom {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 700;
     text-transform: uppercase;
 }
@@ -271,8 +319,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .bas-etiquette {
     border-top: 1px dashed #000;
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    gap: 0.35mm 1mm;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     margin-top: 8px;
     padding-top: 5px;
 }

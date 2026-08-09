@@ -16,6 +16,7 @@ import {
 } from '@/Components/ui/dialog';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
+import { Spinner } from '@/Components/ui/spinner';
 import {
     Select,
     SelectContent,
@@ -38,6 +39,7 @@ type VoyageDisponible = {
     itineraire: string | null;
     vehicule_immatriculation: string;
     nombre_places: number;
+    disposition_sieges: string | null;
     chauffeur: string | null;
     places_occupees: number[];
     premiere_place_libre: number | null;
@@ -73,7 +75,15 @@ const voyagesDisponibles = ref<VoyageDisponible[]>([]);
 const voyageSelectionne = ref<VoyageDisponible | null>(null);
 const typeBillet = ref<'aller' | 'aller_retour'>('aller');
 const tarification = ref<'ordinaire' | 'vip'>('ordinaire');
-const timbre = ref<number>(0);
+// Champs vides par défaut (pas de "0" préaffiché) : plus rapide à saisir,
+// pas besoin d'effacer le zéro avant de taper. `valeur*` donne toujours un
+// nombre exploitable pour les calculs, même quand le champ est vide.
+const timbre = ref<number | ''>('');
+const timbreValeur = computed(() => Number(timbre.value) || 0);
+// Commission due à un courtier ayant envoyé le client : saisie manuelle,
+// facultative, n'entre pas dans le total à payer par le client.
+const commission = ref<number | ''>('');
+const commissionValeur = computed(() => Number(commission.value) || 0);
 const placeSelectionnee = ref<number | null>(null);
 const confirmationOuverte = ref(false);
 // Passe à true après la première vente : le formulaire n'est pas réinitialisé
@@ -132,7 +142,7 @@ watch([tarification, tarifActuel], () => {
     }
 });
 
-const totalAPayer = computed(() => prixAffiche.value + (timbre.value || 0));
+const totalAPayer = computed(() => prixAffiche.value + timbreValeur.value);
 
 const peutVendre = computed(() =>
     !!props.agenceId &&
@@ -309,7 +319,8 @@ function resetTout() {
     tarifActuel.value = null;
     typeBillet.value = 'aller';
     tarification.value = 'ordinaire';
-    timbre.value = 0;
+    timbre.value = '';
+    commission.value = '';
     placeSelectionnee.value = null;
     messageAucunVoyage.value = null;
     client.nom = '';
@@ -378,12 +389,13 @@ async function vendre() {
             typeBillet: typeBillet.value,
             tarification: tarification.value,
             numeroPlace: placeSelectionnee.value,
-            timbre: timbre.value || 0,
+            timbre: timbreValeur.value,
+            commission: commissionValeur.value,
             client: { telephone: client.telephone || null, nom: client.nom || null, prenoms: client.prenoms || null, cni: client.cni || null },
         })) as { ok: boolean; ticket?: Recu; erreur?: string };
 
         if (!reponse.ok || !reponse.ticket) {
-            erreur.value = reponse.erreur ?? 'Une erreur est survenue.';
+            erreur.value = reponse.erreur ?? "La vente n'a pas pu être enregistrée. Réessaie, rien n'a été perdu.";
             confirmationOuverte.value = false;
             return;
         }
@@ -447,6 +459,7 @@ async function vendre() {
             type_billet: reponse.ticket.type_billet,
             montant: reponse.ticket.montant,
             timbre: reponse.ticket.timbre,
+            commission: commissionValeur.value,
             total: reponse.ticket.total,
             client: reponse.ticket.client,
         });
@@ -456,7 +469,7 @@ async function vendre() {
         venteEffectuee.value = true;
         await chargerVoyagesConservantSelection(idVoyageCourant);
     } catch (e) {
-        erreur.value = messageErreurInconnue(e, 'Une erreur est survenue pendant la vente.');
+        erreur.value = messageErreurInconnue(e, "Un souci est survenu pendant la vente. Réessaie, rien n'a été perdu.");
     } finally {
         enVente.value = false;
     }
@@ -497,7 +510,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
         <!-- Zone des 3 colonnes : hauteur fixe, chacune scrolle indépendamment. -->
         <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 px-6 py-4 lg:grid-cols-[230px_1fr_320px]">
             <!-- Colonne gauche : destinations -->
-            <section class="flex min-h-0 flex-col rounded-xl border">
+            <section class="flex min-h-0 min-w-0 flex-col rounded-xl border">
                 <p class="shrink-0 flex items-center gap-2 border-b bg-muted/50 px-3 py-2 text-sm font-semibold">
                     <MapPin class="size-4" /> Destinations
                 </p>
@@ -528,7 +541,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
             </section>
 
             <!-- Colonne du milieu : client + départ (défilement indépendant) -->
-            <div class="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
+            <div class="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto pr-1">
                 <section class="rounded-xl border">
                     <p class="flex items-center gap-2 border-b bg-muted/50 px-3 py-2 text-sm font-semibold">
                         <User class="size-4" /> Informations du client
@@ -569,24 +582,26 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                         <p v-if="!villeArriveeId" class="text-sm text-muted-foreground">
                             Choisissez une ville de destination à gauche.
                         </p>
-                        <p v-else-if="chargementVoyages" class="text-sm text-muted-foreground">
+                        <p v-else-if="chargementVoyages" class="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Spinner />
                             Chargement des voyages...
                         </p>
                         <p v-else-if="messageAucunVoyage" class="text-sm text-muted-foreground">
                             {{ messageAucunVoyage }}
                         </p>
 
-                        <div v-else class="grid gap-1.5">
+                        <div v-else class="grid min-w-0 gap-1.5">
                             <Label>Voyage</Label>
                             <Select v-model="voyageIdSelectionne">
-                                <SelectTrigger class="w-full">
+                                <SelectTrigger class="h-10 w-full min-w-0 max-w-full overflow-hidden *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:flex-1 *:data-[slot=select-value]:truncate">
                                     <SelectValue placeholder="Choisir un voyage" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent class="w-[var(--reka-select-trigger-width)] max-w-[min(42rem,calc(100vw-2rem))]">
                                     <SelectItem
                                         v-for="voyage in voyagesDisponibles"
                                         :key="voyage.id"
                                         :value="voyage.id"
+                                        class="items-start whitespace-normal pr-8 leading-snug [&_[data-slot=select-item-text]]:block [&_[data-slot=select-item-text]]:min-w-0 [&_[data-slot=select-item-text]]:whitespace-normal"
                                     >
                                         {{ libelleVoyage(voyage) }}
                                     </SelectItem>
@@ -701,7 +716,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
             </div>
 
             <!-- Colonne droite : type de ticket + places (défilement indépendant) -->
-            <div class="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
+            <div class="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto pr-1">
                 <section class="shrink-0 rounded-xl border">
                     <p class="flex items-center gap-2 border-b bg-muted/50 px-3 py-2 text-sm font-semibold">
                         <Banknote class="size-4" /> Type de ticket
@@ -719,12 +734,28 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                                 type="number"
                                 min="0"
                                 step="50"
+                                placeholder="0"
                                 class="h-8 w-28 text-right"
                             />
                         </div>
                         <div class="flex items-center justify-between border-t pt-3">
                             <span class="text-sm font-medium">Total à payer</span>
                             <span class="text-2xl font-bold">{{ formatMontant(totalAPayer) }} FCFA</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 border-t pt-3">
+                            <div>
+                                <Label for="commission" class="text-sm text-muted-foreground">Commission courtier</Label>
+                                <p class="text-xs text-muted-foreground">Si un courtier a envoyé ce client (facultatif, n'affecte pas le total ci-dessus)</p>
+                            </div>
+                            <Input
+                                id="commission"
+                                v-model.number="commission"
+                                type="number"
+                                min="0"
+                                step="50"
+                                placeholder="0"
+                                class="h-8 w-28 shrink-0 text-right"
+                            />
                         </div>
                     </div>
                 </section>
@@ -743,6 +774,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                         <SeatMap
                             v-else
                             :nombre-places="voyageSelectionne.nombre_places"
+                            :disposition="voyageSelectionne.disposition_sieges"
                             :places-occupees="voyageSelectionne.places_occupees"
                             :place-selectionnee="placeSelectionnee"
                             @select="(place) => (placeSelectionnee = place)"
@@ -813,6 +845,10 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     <span class="text-muted-foreground">Client</span>
                     <span class="font-medium">{{ [client.nom, client.prenoms].filter(Boolean).join(' ') || client.telephone }}</span>
                 </div>
+                <div v-if="commissionValeur > 0" class="flex justify-between">
+                    <span class="text-muted-foreground">Commission courtier</span>
+                    <span class="font-medium">{{ formatMontant(commissionValeur) }} FCFA</span>
+                </div>
                 <div class="flex justify-between border-t pt-1.5">
                     <span class="font-medium">Total à encaisser</span>
                     <span class="text-lg font-bold">{{ formatMontant(totalAPayer) }} FCFA</span>
@@ -825,8 +861,9 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     Fermer
                 </Button>
                 <Button :disabled="enVente" @click="vendre">
-                    <Check />
-                    Confirmer
+                    <Spinner v-if="enVente" />
+                    <Check v-else />
+                    {{ enVente ? 'Vente en cours…' : 'Confirmer' }}
                 </Button>
             </DialogFooter>
         </DialogContent>

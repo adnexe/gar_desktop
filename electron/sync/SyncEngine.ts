@@ -5,7 +5,9 @@ import { getDb } from '../database/connection';
 import { migrer } from '../database/migrate';
 import { logger } from '../logger';
 import { ConfigRepository } from '../repositories/ConfigRepository';
+import { BootstrapService } from '../services/BootstrapService';
 import { SyncQueueRepository } from '../repositories/SyncQueueRepository';
+import { UserRepository } from '../repositories/UserRepository';
 import { eventBus } from './EventBus';
 
 type LigneSync = {
@@ -25,8 +27,12 @@ type DecisionErreur = {
 export class SyncEngine {
     private readonly repo = new SyncQueueRepository();
     private readonly config = new ConfigRepository();
+    private readonly bootstrap = new BootstrapService();
+    private readonly users = new UserRepository();
     private enCours = false;
     private demarre = false;
+    private derniereVerificationLicence = 0;
+    private derniereActualisationCatalogue = 0;
     private minuterie: ReturnType<typeof setTimeout> | null = null;
     private intervalle: ReturnType<typeof setInterval> | null = null;
 
@@ -34,6 +40,13 @@ export class SyncEngine {
         if (this.demarre) return;
 
         this.demarre = true;
+        // L'écran de connexion (Login.vue) fait déjà un check-in silencieux à
+        // son montage, à chaque lancement de l'app. Sans ce seed, ce premier
+        // cycle (2s après demarrer()) déclenchait un DEUXIÈME appel bootstrap
+        // quasi simultané à chaque démarrage — deux requêtes pour un seul
+        // besoin, ce qui use inutilement le quota anti-abus côté admin.
+        this.derniereVerificationLicence = Date.now();
+        this.derniereActualisationCatalogue = Date.now();
         eventBus.ecouter('file:ajout', () => this.planifier(300));
         this.intervalle = setInterval(() => this.planifier(0), 30_000);
         this.planifier(2_000);
@@ -75,6 +88,26 @@ export class SyncEngine {
         try {
             migrer(getDb());
 
+            // Licence/agence revérifiées en ligne au plus une fois toutes les
+            // 5 minutes : assez rapide pour couper un poste déjà connecté,
+            // sans saturer l'admin.
+            if (Date.now() - this.derniereVerificationLicence > 300_000) {
+                this.derniereVerificationLicence = Date.now();
+                await this.bootstrap.verifierLicenceEnLigne();
+            }
+
+            // Check-in silencieux régulier : agents, comptes, agence, tarifs,
+            // voyages futurs... Si le serveur répond, l'état local est remis
+            // à jour; s'il ne répond pas, on garde la caisse opérationnelle.
+            if (Date.now() - this.derniereActualisationCatalogue > 300_000) {
+                this.derniereActualisationCatalogue = Date.now();
+                try {
+                    await this.bootstrap.actualiser(5000);
+                } catch {
+                    logger.warn('Check-in catalogue ignoré : serveur admin injoignable.');
+                }
+            }
+
             const token = this.config.obtenir('api_token');
             if (!token) {
                 return;
@@ -96,6 +129,9 @@ export class SyncEngine {
                 try {
                     await envoyerOperationSync(token, operation);
                     this.repo.marquerSynchronise(ligne.id);
+                    if (ligne.entite === 'users') {
+                        this.users.marquerActionSynchronisee(operation.payload);
+                    }
                 } catch (erreur) {
                     const decision = this.classerErreur(erreur);
 
@@ -138,7 +174,7 @@ export class SyncEngine {
     private operationIgnoreeSurPosteClient(entite: string): boolean {
         if (this.config.obtenir('reseau_mode') !== 'client') return false;
 
-        return ['clients', 'voyages', 'tickets'].includes(entite);
+        return ['voyages', 'tickets'].includes(entite);
     }
 
     private payloadPour(ligne: LigneSync): Record<string, unknown> | null {
@@ -153,6 +189,10 @@ export class SyncEngine {
                 return this.bagagePayload(ligne.entite_uuid);
             case 'courriers':
                 return this.courrierPayload(ligne.entite_uuid);
+            case 'courriers_internationaux':
+                return this.courrierInternationalPayload(ligne.entite_uuid);
+            case 'users':
+                return JSON.parse(ligne.payload) as Record<string, unknown>;
             default:
                 return JSON.parse(ligne.payload) as Record<string, unknown>;
         }
@@ -181,7 +221,7 @@ export class SyncEngine {
         const ligne = getDb()
             .prepare(
                 `SELECT t.uuid, t.numero_ticket, t.agent_id, t.user_id, t.trajet_id,
-                        t.type_billet, t.numero_place, t.montant, t.timbre, t.tarification,
+                        t.type_billet, t.numero_place, t.montant, t.timbre, t.commission, t.tarification,
                         t.statut_paiement, t.statut_ticket, t.created_at, t.updated_at,
                         v.uuid AS voyage_uuid, c.uuid AS client_uuid
                  FROM tickets t
@@ -206,15 +246,23 @@ export class SyncEngine {
                         b.user_id, b.agent_id, b.description, b.valeur, b.montant, b.statut_paiement,
                         b.created_at, b.updated_at,
                         COALESCE(t.uuid, b.ticket_uuid) AS ticket_uuid,
-                        COALESCE(v.uuid, b.voyage_uuid) AS voyage_uuid
+                        COALESCE(t.numero_ticket, b.ticket_numero) AS ticket_numero,
+                        COALESCE(v.uuid, b.voyage_uuid) AS voyage_uuid,
+                        cb.uuid AS client_uuid
                  FROM bagages b
                  LEFT JOIN tickets t ON t.id = b.ticket_id
                  LEFT JOIN voyages v ON v.id = b.voyage_id
+                 LEFT JOIN clients cb ON cb.id = b.client_id
                  WHERE b.uuid = ?`,
             )
             .get(uuid) as Record<string, unknown> | undefined;
 
-        return ligne ?? null;
+        if (!ligne) return null;
+
+        return {
+            ...ligne,
+            client: typeof ligne.client_uuid === 'string' ? this.clientPayload(ligne.client_uuid) : null,
+        };
     }
 
     private courrierPayload(uuid: string): Record<string, unknown> | null {
@@ -241,6 +289,42 @@ export class SyncEngine {
                 `SELECT uuid, nom, type, quantite, prix, montant, created_at, updated_at
                  FROM colis
                  WHERE courrier_id = (SELECT id FROM courriers WHERE uuid = ?)
+                 ORDER BY id ASC`,
+            )
+            .all(uuid) as Record<string, unknown>[];
+
+        return {
+            ...ligne,
+            expediteur: typeof ligne.expediteur_uuid === 'string' ? this.clientPayload(ligne.expediteur_uuid) : null,
+            destinataire: typeof ligne.destinataire_uuid === 'string' ? this.clientPayload(ligne.destinataire_uuid) : null,
+            colis,
+        };
+    }
+
+    private courrierInternationalPayload(uuid: string): Record<string, unknown> | null {
+        const ligne = getDb()
+            .prepare(
+                `SELECT c.uuid, c.numero_courrier, c.agence_depart_id, c.pays_destination_id, c.ville_destination_id,
+                        c.user_id, c.agent_id, c.pays_destination, c.ville_destination, c.adresse_destination,
+                        c.transporteur, c.tracking_externe, c.mode_facturation, c.pourcentage_frais,
+                        c.frais_expedition, c.valeur_colis, c.montant_total, c.statut,
+                        c.observation, c.created_at, c.updated_at,
+                        exp.uuid AS expediteur_uuid,
+                        dest.uuid AS destinataire_uuid
+                 FROM courriers_internationaux c
+                 JOIN clients exp ON exp.id = c.expediteur_id
+                 JOIN clients dest ON dest.id = c.destinataire_id
+                 WHERE c.uuid = ?`,
+            )
+            .get(uuid) as Record<string, unknown> | undefined;
+
+        if (!ligne) return null;
+
+        const colis = getDb()
+            .prepare(
+                `SELECT uuid, nom, type, quantite, poids_kg, prix, montant, frais_unitaire, frais_expedition, created_at, updated_at
+                 FROM colis_internationaux
+                 WHERE courrier_international_id = (SELECT id FROM courriers_internationaux WHERE uuid = ?)
                  ORDER BY id ASC`,
             )
             .all(uuid) as Record<string, unknown>[];

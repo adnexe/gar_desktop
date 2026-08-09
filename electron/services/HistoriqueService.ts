@@ -7,11 +7,13 @@ export class HistoriqueService {
     private readonly bagages = new BagageRepository();
     private readonly courriers = new CourrierRepository();
 
-    duJour(agenceId: number) {
+    // userId null = tout voir (admin / chef de gare) ; sinon uniquement les
+    // opérations de cet utilisateur (agents).
+    duJour(agenceId: number, userId?: number | null) {
         return {
-            tickets: this.tickets.ventesDuJour(agenceId),
-            bagages: this.bagages.duJour(agenceId),
-            courriers: this.courriers.duJour(agenceId),
+            tickets: this.tickets.ventesDuJour(agenceId, undefined, userId),
+            bagages: this.bagages.duJour(agenceId, undefined, userId),
+            courriers: this.courriers.duJour(agenceId, undefined, userId),
         };
     }
 }

@@ -6,7 +6,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, __dirname, '');
-    const garApiUrl = env.GAR_API_URL || process.env.GAR_API_URL || 'http://127.0.0.1:8000';
+    const garApiUrl = process.env.GAR_API_URL || env.GAR_API_URL || 'http://127.0.0.1:8000';
 
     return {
         main: {

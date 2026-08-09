@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { watchDebounced } from '@vueuse/core';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
-import { Check, Mail, Package, Plus, Send, Trash2, UserRound, X } from '@lucide/vue';
+import { Check, Mail, Package, Plus, Printer, Send, Trash2, UserRound, X } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
+import { Spinner } from '@/Components/ui/spinner';
 import {
     Select,
     SelectContent,
@@ -19,7 +20,7 @@ import { useSessionStore } from '@/Stores/session';
 import type { CourrierDuJour } from '@/types/courrier';
 
 interface Ville { id: number; uuid: string; nom: string }
-interface Agence { id: number; uuid: string; nom: string; ville_id: number }
+interface Agence { id: number; uuid: string; nom: string; ville_id: number; telephone: string | null }
 interface VoyageOption { id: number; uuid: string; date_depart: string; heure_depart: string; itineraire_nom: string | null }
 interface LigneColis { nom: string; type: string; quantite: number; prix: number }
 
@@ -40,6 +41,8 @@ const config = useConfigStore();
 const session = useSessionStore();
 
 const villes = ref<Ville[]>([]);
+// On ne peut pas envoyer un courrier vers la ville où l'on se trouve déjà.
+const villesDestinationsPossibles = computed(() => villes.value.filter((v) => v.id !== config.agence?.ville_id));
 const villeArriveeId = ref<number | null>(null);
 const agencesDestination = ref<Agence[]>([]);
 const agenceArriveeId = ref<number | null>(null);
@@ -70,6 +73,7 @@ const recu = ref<{
     numero_courrier: string;
     destination: string;
     agence_arrivee: string | null;
+    agence_arrivee_telephone: string | null;
     voyage: string | null;
     expediteur: string;
     expediteur_nom: string;
@@ -82,6 +86,7 @@ const recu = ref<{
     montant_colis: number;
     montant_total: number;
     agence_depart: string | null;
+    agence_depart_telephone: string | null;
     agent: string | null;
     created_at: string;
     compagnie: CompagnieLocale | null;
@@ -143,7 +148,6 @@ const nbColis = computed(() => colisListe.value.reduce((s, c) => s + c.quantite,
 const peutEnvoyer = computed(() =>
     !!config.agence &&
     !!villeArriveeId.value &&
-    !!agenceArriveeId.value &&
     expediteur.nom.trim().length > 0 &&
     expediteur.telephone.trim().length > 0 &&
     destinataire.nom.trim().length > 0 &&
@@ -224,6 +228,31 @@ function nomComplet(personne: { nom: string; prenoms: string }) {
     return [personne.prenoms, personne.nom].filter(Boolean).join(' ').trim();
 }
 
+// Après un envoi réussi, on garde le dernier reçu en mémoire : le bloc
+// « Dernier courrier » permet de réimprimer reçu ou étiquette.
+function resetSaisie() {
+    villeArriveeId.value = null;
+    agenceArriveeId.value = null;
+    agencesDestination.value = [];
+    voyageId.value = null;
+    expediteur.nom = '';
+    expediteur.prenoms = '';
+    expediteur.telephone = '';
+    destinataire.nom = '';
+    destinataire.prenoms = '';
+    destinataire.telephone = '';
+    nouveauColis.nom = '';
+    nouveauColis.type = 'petit';
+    nouveauColis.quantite = 1;
+    nouveauColis.prix = 0;
+    colisListe.value = [];
+    prixExpedition.value = null;
+    pourcentageExpedition.value = 10;
+    expeditionManuelle.value = false;
+    confirmationOuverte.value = false;
+    erreur.value = '';
+}
+
 function resetTout() {
     villeArriveeId.value = null;
     agenceArriveeId.value = null;
@@ -275,9 +304,23 @@ async function imprimer(partie: 'recu' | 'etiquette'): Promise<ResultatImpressio
     }
 }
 
+async function reimprimer(partie: 'recu' | 'etiquette') {
+    if (!recu.value) return;
+
+    erreur.value = '';
+    try {
+        const impression = await imprimer(partie);
+        if (!impression.ok) {
+            erreur.value = `${partie === 'recu' ? 'Reçu' : 'Étiquette'} non imprimé(e) : ${impression.erreur ?? 'Impression non confirmée par le système.'}`;
+        }
+    } catch (e) {
+        erreur.value = `${partie === 'recu' ? 'Reçu' : 'Étiquette'} non imprimé(e) : ${messageErreurInconnue(e, "L'impression n'a pas pu être lancée.")}`;
+    }
+}
+
 async function envoyer() {
-    if (!config.agence || !villeArriveeId.value || !agenceArriveeId.value || !session.userId) {
-        erreur.value = "Choisissez la ville et l'agence de destination.";
+    if (!config.agence || !villeArriveeId.value || !session.userId) {
+        erreur.value = 'Choisissez la ville de destination.';
         return;
     }
 
@@ -311,7 +354,7 @@ async function envoyer() {
         };
 
         if (!reponse.ok || !reponse.courrier) {
-            erreur.value = reponse.erreur ?? "L'enregistrement a échoué.";
+            erreur.value = reponse.erreur ?? "L'enregistrement n'a pas abouti. Réessaie, rien n'a été perdu.";
             confirmationOuverte.value = false;
             return;
         }
@@ -319,13 +362,14 @@ async function envoyer() {
         confirmationOuverte.value = false;
 
         const destination = villes.value.find((v) => v.id === villeArriveeIdActuelle)?.nom ?? '';
-        const agenceNom = agencesDestination.value.find((a) => a.id === agenceArriveeIdActuelle)?.nom ?? null;
+        const agenceDestination = agencesDestination.value.find((a) => a.id === agenceArriveeIdActuelle) ?? null;
         const voyageLabel = voyageSelectionne.value ? libelleVoyage(voyageSelectionne.value) : null;
 
         const dernierRecu = {
             numero_courrier: reponse.courrier.numeroCourrier,
             destination,
-            agence_arrivee: agenceNom,
+            agence_arrivee: agenceDestination?.nom ?? null,
+            agence_arrivee_telephone: agenceDestination?.telephone ?? null,
             voyage: voyageLabel,
             expediteur: `${nomComplet(expediteur)} (${expediteur.telephone})`.trim(),
             expediteur_nom: nomComplet(expediteur),
@@ -343,6 +387,7 @@ async function envoyer() {
             montant_colis: reponse.courrier.montantColis,
             montant_total: reponse.courrier.montantTotal,
             agence_depart: agenceActuelle.nom,
+            agence_depart_telephone: agenceActuelle.telephone,
             agent: session.nom || null,
             created_at: dateHeureRecu(),
             compagnie: config.compagnie,
@@ -400,9 +445,9 @@ async function envoyer() {
             montant_total: reponse.courrier.montantTotal,
         });
 
-        resetTout();
+        resetSaisie();
     } catch (e) {
-        erreur.value = messageErreurInconnue(e, "Une erreur est survenue lors de l'enregistrement.");
+        erreur.value = messageErreurInconnue(e, "L'enregistrement n'a pas abouti. Réessaie, rien n'a été perdu.");
         confirmationOuverte.value = false;
     } finally {
         enregistrement.value = false;
@@ -425,20 +470,21 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     <Select v-model="villeArriveeId">
                         <SelectTrigger class="h-10 w-full"><SelectValue placeholder="Choisir une ville" /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem v-for="ville in villes" :key="ville.id" :value="ville.id">{{ ville.nom }}</SelectItem>
+                            <SelectItem v-for="ville in villesDestinationsPossibles" :key="ville.id" :value="ville.id">{{ ville.nom }}</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
                 <div class="space-y-1.5">
-                    <Label>Agence de destination</Label>
+                    <Label>Agence de destination <span class="text-muted-foreground">(facultatif)</span></Label>
                     <Select v-model="agenceArriveeId" :disabled="!villeArriveeId">
-                        <SelectTrigger class="h-10 w-full"><SelectValue placeholder="Choisir une agence" /></SelectTrigger>
+                        <SelectTrigger class="h-10 w-full"><SelectValue placeholder="Aucune agence précise" /></SelectTrigger>
                         <SelectContent>
+                            <SelectItem :value="null">Aucune agence précise</SelectItem>
                             <SelectItem v-for="a in agencesDestination" :key="a.id" :value="a.id">{{ a.nom }}</SelectItem>
                         </SelectContent>
                     </Select>
                     <p v-if="villeArriveeId && agencesDestination.length === 0" class="text-xs text-muted-foreground">
-                        Aucune agence dans cette ville.
+                        Aucune agence dans cette ville — le colis sera retirable dans n'importe laquelle.
                     </p>
                 </div>
                 <div class="space-y-1.5">
@@ -598,6 +644,17 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                     <p class="mt-1 border-t pt-1 text-xl font-semibold">Total à payer : {{ formatMontant(montantTotal) }}</p>
                 </div>
             </div>
+
+            <div v-if="recu" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                <div>
+                    <p class="text-sm font-semibold">Dernier courrier enregistré : {{ recu.numero_courrier }}</p>
+                    <p class="text-sm text-muted-foreground">{{ recu.destination }} · {{ recu.destinataire_nom }}</p>
+                </div>
+                <Button variant="outline" @click="reimprimer('etiquette')">
+                    <Printer />
+                    Réimprimer étiquette (talon)
+                </Button>
+            </div>
         </div>
 
         <!-- Barre d'actions fixe : hors de la zone qui défile. -->
@@ -645,7 +702,8 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                         Fermer
                     </Button>
                     <Button :disabled="enregistrement" @click="envoyer">
-                        <Check />
+                        <Spinner v-if="enregistrement" />
+                        <Check v-else />
                         {{ enregistrement ? 'Enregistrement…' : 'Confirmer' }}
                     </Button>
                 </div>

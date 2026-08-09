@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { Blinds } from '@lucide/vue';
 import { cn } from '@/lib/utils';
 
 const props = defineProps<{
     nombrePlaces: number;
+    /** "3-2" (3 sièges à gauche de l'allée, 2 à droite) ou "2-2". Absente ou
+     * inconnue → plan générique 2+2 (comportement historique). */
+    disposition: string | null;
     placesOccupees: number[];
     placeSelectionnee: number | null;
 }>();
@@ -12,14 +16,50 @@ const emit = defineEmits<{
     select: [place: number];
 }>();
 
-const places = computed(() => Array.from({ length: props.nombrePlaces }, (_, i) => i + 1));
+// Taille de chaque bloc (gauche = côté chauffeur, droite = de l'autre côté
+// de l'allée) selon la disposition réelle du véhicule.
+const DISPOSITIONS: Record<string, { gauche: number; droite: number }> = {
+    '3-2': { gauche: 3, droite: 2 },
+    '2-2': { gauche: 2, droite: 2 },
+};
 
-// Rangées de 4 places (2 + allée + 2), disposition générique.
+const config = computed(() => (props.disposition && DISPOSITIONS[props.disposition]) || DISPOSITIONS['2-2']);
+const tailleRangee = computed(() => config.value.gauche + config.value.droite);
+
+type Siege = { place: number; fenetre: boolean };
+
+// Numérotation confirmée sur le terrain (fiche de réservation papier) : dans
+// chaque rangée, le n° 1 est le siège fenêtre du bloc de droite, les numéros
+// augmentent en allant vers la fenêtre du bloc de gauche. Rangée suivante :
+// on continue (ex. 3-2 → rangée 1 = 1..5, rangée 2 = 6..10, ...).
+// Position dans la rangée (1 = fenêtre droite … tailleRangee = fenêtre
+// gauche) : seules la 1ère et la dernière position sont côté fenêtre, tout
+// le reste est côté allée.
 const rangees = computed(() => {
-    const result: number[][] = [];
+    const R = tailleRangee.value;
+    const result: { gauche: (Siege | null)[]; droite: (Siege | null)[] }[] = [];
 
-    for (let i = 0; i < places.value.length; i += 4) {
-        result.push(places.value.slice(i, i + 4));
+    for (let debut = 1; debut <= props.nombrePlaces; debut += R) {
+        const gauche: (Siege | null)[] = [];
+        const droite: (Siege | null)[] = [];
+
+        // Ordre d'affichage : bloc gauche de la fenêtre vers l'allée, puis
+        // bloc droite de l'allée vers la fenêtre — comme sur la fiche papier.
+        // Sur la dernière rangée (incomplète si nombrePlaces n'est pas un
+        // multiple de R), les places manquantes deviennent `null` mais
+        // gardent leur emplacement : sans ça, un bloc gauche entièrement vide
+        // s'effondre en largeur et décale tout le bloc droite vers la gauche.
+        for (let pos = R; pos >= 1; pos--) {
+            const place = debut + pos - 1;
+            const siege: Siege | null = place <= props.nombrePlaces
+                ? { place, fenetre: pos === 1 || pos === R }
+                : null;
+
+            if (pos > config.value.droite) gauche.push(siege);
+            else droite.push(siege);
+        }
+
+        result.push({ gauche, droite });
     }
 
     return result;
@@ -35,7 +75,7 @@ const classesFor = (place: number) => {
     const s = statut(place);
 
     return cn(
-        'flex size-10 items-center justify-center rounded-md border text-xs font-medium transition-colors',
+        'relative flex size-11 items-center justify-center rounded-md border text-xs font-medium transition-colors',
         s === 'occupee' && 'cursor-not-allowed border-destructive/30 bg-destructive/15 text-destructive',
         s === 'selectionnee' && 'border-emerald-600 bg-emerald-500 text-white',
         s === 'libre' && 'cursor-pointer border-muted-foreground/20 bg-muted/40 text-muted-foreground hover:border-primary hover:text-foreground',
@@ -63,33 +103,43 @@ const choisir = (place: number) => {
                 <span class="size-3 rounded border border-muted-foreground/20 bg-muted/40" />
                 Libre
             </span>
+            <span class="flex items-center gap-1.5">
+                <Blinds class="size-3.5" />
+                Côté fenêtre
+            </span>
         </div>
 
         <div class="space-y-2">
             <div v-for="(rangee, index) in rangees" :key="index" class="flex items-center gap-2">
-                <div class="flex gap-2">
+                <div class="flex gap-1.5">
                     <div
-                        v-for="place in rangee.slice(0, 2)"
-                        :key="place"
-                        :class="classesFor(place)"
-                        role="button"
-                        :aria-disabled="statut(place) === 'occupee'"
-                        @click="choisir(place)"
+                        v-for="(siege, i) in rangee.gauche"
+                        :key="siege ? siege.place : `g${index}-${i}`"
+                        :class="siege ? classesFor(siege.place) : 'size-11'"
+                        :role="siege ? 'button' : undefined"
+                        :aria-disabled="siege ? statut(siege.place) === 'occupee' : undefined"
+                        @click="siege && choisir(siege.place)"
                     >
-                        {{ place }}
+                        <template v-if="siege">
+                            <Blinds v-if="siege.fenetre" class="absolute top-0.5 left-0.5 size-2.5 opacity-60" />
+                            <span class="absolute top-0.5 right-1 text-[10px] leading-none">{{ siege.place }}</span>
+                        </template>
                     </div>
                 </div>
-                <div class="w-6" />
-                <div class="flex gap-2">
+                <div class="w-5" />
+                <div class="flex gap-1.5">
                     <div
-                        v-for="place in rangee.slice(2, 4)"
-                        :key="place"
-                        :class="classesFor(place)"
-                        role="button"
-                        :aria-disabled="statut(place) === 'occupee'"
-                        @click="choisir(place)"
+                        v-for="(siege, i) in rangee.droite"
+                        :key="siege ? siege.place : `d${index}-${i}`"
+                        :class="siege ? classesFor(siege.place) : 'size-11'"
+                        :role="siege ? 'button' : undefined"
+                        :aria-disabled="siege ? statut(siege.place) === 'occupee' : undefined"
+                        @click="siege && choisir(siege.place)"
                     >
-                        {{ place }}
+                        <template v-if="siege">
+                            <Blinds v-if="siege.fenetre" class="absolute top-0.5 left-0.5 size-2.5 opacity-60" />
+                            <span class="absolute top-0.5 right-1 text-[10px] leading-none">{{ siege.place }}</span>
+                        </template>
                     </div>
                 </div>
             </div>

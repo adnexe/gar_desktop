@@ -1,21 +1,53 @@
 import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 // pdf-to-printer est en CommonJS : import par défaut obligatoire (main en ESM).
 import pdfToPrinter from 'pdf-to-printer';
 
 const { print: imprimerFichierPdf } = pdfToPrinter;
+const execFileAsync = promisify(execFile);
+
+// Envoie un PDF à l'imprimante : SumatraPDF (pdf-to-printer) sous Windows,
+// CUPS (`lp`) sous macOS/Linux — même stratégie des deux côtés : papier
+// personnalisé à la taille du reçu, réduction si la page dépasse la zone
+// imprimable (plutôt qu'un rognage à droite).
+async function envoyerPdfImprimante(fichier: string, options: { printer?: string; paperSize?: string }): Promise<void> {
+    if (process.platform === 'win32') {
+        await imprimerFichierPdf(fichier, {
+            ...(options.printer ? { printer: options.printer } : {}),
+            ...(options.paperSize ? { paperSize: options.paperSize } : {}),
+            scale: 'shrink',
+        });
+        return;
+    }
+
+    const args: string[] = [];
+    if (options.printer) args.push('-d', options.printer.replace(/ /g, '_'));
+    const dims = options.paperSize?.match(/^(\d+)mm x (\d+)mm$/);
+    if (dims) args.push('-o', `media=Custom.${dims[1]}x${dims[2]}mm`);
+    // La zone imprimable des thermiques est plus étroite que le papier
+    // (~72 mm sur 80 mm) : sans ajustement, le pilote rogne à droite et en
+    // bas. « fit-to-page » réduit très légèrement la page pour tout garder.
+    args.push('-o', 'fit-to-page');
+    args.push(fichier);
+    await execFileAsync('lp', args);
+}
 import { ConfigController } from '../controllers/ConfigController';
 import { AuthController } from '../controllers/AuthController';
+import { AgentController } from '../controllers/AgentController';
 import { ReferentielController } from '../controllers/ReferentielController';
 import { VenteController } from '../controllers/VenteController';
 import { BagageController } from '../controllers/BagageController';
 import { CourrierController } from '../controllers/CourrierController';
+import { CourrierInternationalController } from '../controllers/CourrierInternationalController';
 import { VoyageController } from '../controllers/VoyageController';
 import { HistoriqueController } from '../controllers/HistoriqueController';
 import { logger } from '../logger';
 import { localNetworkService } from '../services/LocalNetworkService';
+import { lireCalibrationImpression } from '../services/ImpressionConfigService';
 
 type ImprimanteRuntime = Electron.PrinterInfo & {
     isDefault?: boolean;
@@ -31,6 +63,10 @@ type ImprimanteExposee = {
 };
 
 type ResultatImpression = { ok: true; imprimante: string } | { ok: false; erreur: string };
+
+function dureeMs(debut: number): number {
+    return Math.round(performance.now() - debut);
+}
 
 function nomImprimante(imprimante: ImprimanteRuntime): string {
     return imprimante.displayName || imprimante.name || 'Imprimante sans nom';
@@ -60,10 +96,21 @@ function exposerImprimante(imprimante: ImprimanteRuntime): ImprimanteExposee {
 }
 
 async function listerImprimantes(sender: WebContents): Promise<ImprimanteRuntime[]> {
+    const debut = performance.now();
+
     try {
-        return await sender.getPrintersAsync() as ImprimanteRuntime[];
+        const imprimantes = await sender.getPrintersAsync() as ImprimanteRuntime[];
+        logger.info('Chrono impression - liste imprimantes', {
+            duree_ms: dureeMs(debut),
+            nombre: imprimantes.length,
+        });
+
+        return imprimantes;
     } catch (erreur) {
-        logger.warn('Liste des imprimantes indisponible.', erreur);
+        logger.warn('Liste des imprimantes indisponible.', {
+            duree_ms: dureeMs(debut),
+            erreur: erreur instanceof Error ? erreur.message : String(erreur),
+        });
         return [];
     }
 }
@@ -73,8 +120,17 @@ function imprimerWebContents(sender: WebContents, options: Electron.WebContentsP
         return Promise.resolve({ ok: false, erreur: 'Fenêtre d’impression introuvable.' });
     }
 
+    const debut = performance.now();
+
     return new Promise((resolve) => {
         sender.print(options, (succes, raison) => {
+            logger.info('Chrono impression Electron directe', {
+                libelle,
+                ok: succes,
+                duree_ms: dureeMs(debut),
+                raison: succes ? null : raison,
+            });
+
             if (succes) {
                 resolve({ ok: true, imprimante: libelle });
                 return;
@@ -107,25 +163,57 @@ function estImprimanteVirtuelle(imprimante: ImprimanteRuntime): boolean {
  * SumatraPDF embarqué (paquet pdf-to-printer).
  */
 async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntime[], tentatives: string[], hauteurMm?: number): Promise<ResultatImpression> {
+    const debutTotal = performance.now();
+    const calibration = lireCalibrationImpression();
+    const chrono = {
+        hauteur_mesuree_mm: hauteurMm ?? null,
+        hauteur_page_pouces: 0,
+        hauteur_papier_mm: 0,
+        largeur_papier_mm: calibration.largeurPapierMm,
+        largeur_contenu_mm: calibration.largeurContenuMm,
+        decalage_x_mm: calibration.decalageXMm,
+        pdf_octets: 0,
+        print_to_pdf_ms: 0,
+        ecriture_pdf_ms: 0,
+        suppression_pdf_ms: 0,
+        total_ms: 0,
+        tentatives_sumatra: [] as {
+            cible: string;
+            format: string;
+            ok: boolean;
+            duree_ms: number;
+            erreur?: string;
+        }[],
+        resultat: 'succes' as 'succes' | 'echec',
+        imprimante: null as string | null,
+    };
+
     // La hauteur de page suit la hauteur réelle du reçu (mesurée par le
     // renderer) : l'imprimante ne déroule plus une page A4 quasi vide, ce qui
     // accélère nettement la sortie et économise le papier.
     const hauteurPouces = hauteurMm
         ? Math.min(Math.max(hauteurMm / 25.4 + 0.2, 1.5), 40)
         : 11.7;
-
-    const pdf = await sender.printToPDF({
-        printBackground: true,
-        preferCSSPageSize: true,
-        margins: { top: 0, bottom: 0, left: 0, right: 0 },
-        // 80 mm de large (3,15 po) ; le @page du CSS prime s'il est défini.
-        pageSize: { width: 3.15, height: hauteurPouces },
-    });
-
-    const fichier = join(app.getPath('temp'), `adnexe-ticket-${randomUUID()}.pdf`);
-    await writeFile(fichier, pdf);
+    chrono.hauteur_page_pouces = Number(hauteurPouces.toFixed(2));
+    let fichier: string | null = null;
+    let resultat: ResultatImpression | null = null;
 
     try {
+        const debutPdf = performance.now();
+        const pdf = await sender.printToPDF({
+            printBackground: true,
+            preferCSSPageSize: true,
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            pageSize: { width: calibration.largeurPapierMm / 25.4, height: hauteurPouces },
+        });
+        chrono.print_to_pdf_ms = dureeMs(debutPdf);
+        chrono.pdf_octets = pdf.length;
+
+        fichier = join(app.getPath('temp'), `adnexe-ticket-${randomUUID()}.pdf`);
+        const debutEcriture = performance.now();
+        await writeFile(fichier, pdf);
+        chrono.ecriture_pdf_ms = dureeMs(debutEcriture);
+
         // Imprimante par défaut d'abord (sans nom), puis les imprimantes
         // physiques (défaut en tête) — jamais les virtuelles en repli.
         const cibles: { printer?: string; libelle: string }[] = [
@@ -135,23 +223,70 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
                 .map((imprimante) => ({ printer: imprimante.name, libelle: nomImprimante(imprimante) })),
         ];
 
-        for (const cible of cibles) {
-            try {
-                await imprimerFichierPdf(fichier, {
-                    ...(cible.printer ? { printer: cible.printer } : {}),
-                    scale: 'noscale',
-                });
+        // Papier personnalisé à la taille exacte du reçu (paper=80mm x Hmm) :
+        // sans lui, SumatraPDF centre la petite page sur le papier du pilote
+        // (souvent 297 mm) → gros blanc avant le ticket. Repli sans format
+        // personnalisé pour les pilotes qui le refusent.
+        const hauteurPapierMm = Math.round(hauteurPouces * 25.4);
+        chrono.hauteur_papier_mm = hauteurPapierMm;
+        const formats: { paperSize?: string; libelle: string }[] = [
+            {
+                paperSize: `${calibration.largeurPapierMm}mm x ${hauteurPapierMm}mm`,
+                libelle: `${calibration.largeurPapierMm}x${hauteurPapierMm}`,
+            },
+            { libelle: 'papier pilote' },
+        ];
 
-                return { ok: true, imprimante: `${cible.libelle} (PDF)` };
-            } catch (erreur) {
-                const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
-                tentatives.push(`${cible.libelle} [PDF] : ${message}`);
+        for (const cible of cibles) {
+            for (const format of formats) {
+                const debutSumatra = performance.now();
+
+                try {
+                    await envoyerPdfImprimante(fichier, {
+                        ...(cible.printer ? { printer: cible.printer } : {}),
+                        ...(format.paperSize ? { paperSize: format.paperSize } : {}),
+                    });
+
+                    const imprimante = `${cible.libelle} (PDF ${format.libelle})`;
+                    chrono.tentatives_sumatra.push({
+                        cible: cible.libelle,
+                        format: format.libelle,
+                        ok: true,
+                        duree_ms: dureeMs(debutSumatra),
+                    });
+                    chrono.imprimante = imprimante;
+                    resultat = { ok: true, imprimante };
+
+                    return resultat;
+                } catch (erreur) {
+                    const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
+                    chrono.tentatives_sumatra.push({
+                        cible: cible.libelle,
+                        format: format.libelle,
+                        ok: false,
+                        duree_ms: dureeMs(debutSumatra),
+                        erreur: message,
+                    });
+                    tentatives.push(`${cible.libelle} [PDF ${format.libelle}] : ${message}`);
+                }
             }
         }
 
-        return { ok: false, erreur: tentatives.join(' | ') };
+        chrono.resultat = 'echec';
+        resultat = { ok: false, erreur: tentatives.join(' | ') };
+
+        return resultat;
     } finally {
-        void unlink(fichier).catch(() => undefined);
+        if (fichier) {
+            const debutSuppression = performance.now();
+            await unlink(fichier).catch(() => undefined);
+            chrono.suppression_pdf_ms = dureeMs(debutSuppression);
+        }
+
+        chrono.total_ms = dureeMs(debutTotal);
+        chrono.resultat = resultat?.ok ? 'succes' : 'echec';
+
+        logger[chrono.resultat === 'succes' ? 'info' : 'warn']('Chrono impression PDF/Sumatra', chrono);
     }
 }
 
@@ -186,19 +321,34 @@ const FORMES_IMPRESSION: { libelle: string; options: Electron.WebContentsPrintOp
 ];
 
 async function imprimerDirect(sender: WebContents, hauteurMm?: number): Promise<ResultatImpression> {
-    const imprimantes = await listerImprimantes(sender);
     const tentatives: string[] = [];
+    let imprimantes: ImprimanteRuntime[] | null = null;
 
-    // Sous Windows, la voie PDF + SumatraPDF est la seule fiable.
-    if (process.platform === 'win32') {
+    // La voie PDF est la seule fiable : SumatraPDF sous Windows, CUPS (`lp`)
+    // sous macOS/Linux — l'impression Chromium directe échoue sur les
+    // thermiques (« Invalid printer settings ») sur les deux plateformes.
+    // Chemin rapide : imprimante par défaut d'abord, puis repli complet.
+    if (process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux') {
         try {
-            const viaPdf = await imprimerViaPdf(sender, imprimantes, tentatives, hauteurMm);
-            if (viaPdf.ok) return viaPdf;
+            const viaPdfDefaut = await imprimerViaPdf(sender, [], tentatives, hauteurMm);
+            if (viaPdfDefaut.ok) return viaPdfDefaut;
         } catch (erreur) {
             const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
-            tentatives.push(`génération PDF : ${message}`);
+            tentatives.push(`PDF défaut rapide : ${message}`);
+        }
+
+        imprimantes = await listerImprimantes(sender);
+
+        try {
+            const viaPdfComplet = await imprimerViaPdf(sender, imprimantes, tentatives, hauteurMm);
+            if (viaPdfComplet.ok) return viaPdfComplet;
+        } catch (erreur) {
+            const message = erreur instanceof Error ? erreur.message.split('\n')[0] : String(erreur);
+            tentatives.push(`génération PDF complète : ${message}`);
         }
     }
+
+    imprimantes ??= await listerImprimantes(sender);
 
     // Cibles dans l'ordre : imprimante par défaut (deviceName absent), puis
     // chaque imprimante physique nommée (défaut en tête).
@@ -255,6 +405,7 @@ async function imprimerTicketTest(): Promise<ResultatImpression> {
         },
     });
 
+    const calibration = lireCalibrationImpression();
     const date = new Date().toLocaleString('fr-FR');
     const html = `
         <!doctype html>
@@ -262,27 +413,44 @@ async function imprimerTicketTest(): Promise<ResultatImpression> {
         <head>
             <meta charset="utf-8" />
             <style>
-                @page { size: auto; margin: 0; }
-                body { width: 72mm; margin: 0; font-family: Arial, sans-serif; color: #000; }
-                .ticket { border: 1px solid #000; padding: 8px; font-size: 13px; }
+                @page { size: ${calibration.largeurPapierMm}mm auto; margin: 0; }
+                body { width: ${calibration.largeurPapierMm}mm; margin: 0; font-family: Arial, sans-serif; color: #000; }
+                .page { width: ${calibration.largeurPapierMm}mm; overflow: hidden; clip-path: inset(0); }
+                .ticket {
+                    width: ${calibration.largeurContenuMm}mm;
+                    box-sizing: border-box;
+                    border: 1px solid #000;
+                    padding: 8px;
+                    margin-left: ${Math.min(
+                        Math.max((calibration.largeurPapierMm - calibration.largeurContenuMm) / 2 + calibration.decalageXMm, 0),
+                        calibration.largeurPapierMm - calibration.largeurContenuMm,
+                    )}mm;
+                    margin-right: 0;
+                    font-size: 13px;
+                    overflow-wrap: anywhere;
+                    word-break: break-word;
+                }
+                .ticket * { box-sizing: border-box; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
                 h1 { margin: 0 0 8px; text-align: center; font-size: 18px; }
                 p { margin: 5px 0; }
                 .ligne { display: flex; justify-content: space-between; border-top: 1px dashed #000; padding-top: 6px; margin-top: 8px; }
             </style>
         </head>
         <body>
-            <div class="ticket">
-                <h1>TEST IMPRESSION</h1>
-                <p>Adnexe Transport</p>
-                <p>Si ce ticket sort, l'imprimante est disponible pour l'application.</p>
-                <div class="ligne"><span>Date</span><strong>${date}</strong></div>
+            <div class="page">
+                <div class="ticket">
+                    <h1>TEST IMPRESSION</h1>
+                    <p>Adnexe Transport</p>
+                    <p>Papier ${calibration.largeurPapierMm}mm · contenu ${calibration.largeurContenuMm}mm · décalage ${calibration.decalageXMm}mm</p>
+                    <div class="ligne"><span>Date</span><strong>${date}</strong></div>
+                </div>
             </div>
         </body>
         </html>`;
 
     try {
         await fenetre.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-        return await imprimerDirect(fenetre.webContents);
+        return await imprimerDirect(fenetre.webContents, 90);
     } finally {
         if (!fenetre.isDestroyed()) fenetre.destroy();
     }
@@ -310,18 +478,36 @@ export function enregistrerIpc(): void {
     gerer('config:compagnieActuelle', ConfigController.compagnieActuelle);
     gerer('config:licenceActuelle', ConfigController.licenceActuelle);
     gerer('config:reclamerLicence', ConfigController.reclamerLicence);
+    gerer('config:verifierLicence', ConfigController.verifierLicence);
     gerer('config:configurer', ConfigController.configurer);
     gerer('config:actualiser', ConfigController.actualiser);
+    gerer('config:synchroniserMaintenant', ConfigController.synchroniserMaintenant);
     gerer('config:reseauLocal', ConfigController.reseauLocal);
+    gerer('config:calibrationImpression', ConfigController.calibrationImpression);
+    gerer('config:enregistrerCalibrationImpression', ConfigController.enregistrerCalibrationImpression);
     gerer('config:configurerReseauLocal', ConfigController.configurerReseauLocal);
     gerer('config:testerReseauLocal', ConfigController.testerReseauLocal);
     gerer('config:actualiserVoyagesServeurLocal', ConfigController.actualiserVoyagesServeurLocal);
+    gerer('config:relancerServeurLocal', ConfigController.relancerServeurLocal);
+    gerer('config:nettoyerDonneesTest', ConfigController.nettoyerDonneesTest);
+    gerer('config:resetComplet', ConfigController.resetComplet);
 
     gerer('auth:connecter', AuthController.connecter);
+    gerer('auth:verifierSession', AgentController.verifierSession);
+
+    gerer('agents:lister', AgentController.lister);
+    gerer('agents:desactiver', AgentController.desactiver);
+    gerer('agents:reactiver', AgentController.reactiver);
+    gerer('agents:supprimerLocalement', AgentController.supprimerLocalement);
 
     gerer('referentiel:villes', ReferentielController.villes);
+    gerer('referentiel:pays', ReferentielController.pays);
+    gerer('referentiel:villesParPays', ReferentielController.villesParPays);
     gerer('referentiel:agencesParVille', ReferentielController.agencesParVille);
     gerer('referentiel:voyagesDeAgence', ReferentielController.voyagesDeAgence);
+    gerer('referentiel:tarifsAgence', ReferentielController.tarifsAgence);
+    gerer('referentiel:chauffeurs', ReferentielController.chauffeurs);
+    gerer('referentiel:vehicules', ReferentielController.vehicules);
 
     gerer('vente:rechercherVoyages', VenteController.rechercherVoyages);
     gerer('vente:rechercherClient', VenteController.rechercherClient);
@@ -330,6 +516,7 @@ export function enregistrerIpc(): void {
     gerer('vente:annulerImpression', VenteController.annulerImpression);
     gerer('vente:ventesDuJour', VenteController.ventesDuJour);
     gerer('vente:finDeCaisse', VenteController.finDeCaisse);
+    gerer('vente:voyagesFinDeCaisse', VenteController.voyagesFinDeCaisse);
 
     const imprimerDepuisRenderer = async (event: IpcMainInvokeEvent, hauteurMm?: number) => {
         const fenetre = BrowserWindow.fromWebContents(event.sender);
@@ -348,22 +535,44 @@ export function enregistrerIpc(): void {
     ipcMain.handle('impression:recu', imprimerDepuisRenderer);
     ipcMain.handle('impression:listerImprimantes', async (event) => (await listerImprimantes(event.sender)).map(exposerImprimante));
     ipcMain.handle('impression:tester', async () => imprimerTicketTest());
+    ipcMain.handle('diagnostic:log', async (_event, niveau: 'info' | 'warn', message: string, contexte?: unknown) => {
+        const details = typeof contexte === 'object' && contexte !== null ? contexte as Record<string, unknown> : { contexte };
+        if (niveau === 'warn') {
+            logger.warn(message, details);
+        } else {
+            logger.info(message, details);
+        }
+        return { ok: true as const };
+    });
 
     gerer('bagage:rechercherTicket', BagageController.rechercherTicket);
     gerer('bagage:enregistrer', BagageController.enregistrer);
     gerer('bagage:confirmerImpression', BagageController.confirmerImpression);
     gerer('bagage:annulerImpression', BagageController.annulerImpression);
     gerer('bagage:duJour', BagageController.duJour);
+    gerer('bagage:details', BagageController.details);
     gerer('bagage:finDeCaisse', BagageController.finDeCaisse);
 
+    gerer('courrier:preparerNumero', CourrierController.preparerNumero);
     gerer('courrier:enregistrer', CourrierController.enregistrer);
     gerer('courrier:confirmerImpression', CourrierController.confirmerImpression);
     gerer('courrier:annulerImpression', CourrierController.annulerImpression);
     gerer('courrier:duJour', CourrierController.duJour);
+    gerer('courrier:details', CourrierController.details);
     gerer('courrier:finDeCaisse', CourrierController.finDeCaisse);
+
+    gerer('courrierInternational:preparerNumero', CourrierInternationalController.preparerNumero);
+    gerer('courrierInternational:enregistrer', CourrierInternationalController.enregistrer);
+    gerer('courrierInternational:confirmerImpression', CourrierInternationalController.confirmerImpression);
+    gerer('courrierInternational:annulerImpression', CourrierInternationalController.annulerImpression);
+    gerer('courrierInternational:duJour', CourrierInternationalController.duJour);
+    gerer('courrierInternational:details', CourrierInternationalController.details);
+    gerer('courrierInternational:finDeCaisse', CourrierInternationalController.finDeCaisse);
 
     gerer('voyage:formulaire', VoyageController.formulaire);
     gerer('voyage:creer', VoyageController.creer);
+    gerer('voyage:details', VoyageController.details);
+    gerer('voyage:modifier', VoyageController.modifier);
     gerer('voyage:liste', VoyageController.liste);
 
     gerer('historique:duJour', HistoriqueController.duJour);

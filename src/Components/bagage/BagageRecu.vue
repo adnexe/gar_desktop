@@ -18,6 +18,7 @@ type RecuBagage = {
     destination: string | null;
     voyage: string | null;
     client: string | null;
+    client_telephone?: string | null;
     valeur: number | null;
     montant: number;
     description: string | null;
@@ -38,7 +39,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 </script>
 
 <template>
-    <div v-if="mode === 'recu'" class="ticket-recu recu-bagage">
+    <div v-if="mode !== 'talon'" class="ticket-recu recu-bagage">
         <div class="text-center">
             <img
                 v-if="recu.compagnie?.logo_data_uri || recu.compagnie?.logo_url"
@@ -54,21 +55,23 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             </p>
         </div>
 
-        <div class="numero-recu">
+        <div class="numero-recu numero-encadre">
             <span>N° REÇU BAGAGES</span>
             <strong>{{ recu.numero_bagage }}</strong>
         </div>
 
-        <div class="bloc">
-            <p class="titre">N° TICKET</p>
+        <div class="bloc section-recu">
+            <p class="titre section-titre">N° TICKET</p>
             <p class="numero-ticket">{{ recu.numero_ticket || 'Sans ticket' }}</p>
+            <p v-if="recu.numero_place" class="petit">Siège N° {{ recu.numero_place }}</p>
             <p v-if="recu.destination" class="destination">{{ recu.destination }}</p>
             <p v-if="recu.voyage" class="petit">Voyage : {{ recu.voyage }}</p>
         </div>
 
-        <div class="bloc">
-            <p class="titre">CLIENT</p>
+        <div class="bloc section-recu">
+            <p class="titre section-titre">CLIENT</p>
             <p class="nom-client">{{ recu.client || 'Client anonyme' }}</p>
+            <p v-if="recu.client_telephone" class="petit">{{ recu.client_telephone }}</p>
             <div class="ligne montant">
                 <span>Montant :</span>
                 <strong>{{ formatMontant(recu.montant) }}</strong>
@@ -91,15 +94,16 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             </div>
         </div>
 
-        <div class="bloc contenu">
-            <p class="titre">{{ recu.description || 'Bagage' }}</p>
+        <div class="bloc contenu section-recu">
+            <p class="titre section-titre">CONTENU</p>
+            <p class="description-bagage">{{ recu.description || 'Bagage' }}</p>
         </div>
 
         <hr v-if="recu.compagnie?.pied_ticket" />
         <p v-if="recu.compagnie?.pied_ticket" class="pied">{{ recu.compagnie.pied_ticket }}</p>
     </div>
 
-    <div v-else class="ticket-recu talon-bagage">
+    <div v-if="mode !== 'recu'" class="ticket-recu talon-bagage">
         <div class="text-center">
             <p class="compagnie">{{ recu.compagnie?.nom || recu.agence }}</p>
             <p class="contact">Talon bagage à coller</p>
@@ -115,21 +119,38 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 <span>N° Ticket</span>
                 <strong>{{ recu.numero_ticket || 'Sans ticket' }}</strong>
             </div>
-            <div v-if="recu.numero_place" class="ligne">
-                <span>Place</span>
-                <span>N° {{ recu.numero_place }}</span>
+            <div class="ligne">
+                <span>Siège</span>
+                <span>{{ recu.numero_place ? `N° ${recu.numero_place}` : '' }}</span>
             </div>
-            <div v-if="recu.destination" class="destination-talon">{{ recu.destination }}</div>
-            <div v-if="recu.voyage" class="petit">Voyage : {{ recu.voyage }}</div>
+            <p class="titre">Destination</p>
+            <div class="destination-talon">{{ recu.destination || '' }}</div>
+            <div class="ligne">
+                <span>Voyage</span>
+                <span>{{ recu.voyage || '' }}</span>
+            </div>
         </div>
 
         <div class="bloc">
             <p class="titre">CLIENT</p>
-            <p class="nom-client">{{ recu.client || 'Client anonyme' }}</p>
+            <p class="nom-client">{{ recu.client || '' }}</p>
+            <div class="ligne">
+                <span>Téléphone</span>
+                <span>{{ recu.client_telephone || '' }}</span>
+            </div>
         </div>
 
         <div class="bloc contenu">
-            <p class="titre">{{ recu.description || 'Bagage' }}</p>
+            <p class="titre">CONTENU</p>
+            <p>{{ recu.description || '' }}</p>
+            <div class="ligne">
+                <span>Valeur déclarée</span>
+                <span>{{ recu.valeur !== null ? formatMontant(recu.valeur) : '' }}</span>
+            </div>
+            <div class="ligne">
+                <span>Montant payé</span>
+                <strong>{{ formatMontant(recu.montant) }}</strong>
+            </div>
         </div>
 
         <div class="bas-talon">
@@ -141,25 +162,39 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 <style scoped>
 .ticket-recu {
-    width: 72mm;
+    box-sizing: border-box;
+    width: var(--impression-largeur-contenu, 70mm);
+    margin: 0 auto;
     color: #000;
     font-family: Arial, 'Helvetica Neue', sans-serif;
     font-size: 13px;
-    line-height: 1.35;
-    padding: 1mm;
+    line-height: 1.28;
+    padding: 0;
+}
+
+.ticket-recu,
+.ticket-recu * {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: break-word;
+    white-space: normal;
+    word-break: normal;
 }
 
 .logo {
-    max-height: 34px;
+    height: 26px;
     max-width: 44mm;
     object-fit: contain;
-    margin: 0 auto 3px;
+    margin: 0 auto 1px;
 }
 
 .compagnie {
     font-size: 14px;
     font-weight: 700;
+    line-height: 1.05;
     text-transform: uppercase;
+    word-break: normal;
 }
 
 .contact,
@@ -168,14 +203,30 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     font-size: 11px;
 }
 
-.numero-recu,
-.numero-talon {
-    align-items: center;
+/* flex-wrap et NON grid, exactement comme .numero-talon : quand l'étiquette
+ * est longue (« N° REÇU BAGAGES ») et la largeur réduite, une grille écrase la
+ * colonne du numéro et le coupe en deux (« 1012418 / 57 »). En flex, le numéro
+ * passe ENTIER à la ligne suivante — jamais tronqué. */
+.numero-recu {
+    align-items: start;
     border: 1px solid #000;
     display: flex;
+    flex-wrap: wrap;
+    gap: 0.35mm 1mm;
     justify-content: space-between;
-    margin: 5px 0;
-    padding: 5px;
+    margin: 2px 0;
+    padding: 1px;
+}
+
+.numero-talon {
+    align-items: start;
+    border: 1px solid #000;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35mm 1mm;
+    justify-content: space-between;
+    margin: 3px 0;
+    padding: 2px;
 }
 
 .numero-recu span,
@@ -185,28 +236,68 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
     text-transform: uppercase;
 }
 
+/* Étiquettes fixes (« N° REÇU BAGAGES », « N° BAGAGE »), jamais une valeur :
+ * retour à la ligne entre les mots uniquement, jamais en plein milieu — voir
+ * .recu-bagage .ligne span:first-child plus bas pour le détail du !important. */
+.numero-recu span,
+.numero-talon span {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+
 .numero-recu strong,
 .numero-talon strong {
-    font-size: 20px;
+    font-size: 16px;
+    line-height: 1.12;
+    min-width: 0;
+    overflow-wrap: break-word;
+    text-align: left;
+    word-break: normal;
+}
+
+.numero-talon span {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.numero-talon strong {
+    flex: 1 1 26mm;
 }
 
 .bloc {
     border: 1px solid #000;
-    margin: 5px 0;
-    padding: 5px;
+    margin: 2px 0;
+    padding: 1px;
+}
+
+.recu-bagage .section-recu {
+    padding: 0.5px;
+}
+
+.recu-bagage .section-titre {
+    background: #fff;
+    border-bottom: 1px solid #000;
+    margin: -0.5px -0.5px 1px;
+    padding: 0.5px;
 }
 
 .numero-ticket {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
+    line-height: 1.1;
+    overflow-wrap: break-word;
     text-align: center;
+    word-break: normal;
 }
 
 .destination,
 .destination-talon {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
+    line-height: 1.1;
+    overflow-wrap: break-word;
     text-transform: uppercase;
+    word-break: normal;
 }
 
 .destination-talon {
@@ -216,24 +307,75 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 .nom-client {
     font-size: 13px;
     font-weight: 700;
+    overflow-wrap: break-word;
     text-transform: uppercase;
+    word-break: normal;
 }
 
-.ligne {
-    align-items: baseline;
+.talon-bagage .ligne {
+    align-items: start;
     display: flex;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 0.35mm 1mm;
     justify-content: space-between;
+}
+
+.recu-bagage .ligne {
+    align-items: start;
+    display: grid;
+    gap: 0.2mm 0.6mm;
+    /* auto : l'étiquette prend exactement la place de son texte, quelle que
+     * soit la calibration — un pourcentage fixe devient trop étroit sur les
+     * petites largeurs et force la coupure des étiquettes en plein mot. */
+    grid-template-columns: auto minmax(0, 1fr);
+}
+
+/* !important nécessaire : la règle globale (app.css) force overflow-wrap:
+ * anywhere + word-break: break-word sur tout span du reçu, pour ne jamais
+ * dépasser la zone imprimable. Sur une étiquette (« Enregistré le : »),
+ * ça coupe au milieu du mot (« Enregis »/« tré le : ») dès que la colonne
+ * est un peu étroite. keep-all autorise toujours le retour à la ligne
+ * (entre les mots), juste plus jamais en plein milieu d'un mot. */
+.recu-bagage .ligne span:first-child {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+
+.talon-bagage .ligne span:first-child {
+    flex: 0 1 24mm;
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
 }
 
 .ligne span:last-child,
 .ligne strong {
-    text-align: right;
+    min-width: 0;
+    overflow-wrap: break-word;
+    text-align: left;
+    word-break: normal;
+}
+
+.recu-bagage p,
+.recu-bagage span,
+.recu-bagage strong {
+    overflow-wrap: break-word;
+    white-space: normal;
+    word-break: normal;
+}
+
+.recu-bagage .montant strong {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.talon-bagage .ligne span:last-child,
+.talon-bagage .ligne strong {
+    flex: 1 1 24mm;
 }
 
 .montant {
-    font-size: 15px;
-    margin: 8px 0;
+    font-size: 14px;
+    margin: 2px 0;
 }
 
 .importante strong {
@@ -241,7 +383,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 }
 
 .contenu {
-    min-height: 20mm;
+    min-height: 12mm;
 }
 
 .pied {
@@ -254,8 +396,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
 
 .bas-talon {
     border-top: 1px dashed #000;
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    gap: 0.35mm 1mm;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     margin-top: 8px;
     padding-top: 5px;
 }

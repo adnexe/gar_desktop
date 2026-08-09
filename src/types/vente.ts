@@ -7,6 +7,7 @@ export interface VenteDuJour {
     type_billet: string;
     montant: number;
     timbre: number;
+    commission: number;
     total: number;
     client: string | null;
     client_telephone?: string | null;

@@ -328,9 +328,9 @@ export const migrations: { nom: string; sql: string }[] = [
     {
         nom: '0009_references_distantes_bagages_courriers',
         sql: `
-            -- En mode poste client, les voyages/tickets peuvent venir de la
-            -- caisse serveur. On garde leurs UUID pour la synchronisation admin
-            -- sans utiliser leurs IDs numériques dans la base locale.
+            -- En mode poste client, les voyages peuvent venir de la caisse
+            -- serveur. Les UUID distants restent utiles pour rattacher les
+            -- opérations sans dépendre des IDs numériques locaux.
             ALTER TABLE bagages ADD COLUMN ticket_uuid TEXT;
             ALTER TABLE bagages ADD COLUMN ticket_numero TEXT;
             ALTER TABLE bagages ADD COLUMN voyage_uuid TEXT;
@@ -352,6 +352,127 @@ export const migrations: { nom: string; sql: string }[] = [
                 SELECT client_id FROM tickets WHERE client_id IS NOT NULL
              );
             CREATE INDEX IF NOT EXISTS idx_clients_telephone_source ON clients(telephone, source);
+        `,
+    },
+    {
+        nom: '0011_statut_local_agents_users',
+        sql: `
+            -- Statuts locaux de sécurité : un chef de gare peut couper un accès
+            -- même si le poste est hors-ligne. On ne supprime pas physiquement
+            -- pour conserver les ventes passées liées aux users/agents.
+            ALTER TABLE agents ADD COLUMN desactive_localement INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE agents ADD COLUMN supprime_localement INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE users ADD COLUMN desactive_localement INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE users ADD COLUMN supprime_localement INTEGER NOT NULL DEFAULT 0;
+        `,
+    },
+    {
+        nom: '0012_agent_reste_trace_vente',
+        sql: `
+            -- L'agent est la trace métier des ventes. Seul le user gère
+            -- l'accès à l'application; on annule donc d'éventuelles anciennes
+            -- suppressions/désactivations locales posées sur agents.
+            UPDATE agents
+               SET desactive_localement = 0,
+                   supprime_localement = 0
+             WHERE COALESCE(desactive_localement, 0) = 1
+                OR COALESCE(supprime_localement, 0) = 1;
+        `,
+    },
+    {
+        nom: '0013_code_ticket_agences',
+        sql: `
+            ALTER TABLE agences ADD COLUMN code_ticket TEXT;
+        `,
+    },
+    {
+        nom: '0014_client_sur_bagages',
+        sql: `
+            -- Un bagage sans ticket peut quand même porter un client (nom /
+            -- téléphone saisis au comptoir), comme les courriers.
+            ALTER TABLE bagages ADD COLUMN client_id INTEGER REFERENCES clients(id);
+        `,
+    },
+    {
+        nom: '0015_disposition_sieges_vehicules',
+        sql: `
+            -- "3-2" (3 sièges à gauche de l'allée, 2 à droite) ou "2-2".
+            -- Nullable : sans valeur, le plan de sièges reste générique.
+            ALTER TABLE vehicules ADD COLUMN disposition_sieges TEXT;
+        `,
+    },
+    {
+        nom: '0016_commission_sur_tickets',
+        sql: `
+            -- Commission due à un courtier ayant envoyé le client, saisie
+            -- manuellement par la caissière après la vente. Ne fait pas
+            -- partie du total encaissé auprès du client (timbre + montant) :
+            -- elle est déduite côté gare, pas payée par le passager.
+            ALTER TABLE tickets ADD COLUMN commission REAL NOT NULL DEFAULT 0;
+        `,
+    },
+    {
+        nom: '0017_courriers_internationaux',
+        sql: `
+            CREATE TABLE IF NOT EXISTS pays (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                nom TEXT NOT NULL,
+                code TEXT NOT NULL UNIQUE,
+                actif INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT,
+                updated_at TEXT
+            );
+
+            ALTER TABLE villes ADD COLUMN pays_id INTEGER REFERENCES pays(id);
+            CREATE INDEX IF NOT EXISTS idx_villes_pays_id ON villes(pays_id);
+
+            CREATE TABLE IF NOT EXISTS courriers_internationaux (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                numero_courrier TEXT NOT NULL UNIQUE,
+                agence_depart_id INTEGER NOT NULL REFERENCES agences(id),
+                pays_destination_id INTEGER REFERENCES pays(id),
+                ville_destination_id INTEGER REFERENCES villes(id),
+                expediteur_id INTEGER NOT NULL REFERENCES clients(id),
+                destinataire_id INTEGER NOT NULL REFERENCES clients(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                agent_id INTEGER REFERENCES agents(id),
+                pays_destination TEXT NOT NULL,
+                ville_destination TEXT NOT NULL,
+                adresse_destination TEXT,
+                transporteur TEXT,
+                tracking_externe TEXT,
+                mode_facturation TEXT NOT NULL DEFAULT 'par_colis',
+                pourcentage_frais REAL,
+                frais_expedition REAL NOT NULL DEFAULT 0,
+                valeur_colis REAL NOT NULL DEFAULT 0,
+                montant_total REAL NOT NULL DEFAULT 0,
+                statut TEXT NOT NULL DEFAULT 'enregistre',
+                observation TEXT,
+                impression_confirmee_at TEXT,
+                annule_at TEXT,
+                motif_annulation TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_courriers_internationaux_agence_date ON courriers_internationaux(agence_depart_id, created_at);
+
+            CREATE TABLE IF NOT EXISTS colis_internationaux (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                courrier_international_id INTEGER NOT NULL REFERENCES courriers_internationaux(id) ON DELETE CASCADE,
+                nom TEXT NOT NULL,
+                type TEXT NOT NULL,
+                quantite INTEGER NOT NULL DEFAULT 1,
+                poids_kg REAL,
+                prix REAL NOT NULL,
+                montant REAL NOT NULL,
+                frais_unitaire REAL,
+                frais_expedition REAL,
+                created_at TEXT,
+                updated_at TEXT
+            );
         `,
     },
 ];

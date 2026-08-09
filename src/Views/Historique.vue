@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { History } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { useSessionStore } from '@/Stores/session';
@@ -15,16 +15,27 @@ const courriers = ref<CourrierDuJour[]>([]);
 
 const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + ' FCFA';
 
+// Les agents ne voient que leurs propres opérations ; admin et chef de gare
+// voient tout (même règle que les écrans vente/bagages/courrier).
+const userIdFiltre = computed(() => ['super_admin', 'admin', 'chef_gare'].includes(session.role) ? null : session.userId);
+
 onMounted(async () => {
     if (!session.agenceId) return;
-    const data = (await window.api.historique.duJour(session.agenceId)) as {
-        tickets: TicketDuJour[];
-        bagages: BagageDuJour[];
-        courriers: CourrierDuJour[];
-    };
-    tickets.value = data.tickets;
-    bagages.value = data.bagages;
-    courriers.value = data.courriers;
+    const [ticketsDuJour, bagagesDuJour, courriersDuJour] = await Promise.all([
+        session.peutModule('ticket')
+            ? window.api.vente.ventesDuJour(session.agenceId, undefined, userIdFiltre.value) as Promise<TicketDuJour[]>
+            : Promise.resolve([]),
+        session.peutModule('bagage')
+            ? window.api.bagage.duJour(session.agenceId, undefined, userIdFiltre.value) as Promise<BagageDuJour[]>
+            : Promise.resolve([]),
+        session.peutModule('courrier')
+            ? window.api.courrier.duJour(session.agenceId, undefined, userIdFiltre.value) as Promise<CourrierDuJour[]>
+            : Promise.resolve([]),
+    ]);
+
+    tickets.value = ticketsDuJour;
+    bagages.value = bagagesDuJour;
+    courriers.value = courriersDuJour;
 });
 </script>
 
@@ -38,6 +49,7 @@ onMounted(async () => {
 
             <section v-if="session.peutModule('ticket')" class="overflow-hidden rounded-lg border bg-card p-5 shadow-sm">
                 <h2 class="mb-3 text-base font-semibold">Tickets</h2>
+                <div class="overflow-x-auto">
                 <table class="w-full text-[0.95rem]">
                     <tbody>
                         <tr v-for="t in tickets" :key="t.uuid" class="border-b last:border-0 hover:bg-muted/30">
@@ -49,11 +61,13 @@ onMounted(async () => {
                         </tr>
                     </tbody>
                 </table>
+                </div>
                 <p v-if="tickets.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">Aucun ticket aujourd'hui.</p>
             </section>
 
             <section v-if="session.peutModule('bagage')" class="overflow-hidden rounded-lg border bg-card p-5 shadow-sm">
                 <h2 class="mb-3 text-base font-semibold">Bagages</h2>
+                <div class="overflow-x-auto">
                 <table class="w-full text-[0.95rem]">
                     <tbody>
                         <tr v-for="b in bagages" :key="b.uuid" class="border-b last:border-0 hover:bg-muted/30">
@@ -64,11 +78,13 @@ onMounted(async () => {
                         </tr>
                     </tbody>
                 </table>
+                </div>
                 <p v-if="bagages.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">Aucun bagage aujourd'hui.</p>
             </section>
 
             <section v-if="session.peutModule('courrier')" class="overflow-hidden rounded-lg border bg-card p-5 shadow-sm">
                 <h2 class="mb-3 text-base font-semibold">Courriers</h2>
+                <div class="overflow-x-auto">
                 <table class="w-full text-[0.95rem]">
                     <tbody>
                         <tr v-for="c in courriers" :key="c.uuid" class="border-b last:border-0 hover:bg-muted/30">
@@ -79,6 +95,7 @@ onMounted(async () => {
                         </tr>
                     </tbody>
                 </table>
+                </div>
                 <p v-if="courriers.length === 0" class="rounded-md bg-muted/40 px-4 py-6 text-center text-[0.95rem] text-muted-foreground">Aucun courrier aujourd'hui.</p>
             </section>
         </div>

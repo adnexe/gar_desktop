@@ -22,7 +22,7 @@ export const useSessionStore = defineStore('session', () => {
 
     const estConnecte = computed(() => userId.value !== null);
     const estAdminLevel = computed(() => ['super_admin', 'admin'].includes(role.value));
-    const peutModule = (module: 'ticket' | 'bagage' | 'courrier') =>
+    const peutModule = (module: 'ticket' | 'bagage' | 'courrier' | 'courrier_international') =>
         estAdminLevel.value || role.value === 'chef_gare' || typeAgent.value.includes(module);
 
     function definir(session: DonneesSession) {

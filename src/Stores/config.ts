@@ -5,6 +5,7 @@ export interface AgenceLocale {
     id: number;
     uuid: string;
     reference: string;
+    telephone: string | null;
     nom: string;
     ville_id: number;
     ville_nom: string;
@@ -13,6 +14,7 @@ export interface AgenceLocale {
 export interface LicenceLocale {
     uuid: string;
     code: string;
+    code_poste: string | null;
     agence_id: number;
     date_debut: string;
     date_expiration: string;
@@ -33,6 +35,7 @@ export interface CompagnieLocale {
     pied_ticket: string | null;
     logo_url: string | null;
     logo_data_uri: string | null;
+    modules_actifs: string[];
 }
 
 export interface ReponseLicence {
@@ -47,6 +50,11 @@ export const useConfigStore = defineStore('config', () => {
     const agence = ref<AgenceLocale | null>(null);
     const compagnie = ref<CompagnieLocale | null>(null);
     const licence = ref<LicenceLocale | null>(null);
+
+    // Réglage de l'entreprise (pas de l'agent) : masque/bloque les écrans
+    // liés à un module que l'entreprise n'utilise pas du tout. Tant que rien
+    // n'est encore chargé, on ne restreint rien (fail open, comme l'admin).
+    const moduleActif = (module: 'ticket' | 'bagage' | 'courrier' | 'courrier_international') => compagnie.value?.modules_actifs.includes(module) ?? true;
 
     const licenceValide = computed(() => {
         if (!licence.value || !licence.value.actif) return false;
@@ -64,8 +72,25 @@ export const useConfigStore = defineStore('config', () => {
         }
     }
 
-    async function reclamerLicence(reference: string, appareil: string): Promise<ReponseLicence> {
-        const resultat = (await window.api.config.reclamerLicence(reference, appareil)) as ReponseLicence;
+    // Revérifie la licence auprès du serveur (silencieux hors-ligne) puis
+    // recharge l'état local — c'est la base locale qui fait foi ensuite.
+    async function verifierLicence() {
+        licence.value = (await window.api.config.verifierLicence()) as LicenceLocale | null;
+    }
+
+    async function chargerLicence() {
+        licence.value = await window.api.config.licenceActuelle();
+    }
+
+    // Relit l'état local complet : détecte l'invalidation de licence comme la
+    // réinitialisation du poste (agence supprimée) faites en arrière-plan.
+    async function rafraichirEtat() {
+        configuree.value = (await window.api.config.estConfiguree()) as boolean;
+        licence.value = await window.api.config.licenceActuelle();
+    }
+
+    async function reclamerLicence(reference: string, appareil: string, codePoste?: string | null): Promise<ReponseLicence> {
+        const resultat = (await window.api.config.reclamerLicence(reference, appareil, codePoste ?? null)) as ReponseLicence;
         if (resultat.ok && resultat.licence) {
             licence.value = resultat.licence;
         } else if (licence.value && ['expiree', 'desactivee', 'aucune_licence'].includes(resultat.statut)) {
@@ -75,8 +100,8 @@ export const useConfigStore = defineStore('config', () => {
         return resultat;
     }
 
-    async function configurer(reference: string, appareil: string) {
-        agence.value = (await window.api.config.configurer(reference, appareil)) as AgenceLocale;
+    async function configurer(reference: string, appareil: string, codePoste?: string | null) {
+        agence.value = (await window.api.config.configurer(reference, appareil, codePoste ?? null)) as AgenceLocale;
         compagnie.value = await window.api.config.compagnieActuelle();
         licence.value = await window.api.config.licenceActuelle();
         configuree.value = true;
@@ -89,5 +114,5 @@ export const useConfigStore = defineStore('config', () => {
         return `${maintenant.getFullYear()}-${pad(maintenant.getMonth() + 1)}-${pad(maintenant.getDate())}`;
     }
 
-    return { configuree, agence, compagnie, licence, licenceValide, charger, reclamerLicence, configurer };
+    return { configuree, agence, compagnie, licence, licenceValide, moduleActif, charger, chargerLicence, rafraichirEtat, verifierLicence, reclamerLicence, configurer };
 });

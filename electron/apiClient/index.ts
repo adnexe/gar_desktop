@@ -9,6 +9,10 @@ const BASE_URL = (process.env.GAR_API_URL ?? 'http://127.0.0.1:8000').replace(/\
 
 const http = axios.create({ baseURL: BASE_URL, timeout: 15000 });
 
+export function apiBaseUrl(): string {
+    return BASE_URL;
+}
+
 export async function bootstrap(reference: string, appareil: string, timeoutMs = 15000): Promise<BootstrapResponse> {
     const { data } = await http.post<BootstrapResponse>('/api/desktop/bootstrap', { reference, appareil }, { timeout: timeoutMs });
     return data;
@@ -17,6 +21,7 @@ export async function bootstrap(reference: string, appareil: string, timeoutMs =
 export interface LicenceDesktop {
     uuid: string;
     code: string;
+    code_poste: string | null;
     agence_id: number;
     date_debut: string;
     date_expiration: string;
@@ -37,11 +42,12 @@ export async function reclamerLicence(
     reference: string,
     appareil: string,
     licenceUuid?: string | null,
+    codePoste?: string | null,
     timeoutMs = 10000,
 ): Promise<ReponseLicenceDesktop> {
     const { data } = await http.post<ReponseLicenceDesktop>(
         '/api/desktop/licence/reclamer',
-        { reference, appareil, licence_uuid: licenceUuid ?? null },
+        { reference, appareil, licence_uuid: licenceUuid ?? null, code_poste: codePoste ?? null },
         {
             timeout: timeoutMs,
             validateStatus: (status) => status < 500,

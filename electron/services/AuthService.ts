@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { net } from 'electron';
 import { logger } from '../logger';
+import { ConfigRepository } from '../repositories/ConfigRepository';
 import { UserRepository } from '../repositories/UserRepository';
 import { syncEngine } from '../sync/SyncEngine';
 import { BootstrapService } from './BootstrapService';
@@ -18,9 +19,29 @@ export interface Session {
 export class AuthService {
     private readonly users = new UserRepository();
     private readonly bootstrap = new BootstrapService();
+    private readonly config = new ConfigRepository();
 
     async connecter(identifiant: string, motDePasse: string): Promise<Session> {
-        const sessionLocale = await this.authentifierLocal(identifiant, motDePasse);
+        let sessionLocale: Session;
+        try {
+            sessionLocale = await this.authentifierLocal(identifiant, motDePasse);
+        } catch (erreur) {
+            if (!net.isOnline()) {
+                throw erreur;
+            }
+
+            try {
+                await this.bootstrap.actualiser(5000);
+                const sessionApresActualisation = await this.authentifierLocal(identifiant, motDePasse);
+                syncEngine.planifier(1_000);
+
+                return sessionApresActualisation;
+            } catch {
+                logger.warn('Actualisation avant connexion échouée ou identifiants toujours invalides.');
+                syncEngine.planifier(1_000);
+                throw erreur;
+            }
+        }
 
         if (!net.isOnline()) {
             return sessionLocale;
@@ -59,8 +80,17 @@ export class AuthService {
             nom: utilisateur.name ?? utilisateur.agent_nom ?? utilisateur.number ?? utilisateur.email ?? 'Utilisateur',
             role: utilisateur.role,
             agentId: utilisateur.agent_id,
-            agenceId: utilisateur.agence_id,
+            agenceId: utilisateur.agence_id ?? this.agenceLocalePourCompteGlobal(utilisateur.role),
             typeAgent: utilisateur.type_agent ? utilisateur.type_agent.split(',') : [],
         };
+    }
+
+    private agenceLocalePourCompteGlobal(role: string): number | null {
+        if (!['super_admin', 'admin'].includes(role)) {
+            return null;
+        }
+
+        const agenceId = this.config.obtenir('licence_agence_id');
+        return agenceId ? Number(agenceId) : null;
     }
 }

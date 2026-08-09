@@ -50,6 +50,7 @@ export interface VoyageDisponible {
     itineraire_nom: string | null;
     vehicule_immatriculation: string;
     nombre_places: number;
+    disposition_sieges: string | null;
     chauffeur_nom: string | null;
     places_occupees: number[];
     premiere_place_libre: number | null;
@@ -63,6 +64,32 @@ export interface NouveauVoyage {
     dateDepart: string;
     heureDepart: string;
     numeroDepart: number;
+    statut?: string;
+}
+
+// Volontairement restreint : l'itinéraire, la date/heure et le n° de départ
+// ne sont PAS modifiables après création. Un voyage identifie une vente (les
+// places vendues s'y rattachent) — permettre de le rebasculer sur un autre
+// trajet/horaire ouvrirait une faille : revendre les mêmes places sous un
+// autre trajet en réutilisant le même voyage. Seuls le véhicule, le
+// chauffeur et le statut (annuler, marquer parti/terminé...) sont éditables.
+export interface ModificationVoyage {
+    vehiculeId: number;
+    chauffeurId: number | null;
+    statut: string;
+}
+
+export interface VoyageEdition {
+    id: number;
+    uuid: string;
+    agence_depart_id: number;
+    itineraire_id: number;
+    vehicule_id: number;
+    chauffeur_id: number | null;
+    date_depart: string;
+    heure_depart: string;
+    numero_depart: number;
+    statut: string;
 }
 
 export interface VoyageListe {
@@ -95,17 +122,24 @@ export interface VoyageServeur {
 
 export class VoyageRepository {
     // Liste des voyages de l'agence pour l'écran "Voyages" : aujourd'hui par défaut.
+    // Nom d'itinéraire réorienté (ville de l'agence à gauche) : voir
+    // ReferentielRepository.itineraires() pour l'explication complète.
     liste(agenceId: number, date?: string): VoyageListe[] {
         const dateRecherche = date ?? dateDuJour();
 
         return getDb()
             .prepare(
                 `SELECT v.id, v.uuid, v.date_depart, v.heure_depart, v.numero_depart, v.statut,
-                        i.nom AS itineraire_nom, veh.immatriculation AS vehicule_immatriculation, veh.nombre_places,
+                        (agv.nom || ' - ' || CASE WHEN i.ville_depart_id = agv.id THEN va.nom ELSE vd.nom END) AS itineraire_nom,
+                        veh.immatriculation AS vehicule_immatriculation, veh.nombre_places,
                         c.nom AS chauffeur_nom,
                         (SELECT COUNT(*) FROM tickets t WHERE t.voyage_id = v.id AND t.statut_ticket = 'valide') AS tickets_vendus
                  FROM voyages v
                  JOIN itineraires i ON i.id = v.itineraire_id
+                 JOIN villes vd ON vd.id = i.ville_depart_id
+                 JOIN villes va ON va.id = i.ville_arrivee_id
+                 JOIN agences a ON a.id = v.agence_depart_id
+                 JOIN villes agv ON agv.id = a.ville_id
                  JOIN vehicules veh ON veh.id = v.vehicule_id
                  LEFT JOIN chauffeurs c ON c.id = v.chauffeur_id
                  WHERE v.agence_depart_id = ? AND date(v.date_depart) = date(?)
@@ -123,15 +157,20 @@ export class VoyageRepository {
         const voyages = db
             .prepare(
                 `SELECT v.id, v.uuid, v.date_depart, v.heure_depart, v.numero_depart, v.statut,
-                        v.itineraire_id, i.nom AS itineraire_nom,
-                        veh.immatriculation AS vehicule_immatriculation, veh.nombre_places,
+                        v.itineraire_id,
+                        (agv.nom || ' - ' || CASE WHEN i.ville_depart_id = agv.id THEN va.nom ELSE vd.nom END) AS itineraire_nom,
+                        veh.immatriculation AS vehicule_immatriculation, veh.nombre_places, veh.disposition_sieges,
                         c.nom AS chauffeur_nom
                  FROM voyages v
                  JOIN itineraires i ON i.id = v.itineraire_id
+                 JOIN villes vd ON vd.id = i.ville_depart_id
+                 JOIN villes va ON va.id = i.ville_arrivee_id
+                 JOIN agences a ON a.id = v.agence_depart_id
+                 JOIN villes agv ON agv.id = a.ville_id
                  JOIN itineraire_trajet it ON it.itineraire_id = v.itineraire_id AND it.trajet_id = ?
                  JOIN vehicules veh ON veh.id = v.vehicule_id
                  LEFT JOIN chauffeurs c ON c.id = v.chauffeur_id
-                 WHERE v.agence_depart_id = ? AND v.statut = 'programme'
+                 WHERE v.agence_depart_id = ? AND v.statut IN ('programme', 'embarquement')
                  ORDER BY v.date_depart ASC, v.heure_depart ASC, v.numero_depart ASC`,
             )
             .all(trajetId, agenceId) as Omit<VoyageDisponible, 'places_occupees'>[];
@@ -157,11 +196,12 @@ export class VoyageRepository {
         const db = getDb();
         const uuid = nouvelUuid();
         const maintenant = new Date().toISOString();
+        const statut = donnees.statut ?? 'programme';
 
         const info = db
             .prepare(
                 `INSERT INTO voyages (uuid, agence_depart_id, itineraire_id, vehicule_id, chauffeur_id, date_depart, heure_depart, numero_depart, statut, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'programme', ?, ?)`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
                 uuid,
@@ -172,14 +212,58 @@ export class VoyageRepository {
                 donnees.dateDepart,
                 donnees.heureDepart,
                 donnees.numeroDepart,
+                statut,
                 maintenant,
                 maintenant,
             );
 
         const id = Number(info.lastInsertRowid);
-        queueManager.ajouter('voyages', uuid, { ...donnees, uuid });
+        queueManager.ajouter('voyages', uuid, { ...donnees, statut, uuid });
 
         return { id, uuid };
+    }
+
+    // Pour préremplir le formulaire d'édition (ids bruts des selects, pas les
+    // libellés). L'agence n'est pas modifiable : un voyage reste attaché à
+    // l'agence qui l'a créé.
+    parUuid(uuid: string): VoyageEdition | null {
+        const ligne = getDb()
+            .prepare(
+                `SELECT id, uuid, agence_depart_id, itineraire_id, vehicule_id, chauffeur_id,
+                        date_depart, heure_depart, numero_depart, statut
+                 FROM voyages
+                 WHERE uuid = ?`,
+            )
+            .get(uuid) as VoyageEdition | undefined;
+
+        return ligne ?? null;
+    }
+
+    // Un chef de gare peut annuler un voyage, ou changer de véhicule/chauffeur
+    // (panne, remplacement de dernière minute). L'itinéraire, la date/heure et
+    // le n° de départ sont volontairement hors de portée (voir ModificationVoyage).
+    modifier(uuid: string, donnees: ModificationVoyage): { id: number; uuid: string } | null {
+        const db = getDb();
+        const maintenant = new Date().toISOString();
+
+        const existant = db.prepare('SELECT id, agence_depart_id FROM voyages WHERE uuid = ?').get(uuid) as { id: number; agence_depart_id: number } | undefined;
+        if (!existant) return null;
+
+        db.prepare(
+            `UPDATE voyages
+             SET vehicule_id = ?, chauffeur_id = ?, statut = ?, updated_at = ?
+             WHERE uuid = ?`,
+        ).run(
+            donnees.vehiculeId,
+            donnees.chauffeurId,
+            donnees.statut,
+            maintenant,
+            uuid,
+        );
+
+        queueManager.ajouter('voyages', uuid, { ...donnees, agenceId: existant.agence_depart_id, uuid }, 'update');
+
+        return { id: existant.id, uuid };
     }
 
     exporterPourClient(agenceId: number, date?: string | null): VoyageServeur[] {
@@ -234,5 +318,40 @@ export class VoyageRepository {
 
             return nombre;
         })();
+    }
+
+    remplacerDepuisCaisseClient(agenceId: number, voyages: VoyageServeur[], date?: string | null): { importes: number; supprimes: number } {
+        const importes = this.importerDepuisServeur(voyages);
+        const uuidsServeur = voyages.map((voyage) => voyage.uuid).filter(Boolean);
+        const supprimes = this.supprimerVoyagesFutursOrphelinsAbsents(agenceId, uuidsServeur, date);
+
+        return { importes, supprimes };
+    }
+
+    private supprimerVoyagesFutursOrphelinsAbsents(agenceId: number, uuidsServeur: string[], date?: string | null): number {
+        const dateRecherche = date?.trim();
+        const filtreDate = dateRecherche
+            ? 'date(date_depart) = date(?)'
+            : "date(date_depart) >= date('now')";
+        const filtreUuids = uuidsServeur.length > 0
+            ? `AND uuid NOT IN (${uuidsServeur.map(() => '?').join(', ')})`
+            : '';
+        const params: unknown[] = dateRecherche
+            ? [agenceId, dateRecherche, ...uuidsServeur]
+            : [agenceId, ...uuidsServeur];
+
+        const info = getDb()
+            .prepare(
+                `DELETE FROM voyages
+                 WHERE agence_depart_id = ?
+                   AND ${filtreDate}
+                   ${filtreUuids}
+                   AND NOT EXISTS (SELECT 1 FROM tickets t WHERE t.voyage_id = voyages.id)
+                   AND NOT EXISTS (SELECT 1 FROM bagages b WHERE b.voyage_id = voyages.id)
+                   AND NOT EXISTS (SELECT 1 FROM courriers c WHERE c.voyage_id = voyages.id)`,
+            )
+            .run(...params);
+
+        return info.changes;
     }
 }

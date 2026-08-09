@@ -4,22 +4,35 @@ export interface AgenceLocale {
     id: number;
     uuid: string;
     reference: string;
+    telephone: string | null;
     nom: string;
     ville_id: number;
     ville_nom: string;
 }
 
 export class AgenceRepository {
-    // Une seule agence est synchronisée par appareil Desktop.
     actuelle(): AgenceLocale | null {
-        const ligne = getDb()
+        const db = getDb();
+        const ligne = db
             .prepare(
-                `SELECT a.id, a.uuid, a.reference, a.nom, a.ville_id, v.nom AS ville_nom
+                `SELECT a.id, a.uuid, a.reference, a.telephone, a.nom, a.ville_id, v.nom AS ville_nom
                  FROM agences a JOIN villes v ON v.id = a.ville_id
+                 WHERE a.reference = (SELECT valeur FROM config WHERE cle = 'agence_reference')
                  LIMIT 1`,
             )
             .get() as AgenceLocale | undefined;
 
-        return ligne ?? null;
+        if (ligne) return ligne;
+
+        const fallback = db
+            .prepare(
+                `SELECT a.id, a.uuid, a.reference, a.telephone, a.nom, a.ville_id, v.nom AS ville_nom
+                 FROM agences a JOIN villes v ON v.id = a.ville_id
+                 ORDER BY a.id
+                 LIMIT 1`,
+            )
+            .get() as AgenceLocale | undefined;
+
+        return fallback ?? null;
     }
 }

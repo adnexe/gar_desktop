@@ -111,7 +111,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                 <span>{{ recu.tarification === 'vip' ? 'VIP' : 'Ordinaire' }}</span>
             </div>
             <div class="ligne place">
-                <span>Place</span>
+                <span>Siège</span>
                 <span>N° {{ recu.numero_place }}</span>
             </div>
             <div class="ligne">
@@ -168,7 +168,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
         </div>
 
         <div class="talon-bloc">
-            <p class="talon-label">Place / Bus</p>
+            <p class="talon-label">Siège / Bus</p>
             <p class="talon-valeur">N° {{ recu.numero_place }} · {{ recu.vehicule }}</p>
         </div>
 
@@ -187,29 +187,42 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 
 <style scoped>
 .ticket-recu {
-    width: 72mm;
+    box-sizing: border-box;
+    width: var(--impression-largeur-contenu, 70mm);
+    margin: 0 auto;
     font-family: Arial, 'Helvetica Neue', sans-serif;
     font-size: 13px;
     line-height: 1.4;
     color: #000;
 }
 
+.ticket-recu,
+.ticket-recu * {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: break-word;
+    white-space: normal;
+    word-break: normal;
+}
+
 .ticket-principal,
 .talon-controle {
-    padding: 1mm;
+    padding: 0 0.25mm 0.25mm;
 }
 
 .nom-agence {
     font-size: 14px;
     font-weight: 700;
+    line-height: 1.05;
     text-transform: uppercase;
 }
 
 .logo {
-    max-height: 36px;
+    height: 28px;
     max-width: 44mm;
     object-fit: contain;
-    margin: 0 auto 3px;
+    margin: 0 auto 1px;
 }
 
 .slogan,
@@ -229,38 +242,67 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 }
 
 .ligne {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
+    align-items: start;
+    display: grid;
+    gap: 0.35mm 1mm;
+    /* auto : l'étiquette prend exactement la place de son texte, quelle que
+     * soit la calibration — un pourcentage fixe devient trop étroit sur les
+     * petites largeurs et force la coupure des étiquettes en plein mot. */
+    grid-template-columns: auto minmax(0, 1fr);
 }
 
+/* !important nécessaire : la règle globale (app.css) force overflow-wrap:
+ * anywhere + word-break: break-word sur tout span du reçu, pour ne jamais
+ * dépasser la zone imprimable. Sur une étiquette, ça coupe au milieu du mot
+ * dès que la colonne est étroite. keep-all autorise toujours le retour à la
+ * ligne (entre les mots), juste plus jamais en plein milieu d'un mot. */
+.ligne span:first-child {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+
+/* flex-wrap et NON grid : quand l'étiquette est longue et la largeur réduite,
+ * une grille écrase la colonne du numéro et le coupe en deux. En flex, le
+ * numéro passe ENTIER à la ligne suivante — jamais tronqué. */
 .numero-encadre {
-    align-items: center;
+    align-items: start;
     border: 1px solid #000;
     display: flex;
-    gap: 8px;
-    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.35mm 1mm;
+    justify-content: space-between;
     margin: 4px 0;
-    padding: 4px 2px;
+    padding: 2px 1px;
+}
+
+/* Étiquette fixe (« N° »), jamais une valeur : retour à la ligne entre les
+ * mots uniquement, jamais en plein milieu — voir .ligne span:first-child
+ * plus haut pour le détail du !important. */
+.numero-encadre span,
+.talon-numero span {
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
 }
 
 .numero-encadre strong {
-    font-size: 20px;
-    letter-spacing: 1px;
+    font-size: 18px;
+    letter-spacing: 0;
+    text-align: right;
+    word-break: normal;
 }
 
 .section-recu {
     border: 1px solid #000;
-    margin: 4px 0;
-    padding: 3px;
+    margin: 3px 0;
+    padding: 1px;
 }
 
 .section-titre {
     background: #fff;
     border-bottom: 1px solid #000;
     font-weight: 700;
-    margin: -3px -3px 3px;
-    padding: 1px 3px;
+    margin: -1px -1px 2px;
+    padding: 1px;
     text-transform: uppercase;
 }
 
@@ -291,25 +333,37 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
 }
 
 .talon-numero {
-    align-items: center;
+    align-items: start;
     border: 1px solid #000;
     display: flex;
-    gap: 6px;
-    margin: 8px 0 6px;
-    padding: 6px 4px;
+    flex-wrap: wrap;
+    gap: 0.35mm 1.5mm;
+    justify-content: space-between;
+    margin: 4px 0;
+    padding: 4px 3px;
 }
 
 .talon-numero strong {
-    font-size: 24px;
-    letter-spacing: 1px;
+    font-size: 18px;
+    letter-spacing: 0;
+    text-align: right;
+    word-break: normal;
 }
 
 .talon-route {
-    align-items: center;
-    display: flex;
+    align-items: start;
+    display: grid;
     font-size: 13px;
-    justify-content: space-between;
+    gap: 0.35mm 1mm;
+    grid-template-columns: minmax(0, 1fr) auto;
     margin: 4px 0;
+}
+
+.ligne span:last-child,
+.ligne strong,
+.talon-route span:last-child {
+    text-align: right;
+    word-break: normal;
 }
 
 .ligne-coupe {

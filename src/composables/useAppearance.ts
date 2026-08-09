@@ -10,24 +10,28 @@ export type UseAppearanceReturn = {
     updateAppearance: (value: Appearance) => void;
 };
 
+// Une seule classe CSS à la fois sur <html> : "dark", "theme-feminin",
+// "theme-universel", "theme-emeraude", "theme-ambre" ou "theme-doux"
+// (variables définies dans app.css). "light" = aucune classe, ce sont les
+// variables par défaut de :root.
+const CLASSES_THEME = ['dark', 'theme-feminin', 'theme-universel', 'theme-emeraude', 'theme-ambre', 'theme-doux'] as const;
+
 export function updateTheme(value: Appearance): void {
     if (typeof window === 'undefined') {
         return;
     }
 
-    if (value === 'system') {
-        const mediaQueryList = window.matchMedia(
-            '(prefers-color-scheme: dark)',
-        );
-        const systemTheme = mediaQueryList.matches ? 'dark' : 'light';
+    const resolue = value === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : value;
 
-        document.documentElement.classList.toggle(
-            'dark',
-            systemTheme === 'dark',
-        );
-    } else {
-        document.documentElement.classList.toggle('dark', value === 'dark');
-    }
+    document.documentElement.classList.remove(...CLASSES_THEME);
+    if (resolue === 'dark') document.documentElement.classList.add('dark');
+    else if (resolue === 'feminin') document.documentElement.classList.add('theme-feminin');
+    else if (resolue === 'universel') document.documentElement.classList.add('theme-universel');
+    else if (resolue === 'emeraude') document.documentElement.classList.add('theme-emeraude');
+    else if (resolue === 'ambre') document.documentElement.classList.add('theme-ambre');
+    else if (resolue === 'doux') document.documentElement.classList.add('theme-doux');
 }
 
 const setCookie = (name: string, value: string, days = 365) => {

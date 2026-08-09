@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { KeyRound, RefreshCw } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
@@ -11,12 +11,25 @@ const router = useRouter();
 const enCours = ref(false);
 const message = ref('');
 const erreur = ref('');
+const codePoste = ref('');
 
 const reference = computed(() => config.agence?.reference ?? '');
+
+watch(
+    () => config.licence?.code_poste,
+    (code) => {
+        codePoste.value = code ?? '';
+    },
+    { immediate: true },
+);
 
 async function recuperer() {
     if (!reference.value) {
         erreur.value = "Référence agence introuvable sur ce poste.";
+        return;
+    }
+    if (!codePoste.value.trim()) {
+        erreur.value = "Saisissez le numéro de poste indiqué sur la licence.";
         return;
     }
 
@@ -31,7 +44,7 @@ async function recuperer() {
             return;
         }
 
-        const resultat = await config.reclamerLicence(reference.value, 'poste-caisse');
+        const resultat = await config.reclamerLicence(reference.value, 'poste-caisse', normaliserCodePoste(codePoste.value));
 
         if (!resultat.ok) {
             erreur.value = resultat.message || "Aucune licence disponible pour cette agence.";
@@ -46,6 +59,10 @@ async function recuperer() {
     } finally {
         enCours.value = false;
     }
+}
+
+function normaliserCodePoste(valeur: string) {
+    return valeur.trim().padStart(3, '0');
 }
 </script>
 
@@ -68,10 +85,21 @@ async function recuperer() {
                 Licence locale : {{ config.licence.code }} · expire le {{ config.licence.date_expiration }}
             </p>
 
+            <div class="space-y-1.5 text-left">
+                <label for="code_poste" class="text-sm font-medium">Numéro de poste</label>
+                <input
+                    id="code_poste"
+                    v-model="codePoste"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="Ex : 001"
+                    maxlength="10"
+                />
+            </div>
+
             <p v-if="erreur" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{{ erreur }}</p>
             <p v-if="message" class="rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{{ message }}</p>
 
-            <Button class="w-full" :disabled="enCours" @click="recuperer">
+            <Button class="w-full" :disabled="enCours || !codePoste.trim()" @click="recuperer">
                 <RefreshCw :class="['size-4', enCours ? 'animate-spin' : '']" />
                 {{ enCours ? 'Recherche…' : 'Récupérer une licence' }}
             </Button>

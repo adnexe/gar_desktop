@@ -8,6 +8,7 @@ export const VenteController = {
     exporterClientPourClient: (telephone: string) => service.exporterClientPourClient(telephone),
     exporterTicketPourClient: (code: string) => service.exporterTicketPourClient(code),
     exporterTicketsPourClient: (agenceId: number, date?: string | null) => service.exporterTicketsPourClient(agenceId, date),
+    preparerNumero: () => service.preparerNumero(),
     vendre: (demande: DemandeVente) => {
         try {
             return { ok: true as const, ticket: service.vendre(demande) };
@@ -17,6 +18,9 @@ export const VenteController = {
             }
             if (erreur instanceof Error && erreur.message === 'TARIF_NON_CONFIGURE') {
                 return { ok: false as const, erreur: 'Ce tarif n\'est pas configuré pour cette agence.' };
+            }
+            if (erreur instanceof Error && erreur.message === 'COMPTE_NON_AUTORISE_TICKET') {
+                return { ok: false as const, erreur: "Ce compte n'est pas autorisé à vendre des tickets." };
             }
             throw erreur;
         }
@@ -33,6 +37,7 @@ export const VenteController = {
 
         return { ok: true as const };
     },
-    ventesDuJour: (agenceId: number, date?: string) => service.ventesDuJour(agenceId, date),
-    finDeCaisse: (agenceId: number, date?: string) => service.rapportFinDeCaisse(agenceId, date),
+    ventesDuJour: (agenceId: number, date?: string, userId?: number | null) => service.ventesDuJour(agenceId, date, userId),
+    finDeCaisse: (agenceId: number, date?: string, userId?: number | null, voyageId?: number | null) => service.rapportFinDeCaisse(agenceId, date, userId, voyageId),
+    voyagesFinDeCaisse: (agenceId: number, date?: string) => service.voyagesFinDeCaisse(agenceId, date),
 };
