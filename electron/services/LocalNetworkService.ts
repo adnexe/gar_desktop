@@ -651,9 +651,17 @@ export class LocalNetworkService {
             maintenant,
         );
 
-        const compagnie: Record<keyof CompagnieLocale, string | null> = statut.compagnie;
+        // `modules_actifs` est un tableau (string[]), pas une chaîne : la table
+        // config ne stocke que du texte, et better-sqlite3 traite un tableau
+        // passé en paramètre comme une LISTE de paramètres — d'où le
+        // « RangeError: Too many parameter values were provided » qui faisait
+        // échouer toute la connexion du poste client. On sérialise en CSV,
+        // exactement comme le fait CatalogueRepository.seed() pour le
+        // bootstrap admin (et comme compagnieActuelle() le relit ensuite).
+        const compagnie: CompagnieLocale = statut.compagnie;
         for (const [cle, valeur] of Object.entries(compagnie)) {
-            this.config.definir(`compagnie_${cle}`, valeur ?? '');
+            const texte = Array.isArray(valeur) ? valeur.join(',') : valeur ?? '';
+            this.config.definir(`compagnie_${cle}`, texte);
         }
 
         this.config.definir('agence_reference', agence.reference);
