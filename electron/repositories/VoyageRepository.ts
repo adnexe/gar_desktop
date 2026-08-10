@@ -151,6 +151,13 @@ export class VoyageRepository {
     // Un voyage n'est proposé que si son itinéraire contient le trajet demandé
     // (via le pivot itineraire_trajet, rempli à la synchronisation), et
     // seulement s'il n'est pas déjà passé.
+    //
+    // Le sens inverse compte aussi : un itinéraire est bidirectionnel par
+    // conception, mais les deux sens peuvent avoir été créés comme deux lignes
+    // distinctes (« A - B » et « B - A ») qui désignent la même ligne réelle.
+    // Sans ça, un voyage créé sur « B - A » serait invendable pour un trajet
+    // rattaché seulement à « A - B ». Doit rester aligné sur
+    // Trajet::itinerairesVendables() côté admin.
     disponiblesPourTrajet(agenceId: number, trajetId: number, date = dateDuJour()): VoyageDisponible[] {
         const db = getDb();
 
@@ -167,13 +174,29 @@ export class VoyageRepository {
                  JOIN villes va ON va.id = i.ville_arrivee_id
                  JOIN agences a ON a.id = v.agence_depart_id
                  JOIN villes agv ON agv.id = a.ville_id
-                 JOIN itineraire_trajet it ON it.itineraire_id = v.itineraire_id AND it.trajet_id = ?
                  JOIN vehicules veh ON veh.id = v.vehicule_id
                  LEFT JOIN chauffeurs c ON c.id = v.chauffeur_id
                  WHERE v.agence_depart_id = ? AND v.statut IN ('programme', 'embarquement')
+                   AND EXISTS (
+                       SELECT 1
+                       FROM itineraire_trajet it
+                       JOIN itineraires ir ON ir.id = it.itineraire_id
+                       JOIN trajets tr ON tr.id = it.trajet_id
+                       JOIN trajets td ON td.id = ?
+                       WHERE (
+                               -- même liaison que le trajet demandé, dans un sens ou l'autre
+                               (tr.ville_depart_id = td.ville_depart_id AND tr.ville_arrivee_id = td.ville_arrivee_id)
+                               OR (tr.ville_depart_id = td.ville_arrivee_id AND tr.ville_arrivee_id = td.ville_depart_id)
+                             )
+                         AND (
+                               -- itinéraire du voyage, ou son sens inverse
+                               ir.id = v.itineraire_id
+                               OR (ir.ville_depart_id = i.ville_arrivee_id AND ir.ville_arrivee_id = i.ville_depart_id)
+                             )
+                   )
                  ORDER BY v.date_depart ASC, v.heure_depart ASC, v.numero_depart ASC`,
             )
-            .all(trajetId, agenceId) as Omit<VoyageDisponible, 'places_occupees'>[];
+            .all(agenceId, trajetId) as Omit<VoyageDisponible, 'places_occupees'>[];
 
         const placesStmt = db.prepare(`SELECT numero_place FROM tickets WHERE voyage_id = ? AND statut_ticket <> 'annule'`);
 

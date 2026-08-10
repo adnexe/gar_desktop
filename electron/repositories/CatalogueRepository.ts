@@ -73,13 +73,38 @@ export class CatalogueRepository {
                 configStmt.run(cle, valeur ?? '');
             }
 
+            // Surtout PAS « INSERT OR REPLACE » ici : REPLACE résout le conflit
+            // de clé en SUPPRIMANT la ligne existante avant de réinsérer, ce qui
+            // déclenche le ON DELETE CASCADE de itineraire_trajet et efface les
+            // rattachements. Un même trajet appartenant à plusieurs itinéraires
+            // était réécrit à chaque itinéraire de la boucle ci-dessous, effaçant
+            // à chaque fois les liens créés pour les itinéraires précédents : au
+            // final, seul le DERNIER itinéraire traité gardait ses trajets, et
+            // les caisses affichaient « aucun voyage » pour tous les autres.
+            // La mise à jour en place (ON CONFLICT DO UPDATE) ne supprime rien.
             const itineraireStmt = db.prepare(
-                `INSERT OR REPLACE INTO itineraires (id, uuid, ville_depart_id, ville_arrivee_id, nom, actif, created_at, updated_at)
-                 VALUES (@id, @uuid, @ville_depart_id, @ville_arrivee_id, @nom, @actif, @created_at, @updated_at)`,
+                `INSERT INTO itineraires (id, uuid, ville_depart_id, ville_arrivee_id, nom, actif, created_at, updated_at)
+                 VALUES (@id, @uuid, @ville_depart_id, @ville_arrivee_id, @nom, @actif, @created_at, @updated_at)
+                 ON CONFLICT(id) DO UPDATE SET
+                    uuid = excluded.uuid,
+                    ville_depart_id = excluded.ville_depart_id,
+                    ville_arrivee_id = excluded.ville_arrivee_id,
+                    nom = excluded.nom,
+                    actif = excluded.actif,
+                    created_at = excluded.created_at,
+                    updated_at = excluded.updated_at`,
             );
             const trajetStmt = db.prepare(
-                `INSERT OR REPLACE INTO trajets (id, uuid, ville_depart_id, ville_arrivee_id, nom, actif, created_at, updated_at)
-                 VALUES (@id, @uuid, @ville_depart_id, @ville_arrivee_id, @nom, @actif, @created_at, @updated_at)`,
+                `INSERT INTO trajets (id, uuid, ville_depart_id, ville_arrivee_id, nom, actif, created_at, updated_at)
+                 VALUES (@id, @uuid, @ville_depart_id, @ville_arrivee_id, @nom, @actif, @created_at, @updated_at)
+                 ON CONFLICT(id) DO UPDATE SET
+                    uuid = excluded.uuid,
+                    ville_depart_id = excluded.ville_depart_id,
+                    ville_arrivee_id = excluded.ville_arrivee_id,
+                    nom = excluded.nom,
+                    actif = excluded.actif,
+                    created_at = excluded.created_at,
+                    updated_at = excluded.updated_at`,
             );
             const pivotStmt = db.prepare(
                 `INSERT OR REPLACE INTO itineraire_trajet (itineraire_id, trajet_id, ordre_depart, ordre_arrivee, created_at, updated_at)
@@ -98,15 +123,6 @@ export class CatalogueRepository {
                 }
             }
 
-            // IGNORE et non REPLACE : ce trajet peut déjà avoir été inséré
-            // (et lié à un itinéraire) juste au-dessus. Le REPLACE supprime
-            // puis réinsère la ligne pour résoudre le conflit de PK, ce qui
-            // déclenche le ON DELETE CASCADE de itineraire_trajet.trajet_id
-            // et efface silencieusement le lien pivot qu'on vient de créer.
-            const trajetIgnoreStmt = db.prepare(
-                `INSERT OR IGNORE INTO trajets (id, uuid, ville_depart_id, ville_arrivee_id, nom, actif, created_at, updated_at)
-                 VALUES (@id, @uuid, @ville_depart_id, @ville_arrivee_id, @nom, @actif, @created_at, @updated_at)`,
-            );
             const tarifStmt = db.prepare(
                 `INSERT OR REPLACE INTO tarifs (id, uuid, agence_id, trajet_id, type_billet, tarification, montant, actif, created_at, updated_at)
                  VALUES (@id, @uuid, @agence_id, @trajet_id, @type_billet, @tarification, @montant, @actif, @created_at, @updated_at)`,
@@ -117,8 +133,10 @@ export class CatalogueRepository {
                 // itinéraires ci-dessus ne l'aurait alors jamais inséré, et
                 // ce tarif violerait la FK locale au commit — on l'insère
                 // ici au besoin, depuis la relation chargée par le serveur.
+                // Même instruction que plus haut : mise à jour en place, donc
+                // sans cascade qui effacerait les rattachements du pivot.
                 if (t.trajet) {
-                    trajetIgnoreStmt.run({ ...t.trajet, actif: t.trajet.actif ? 1 : 0 });
+                    trajetStmt.run({ ...t.trajet, actif: t.trajet.actif ? 1 : 0 });
                 }
                 tarifStmt.run({ ...t, montant: Number(t.montant), actif: t.actif ? 1 : 0 });
             }
