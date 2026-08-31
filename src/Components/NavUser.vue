@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
-import { ChevronsUpDown, LogOut } from '@lucide/vue';
+import { ChevronsUpDown, LogOut, UserRound } from '@lucide/vue';
 import { Avatar, AvatarFallback } from '@/Components/ui/avatar';
 import {
     DropdownMenu,
@@ -68,6 +68,10 @@ function deconnecter() {
                         </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem @click="router.push({ name: 'profil' })">
+                        <UserRound />
+                        Profil
+                    </DropdownMenuItem>
                     <DropdownMenuItem @click="deconnecter">
                         <LogOut />
                         Se déconnecter

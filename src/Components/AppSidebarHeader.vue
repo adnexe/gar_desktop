@@ -1,14 +1,40 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { CalendarDays, RefreshCw } from '@lucide/vue';
+import { CalendarDays, Monitor, RefreshCw } from '@lucide/vue';
+import { toast } from 'vue-sonner';
 import { SidebarTrigger } from '@/Components/ui/sidebar';
 import { Badge } from '@/Components/ui/badge';
+import { Button } from '@/Components/ui/button';
 import ThemeToggle from '@/Components/ThemeToggle.vue';
 import { useConfigStore } from '@/Stores/config';
 
 defineProps<{ titre?: string }>();
 
 const config = useConfigStore();
+const synchronisationEnCours = ref(false);
+
+async function synchroniserVersAdmin() {
+    if (synchronisationEnCours.value) return;
+    synchronisationEnCours.value = true;
+    const debut = Date.now();
+
+    try {
+        const resultat = await window.api.config.synchroniserMaintenant();
+        if (resultat.refuses > 0) {
+            toast.warning('Synchronisation partielle. Prévenez votre responsable.');
+        } else if (resultat.enAttente > 0) {
+            toast.info('Certaines données restent à envoyer. La synchronisation continuera automatiquement.');
+        } else {
+            toast.success('Les données de ce poste sont synchronisées.');
+        }
+    } catch {
+        toast.error('Synchronisation indisponible pour le moment. Réessayez plus tard.');
+    } finally {
+        const delaiRestant = 500 - (Date.now() - debut);
+        if (delaiRestant > 0) await new Promise((resolve) => setTimeout(resolve, delaiRestant));
+        synchronisationEnCours.value = false;
+    }
+}
 
 // Mise à jour prête : installée automatiquement à la prochaine fermeture de
 // l'app (jamais en pleine vente) — juste un signe discret pour rassurer.
@@ -92,13 +118,22 @@ function formatDate(date: string | null | undefined) {
 
 <template>
     <header
-        class="sticky top-0 z-30 flex h-[68px] shrink-0 items-center gap-3 border-b border-sidebar-border/70 bg-background/95 px-6 backdrop-blur transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-14"
+        class="sticky top-0 z-30 flex min-h-[68px] shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-sidebar-border/70 bg-background/95 px-3 py-2 backdrop-blur transition-[width,height] ease-linear sm:px-6 group-has-data-[collapsible=icon]/sidebar-wrapper:min-h-14"
     >
-        <div class="flex items-center gap-2">
+        <div class="flex min-w-0 max-w-full items-center gap-2">
             <SidebarTrigger class="-ml-1" />
-            <span v-if="titre" class="text-base font-semibold text-foreground">{{ titre }}</span>
+            <Badge
+                v-if="config.licence?.code_poste"
+                variant="outline"
+                class="shrink-0 rounded-md border-sky-200 bg-sky-50 px-2 py-1.5 text-sm font-semibold text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300"
+                title="Numéro de ce poste"
+            >
+                <Monitor class="size-4 shrink-0" />
+                <span>Poste {{ config.licence.code_poste }}</span>
+            </Badge>
+            <span v-if="titre" class="truncate text-base font-semibold text-foreground">{{ titre }}</span>
         </div>
-        <div class="ml-auto flex min-w-0 items-center gap-2">
+        <div class="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
             <Badge
                 v-if="miseAJourPrete"
                 variant="outline"
@@ -118,6 +153,19 @@ function formatDate(date: string | null | undefined) {
             <Badge v-if="config.agence" variant="outline" class="hidden max-w-[18rem] rounded-md px-3 py-1.5 text-sm md:inline-flex">
                 <span class="truncate">{{ config.agence.nom }} — {{ config.agence.ville_nom }}</span>
             </Badge>
+            <Button
+                variant="outline"
+                size="sm"
+                class="w-9 px-0 sm:w-40 sm:px-3"
+                :disabled="synchronisationEnCours"
+                :aria-busy="synchronisationEnCours"
+                aria-label="Synchroniser vers admin"
+                title="Synchroniser vers admin"
+                @click="synchroniserVersAdmin"
+            >
+                <RefreshCw class="size-4" :class="{ 'animate-spin': synchronisationEnCours }" />
+                <span class="hidden sm:inline">{{ synchronisationEnCours ? 'Envoi en cours…' : 'Synchroniser' }}</span>
+            </Button>
             <ThemeToggle />
         </div>
     </header>

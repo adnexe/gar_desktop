@@ -1,6 +1,7 @@
 import { ClientRepository } from '../repositories/ClientRepository';
 import { CourrierRepository, type LigneColis } from '../repositories/CourrierRepository';
 import { getDb } from '../database/connection';
+import { dateCaisseDuJour, formatDateHeure } from '../database/dates';
 
 export interface DemandeCourrier {
     agenceId: number;
@@ -15,7 +16,6 @@ export interface DemandeCourrier {
     destinataire: { nom: string; prenoms?: string | null; telephone: string };
     colis: LigneColis[];
     numeroCourrier?: string | null;
-    createdAt?: string | null;
 }
 
 export class CourrierService {
@@ -36,7 +36,7 @@ export class CourrierService {
             throw new Error('EXPEDITEUR_DESTINATAIRE_REQUIS');
         }
 
-        return this.courriers.creer({
+        const courrier = this.courriers.creer({
             agenceDepartId: demande.agenceId,
             villeArriveeId: demande.villeArriveeId,
             agenceArriveeId: demande.agenceArriveeId,
@@ -49,8 +49,9 @@ export class CourrierService {
             prixExpedition: demande.prixExpedition,
             colis: demande.colis,
             numeroCourrier: demande.numeroCourrier,
-            createdAt: demande.createdAt,
         });
+
+        return { ...courrier, created_at: formatDateHeure(courrier.created_at) };
     }
 
     private verifierDroitCourrier(demande: DemandeCourrier): void {
@@ -151,6 +152,6 @@ export class CourrierService {
 
     rapportFinDeCaisse(agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) {
         const rapport = this.courriers.rapportDuJour(agenceId, date, voyageId, userId);
-        return { date: date ?? new Date().toISOString().slice(0, 10), ...rapport };
+        return { date: date ?? dateCaisseDuJour(), ...rapport };
     }
 }

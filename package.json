@@ -47,6 +47,8 @@
         "build": "vue-tsc --noEmit && electron-vite build",
         "preview": "electron-vite preview",
         "typecheck": "vue-tsc --noEmit",
+        "test:lot-ipc": "node tests/lot-ipc-serialization.mjs",
+        "test:date-caisse": "node --experimental-strip-types tests/date-caisse-timezone.mjs",
         "postinstall": "electron-rebuild -f -w better-sqlite3",
         "pack": "npm run build && electron-builder --dir",
         "dist": "npm run build && electron-builder",

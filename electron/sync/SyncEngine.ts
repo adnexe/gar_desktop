@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { net } from 'electron';
 import { envoyerOperationSync, type OperationSyncApi } from '../apiClient';
 import { getDb } from '../database/connection';
 import { migrer } from '../database/migrate';
@@ -20,9 +19,21 @@ type LigneSync = {
 };
 
 type DecisionErreur = {
-    statut: 'temporaire' | 'definitive' | 'stop';
+    statut: 'temporaire' | 'definitive' | 'stop' | 'expiration' | 'serveur';
     message: string;
 };
+
+// Un élément qui expire systématiquement ne doit pas retenir toute la file
+// derrière lui : passé ce nombre de tentatives, on le laisse de côté pour ce
+// cycle et on continue avec les suivants. Il reste en attente et sera réessayé
+// — rien n'est perdu — mais les ventes suivantes remontent enfin à l'admin.
+const TENTATIVES_AVANT_MISE_DE_COTE = 3;
+
+// Si plusieurs envois expirent dans le même cycle, la cause n'est plus un
+// élément précis mais le serveur ou le lien réseau : inutile d'insister,
+// on s'arrête et on réessaiera au prochain cycle.
+const EXPIRATIONS_TOLEREES_PAR_CYCLE = 3;
+const ERREURS_SERVEUR_TOLEREES_PAR_CYCLE = 3;
 
 export class SyncEngine {
     private readonly repo = new SyncQueueRepository();
@@ -78,7 +89,7 @@ export class SyncEngine {
     }
 
     async runCycle(): Promise<void> {
-        if (this.enCours || !net.isOnline()) {
+        if (this.enCours) {
             return;
         }
 
@@ -87,6 +98,10 @@ export class SyncEngine {
 
         try {
             migrer(getDb());
+            const lotsRecuperes = this.repo.assurerLotsLocauxDansFile();
+            if (lotsRecuperes > 0) {
+                logger.info(`${lotsRecuperes} lot(s) local(aux) ajouté(s) à la file de synchronisation.`);
+            }
 
             // Licence/agence revérifiées en ligne au plus une fois toutes les
             // 5 minutes : assez rapide pour couper un poste déjà connecté,
@@ -114,6 +129,9 @@ export class SyncEngine {
             }
 
             const lignes = this.repo.enAttente(50) as LigneSync[];
+            let expirationsCycle = 0;
+            let erreursServeurCycle = 0;
+
             for (const ligne of lignes) {
                 if (this.operationIgnoreeSurPosteClient(ligne.entite)) {
                     this.repo.marquerSynchronise(ligne.id);
@@ -141,6 +159,46 @@ export class SyncEngine {
                     }
 
                     this.repo.marquerEchecTemporaire(ligne.id, decision.message);
+
+                    if (decision.statut === 'expiration') {
+                        expirationsCycle++;
+
+                        // Trop d'expirations d'affilée : c'est le serveur ou le
+                        // réseau, pas cet élément. On arrête le cycle.
+                        if (expirationsCycle >= EXPIRATIONS_TOLEREES_PAR_CYCLE) {
+                            logger.warn(`Synchronisation interrompue : ${expirationsCycle} envoi(s) expiré(s) dans ce cycle.`);
+                            break;
+                        }
+
+                        // Élément qui expire depuis plusieurs cycles : on passe
+                        // au suivant pour ne pas geler toute la file derrière lui.
+                        if (ligne.tentatives + 1 >= TENTATIVES_AVANT_MISE_DE_COTE) {
+                            logger.warn(`Élément ${ligne.entite} #${ligne.id} mis de côté après ${ligne.tentatives + 1} tentative(s) : la file continue.`);
+                            continue;
+                        }
+
+                        break;
+                    }
+
+                    if (decision.statut === 'serveur') {
+                        erreursServeurCycle++;
+
+                        if (erreursServeurCycle >= ERREURS_SERVEUR_TOLEREES_PAR_CYCLE) {
+                            logger.warn(`Synchronisation interrompue : ${erreursServeurCycle} erreur(s) serveur dans ce cycle.`);
+                            break;
+                        }
+
+                        // Une ancienne donnée refusée en permanence par le
+                        // serveur ne doit pas retenir les lots et ventes plus
+                        // récents. Elle reste en attente pour être retentée.
+                        if (ligne.tentatives + 1 >= TENTATIVES_AVANT_MISE_DE_COTE) {
+                            logger.warn(`Élément ${ligne.entite} #${ligne.id} mis de côté après ${ligne.tentatives + 1} erreur(s) serveur : la file continue.`);
+                            continue;
+                        }
+
+                        break;
+                    }
+
                     if (decision.statut === 'stop') {
                         break;
                     }
@@ -191,6 +249,8 @@ export class SyncEngine {
                 return this.courrierPayload(ligne.entite_uuid);
             case 'courriers_internationaux':
                 return this.courrierInternationalPayload(ligne.entite_uuid);
+            case 'lots_bordereaux':
+                return this.lotBordereauPayload(ligne.entite_uuid);
             case 'users':
                 return JSON.parse(ligne.payload) as Record<string, unknown>;
             default:
@@ -337,12 +397,62 @@ export class SyncEngine {
         };
     }
 
+    private lotBordereauPayload(uuid: string): Record<string, unknown> | null {
+        const ligne = getDb()
+            .prepare(
+                `SELECT l.uuid, l.type, l.agence_id, l.numero_lot, l.reference, l.date_operation,
+                        l.ville_destination_id, l.destination, l.voyage_uuid, l.voyage_libelle,
+                        l.statut, l.cree_par_user_id, u.name AS cree_par_nom,
+                        l.expedie_at, l.arrive_at, l.livre_at, l.created_at, l.updated_at
+                 FROM lots_bordereaux l
+                 LEFT JOIN users u ON u.id = l.cree_par_user_id
+                 WHERE l.uuid = ?`,
+            )
+            .get(uuid) as Record<string, unknown> | undefined;
+
+        if (!ligne || typeof ligne.type !== 'string') return null;
+
+        const definitions: Record<string, { lien: string; operation: string; colonne: string }> = {
+            courrier: { lien: 'lot_courriers', operation: 'courriers', colonne: 'courrier_id' },
+            bagage: { lien: 'lot_bagages', operation: 'bagages', colonne: 'bagage_id' },
+            courrier_international: {
+                lien: 'lot_courriers_internationaux',
+                operation: 'courriers_internationaux',
+                colonne: 'courrier_international_id',
+            },
+        };
+        const definition = definitions[ligne.type];
+        if (!definition) return null;
+
+        const elements = getDb()
+            .prepare(
+                `SELECT o.uuid
+                 FROM ${definition.lien} lien
+                 JOIN ${definition.operation} o ON o.id = lien.${definition.colonne}
+                 WHERE lien.lot_id = (SELECT id FROM lots_bordereaux WHERE uuid = ?)
+                 ORDER BY lien.created_at, o.id`,
+            )
+            .all(uuid) as Array<{ uuid: string }>;
+
+        return {
+            ...ligne,
+            element_uuids: elements.map((element) => element.uuid),
+        };
+    }
+
     private classerErreur(erreur: unknown): DecisionErreur {
         if (!axios.isAxiosError(erreur)) {
             return { statut: 'stop', message: 'Erreur de synchronisation inconnue.' };
         }
 
         if (!erreur.response) {
+            // Délai dépassé : distinct d'un réseau coupé. Le serveur est
+            // joignable mais n'a pas répondu à temps pour CET élément — il ne
+            // doit donc pas condamner les suivants (voir runCycle).
+            if (erreur.code === 'ECONNABORTED' || erreur.code === 'ETIMEDOUT') {
+                return { statut: 'expiration', message: erreur.message };
+            }
+
             return { statut: 'stop', message: erreur.message };
         }
 
@@ -362,7 +472,7 @@ export class SyncEngine {
             return { statut: 'definitive', message };
         }
 
-        return { statut: 'stop', message };
+        return { statut: 'serveur', message };
     }
 }
 

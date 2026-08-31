@@ -214,16 +214,6 @@ function libelleVoyage(v: VoyageOption) {
     return `${v.date_depart} ${v.heure_depart} · ${v.itineraire_nom ?? ''}`;
 }
 
-function dateHeureRecu() {
-    return new Date().toLocaleString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
-
 function nomComplet(personne: { nom: string; prenoms: string }) {
     return [personne.prenoms, personne.nom].filter(Boolean).join(' ').trim();
 }
@@ -349,7 +339,7 @@ async function envoyer() {
             colis: colisListe.value.map((c) => ({ nom: c.nom, type: c.type, quantite: c.quantite, prix: c.prix })),
         })) as {
             ok: boolean;
-            courrier?: { uuid: string; numeroCourrier: string; montantColis: number; montantTotal: number };
+            courrier?: { uuid: string; numeroCourrier: string; montantColis: number; montantTotal: number; created_at: string };
             erreur?: string;
         };
 
@@ -389,7 +379,7 @@ async function envoyer() {
             agence_depart: agenceActuelle.nom,
             agence_depart_telephone: agenceActuelle.telephone,
             agent: session.nom || null,
-            created_at: dateHeureRecu(),
+            created_at: reponse.courrier.created_at,
             compagnie: config.compagnie,
         };
         recu.value = dernierRecu;
@@ -439,7 +429,7 @@ async function envoyer() {
         emit('enregistre', {
             uuid: reponse.courrier.uuid,
             numero_courrier: reponse.courrier.numeroCourrier,
-            heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            heure: reponse.courrier.created_at.split(' ')[1],
             destination,
             destinataire: dernierRecu.destinataire_nom,
             montant_total: reponse.courrier.montantTotal,

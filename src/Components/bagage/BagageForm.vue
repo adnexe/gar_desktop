@@ -181,16 +181,6 @@ function libelleVoyage(v: VoyageOption) {
     return `${v.date_depart} ${v.heure_depart} · ${v.itineraire_nom ?? ''}`;
 }
 
-function dateHeureRecu() {
-    return new Date().toLocaleString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
-
 function voyageRecu() {
     if (ticket.value) {
         return `${ticket.value.date_depart} à ${ticket.value.heure_depart}`;
@@ -288,7 +278,7 @@ async function enregistrer() {
             description: description.value || null,
             valeur: valeur.value,
             montant: montantActuel,
-        })) as { ok: boolean; bagage?: { uuid: string; numero_bagage: string }; erreur?: string };
+        })) as { ok: boolean; bagage?: { uuid: string; numero_bagage: string; created_at: string }; erreur?: string };
 
         if (!reponse.ok || !reponse.bagage) {
             erreur.value = reponse.erreur ?? "L'enregistrement n'a pas abouti. Réessaie, rien n'a été perdu.";
@@ -314,7 +304,7 @@ async function enregistrer() {
             description: description.value || null,
             agence: agenceActuelle.nom,
             agent: session.nom || null,
-            created_at: dateHeureRecu(),
+            created_at: reponse.bagage.created_at,
             compagnie: config.compagnie,
         };
         recu.value = dernierRecu;
@@ -368,7 +358,7 @@ async function enregistrer() {
         emit('enregistre', {
             uuid: reponse.bagage.uuid,
             numero_bagage: reponse.bagage.numero_bagage,
-            heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            heure: reponse.bagage.created_at.split(' ')[1],
             numero_ticket: dernierRecu.numero_ticket,
             destination,
             description: dernierRecu.description,

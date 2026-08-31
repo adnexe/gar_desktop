@@ -3,6 +3,7 @@ import { nouvelUuid } from '../database/ids';
 import { genererNumeroCourrierInternational, prevoirNumeroCourrierInternational } from '../database/numero';
 import { queueManager } from '../sync/QueueManager';
 import { ConfigRepository } from './ConfigRepository';
+import { maintenantCaisseIso } from '../database/dates';
 
 export interface LigneColisInternational {
     nom: string;
@@ -34,7 +35,6 @@ export interface NouveauCourrierInternational {
     observation?: string | null;
     colis: LigneColisInternational[];
     numeroCourrier?: string | null;
-    createdAt?: string | null;
 }
 
 export interface CourrierInternationalDuJour {
@@ -191,7 +191,7 @@ export class CourrierInternationalRepository {
         return { ...reste, agence_arrivee: null, agence_arrivee_telephone: null, voyage: null, colis };
     }
 
-    creer(donnees: NouveauCourrierInternational): { id: number; uuid: string; numeroCourrier: string; valeurColis: number; montantTotal: number } {
+    creer(donnees: NouveauCourrierInternational): { id: number; uuid: string; numeroCourrier: string; valeurColis: number; montantTotal: number; created_at: string } {
         const db = getDb();
         const uuid = nouvelUuid();
         const numeroCourrier = genererNumeroCourrierInternational(
@@ -200,7 +200,7 @@ export class CourrierInternationalRepository {
             this.codeAgenceTicket(donnees.agenceDepartId),
             donnees.numeroCourrier,
         );
-        const maintenant = donnees.createdAt || new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
 
         return db.transaction(() => {
             const info = db
@@ -266,13 +266,13 @@ export class CourrierInternationalRepository {
                 );
             }
 
-            return { id: courrierId, uuid, numeroCourrier, valeurColis: donnees.valeurColis, montantTotal: donnees.montantTotal };
+            return { id: courrierId, uuid, numeroCourrier, valeurColis: donnees.valeurColis, montantTotal: donnees.montantTotal, created_at: maintenant };
         })();
     }
 
     confirmerImpression(uuid: string): boolean {
         const db = getDb();
-        const maintenant = new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
 
         return db.transaction(() => {
             const dejaValide = db
@@ -299,7 +299,7 @@ export class CourrierInternationalRepository {
     }
 
     annulerImpression(uuid: string, motif: string): boolean {
-        const maintenant = new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
         const motifCourt = motif.trim().slice(0, 500) || 'Impression non confirmee';
 
         const info = getDb()

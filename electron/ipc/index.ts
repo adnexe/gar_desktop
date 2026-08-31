@@ -1,9 +1,14 @@
 import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import { execFile } from 'node:child_process';
+import { recupererDepuisAdmin, consulterTicketsRecuperes, type RecoveryRequest } from '../services/RecoveryService';
+import { profilConnecte, modifierMotDePasse, type ModificationMotDePasse } from '../services/ProfileService';
+import { enregistrerAdresseAdmin } from '../services/AdminAdresseService';
+import { apiBaseUrl } from '../apiClient';
 import { randomUUID } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { posteSuiviService } from '../services/PosteSuiviService';
 // pdf-to-printer est en CommonJS : import par défaut obligatoire (main en ESM).
 import pdfToPrinter from 'pdf-to-printer';
 
@@ -45,6 +50,7 @@ import { CourrierController } from '../controllers/CourrierController';
 import { CourrierInternationalController } from '../controllers/CourrierInternationalController';
 import { VoyageController } from '../controllers/VoyageController';
 import { HistoriqueController } from '../controllers/HistoriqueController';
+import { LotController } from '../controllers/LotController';
 import { logger } from '../logger';
 import { localNetworkService } from '../services/LocalNetworkService';
 import { lireCalibrationImpression } from '../services/ImpressionConfigService';
@@ -459,6 +465,7 @@ async function imprimerTicketTest(): Promise<ResultatImpression> {
 // Chaque canal IPC adapte 1:1 une méthode de contrôleur. Le renderer les
 // appelle via window.api.* (voir preload.ts) — jamais directement ipcRenderer.
 export function enregistrerIpc(): void {
+    let utilisateurConnecteId: number | null = null;
     const gerer = (canal: string, fn: (...args: never[]) => unknown) => {
         ipcMain.handle(canal, async (_event, ...args: unknown[]) => {
             try {
@@ -474,6 +481,11 @@ export function enregistrerIpc(): void {
     };
 
     gerer('config:estConfiguree', ConfigController.estConfiguree);
+    gerer('config:adresseAdmin', () => apiBaseUrl());
+    gerer('config:enregistrerAdresseAdmin', (url: string) => {
+        const userId = utilisateurConnecteId;
+        return enregistrerAdresseAdmin(url, userId, () => utilisateurConnecteId === userId);
+    });
     gerer('config:agenceActuelle', ConfigController.agenceActuelle);
     gerer('config:compagnieActuelle', ConfigController.compagnieActuelle);
     gerer('config:licenceActuelle', ConfigController.licenceActuelle);
@@ -482,6 +494,13 @@ export function enregistrerIpc(): void {
     gerer('config:configurer', ConfigController.configurer);
     gerer('config:actualiser', ConfigController.actualiser);
     gerer('config:synchroniserMaintenant', ConfigController.synchroniserMaintenant);
+    gerer('config:recupererDepuisAdmin', (params: RecoveryRequest) => recupererDepuisAdmin(params, () => utilisateurConnecteId !== null && utilisateurConnecteId === params?.userId));
+    gerer('config:ticketsRecuperes', (params: { date: string; userId: number; voyageId?: number | null }) => {
+        if (!utilisateurConnecteId || utilisateurConnecteId !== params?.userId) throw new Error('Connectez-vous avec un compte super administrateur.');
+        return consulterTicketsRecuperes(params);
+    });
+    gerer('config:envoisRefuses', ConfigController.envoisRefuses);
+    gerer('config:relancerEnvoisRefuses', ConfigController.relancerEnvoisRefuses);
     gerer('config:reseauLocal', ConfigController.reseauLocal);
     gerer('config:calibrationImpression', ConfigController.calibrationImpression);
     gerer('config:enregistrerCalibrationImpression', ConfigController.enregistrerCalibrationImpression);
@@ -492,7 +511,22 @@ export function enregistrerIpc(): void {
     gerer('config:nettoyerDonneesTest', ConfigController.nettoyerDonneesTest);
     gerer('config:resetComplet', ConfigController.resetComplet);
 
-    gerer('auth:connecter', AuthController.connecter);
+    gerer('auth:profil', () => profilConnecte(utilisateurConnecteId));
+    gerer('auth:modifierMotDePasse', (params: ModificationMotDePasse) => {
+        const userId = utilisateurConnecteId;
+        return modifierMotDePasse(userId, params, () => userId !== null && utilisateurConnecteId === userId);
+    });
+    gerer('auth:connecter', async (identifiant: string, motDePasse: string) => {
+        utilisateurConnecteId = null;
+        const session = await AuthController.connecter(identifiant, motDePasse);
+        utilisateurConnecteId = session.userId;
+        posteSuiviService.connecter(session);
+        return session;
+    });
+    gerer('auth:presenceSession', (active: boolean) => {
+        if (!active) utilisateurConnecteId = null;
+        return posteSuiviService.presenceSession(active);
+    });
     gerer('auth:verifierSession', AgentController.verifierSession);
 
     gerer('agents:lister', AgentController.lister);
@@ -560,6 +594,13 @@ export function enregistrerIpc(): void {
     gerer('courrier:duJour', CourrierController.duJour);
     gerer('courrier:details', CourrierController.details);
     gerer('courrier:finDeCaisse', CourrierController.finDeCaisse);
+
+    gerer('lots:lister', LotController.lister);
+    gerer('lots:eligibles', LotController.eligibles);
+    gerer('lots:creer', LotController.creer);
+    gerer('lots:details', LotController.details);
+    gerer('lots:changerStatut', LotController.changerStatut);
+    gerer('lots:retirerElements', LotController.retirerElements);
 
     gerer('courrierInternational:preparerNumero', CourrierInternationalController.preparerNumero);
     gerer('courrierInternational:enregistrer', CourrierInternationalController.enregistrer);

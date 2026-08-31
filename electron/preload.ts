@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 const api = {
     config: {
         estConfiguree: () => ipcRenderer.invoke('config:estConfiguree'),
+        adresseAdmin: () => ipcRenderer.invoke('config:adresseAdmin'),
+        enregistrerAdresseAdmin: (url: string) => ipcRenderer.invoke('config:enregistrerAdresseAdmin', url),
         agenceActuelle: () => ipcRenderer.invoke('config:agenceActuelle'),
         compagnieActuelle: () => ipcRenderer.invoke('config:compagnieActuelle'),
         licenceActuelle: () => ipcRenderer.invoke('config:licenceActuelle'),
@@ -11,6 +13,10 @@ const api = {
         configurer: (reference: string, appareil: string, codePoste?: string | null) => ipcRenderer.invoke('config:configurer', reference, appareil, codePoste),
         actualiser: () => ipcRenderer.invoke('config:actualiser'),
         synchroniserMaintenant: () => ipcRenderer.invoke('config:synchroniserMaintenant'),
+        recupererDepuisAdmin: (params: { section: string; date: string; userId: number; password: string }) => ipcRenderer.invoke('config:recupererDepuisAdmin', params),
+        ticketsRecuperes: (params: { date: string; userId: number; voyageId?: number | null }) => ipcRenderer.invoke('config:ticketsRecuperes', params),
+        envoisRefuses: () => ipcRenderer.invoke('config:envoisRefuses'),
+        relancerEnvoisRefuses: (id?: number | null) => ipcRenderer.invoke('config:relancerEnvoisRefuses', id ?? null),
         reseauLocal: () => ipcRenderer.invoke('config:reseauLocal'),
         calibrationImpression: () => ipcRenderer.invoke('config:calibrationImpression'),
         enregistrerCalibrationImpression: (params: unknown) => ipcRenderer.invoke('config:enregistrerCalibrationImpression', params),
@@ -22,6 +28,9 @@ const api = {
         resetComplet: (acteurUserId: number) => ipcRenderer.invoke('config:resetComplet', acteurUserId),
     },
     auth: {
+        profil: () => ipcRenderer.invoke('auth:profil'),
+        modifierMotDePasse: (params: { currentPassword: string; password: string; confirmation: string }) => ipcRenderer.invoke('auth:modifierMotDePasse', params),
+        presenceSession: (active: boolean) => ipcRenderer.invoke('auth:presenceSession', active),
         connecter: (identifiant: string, motDePasse: string) => ipcRenderer.invoke('auth:connecter', identifiant, motDePasse),
         verifierSession: (userId: number) => ipcRenderer.invoke('auth:verifierSession', userId),
     },
@@ -80,6 +89,14 @@ const api = {
         duJour: (agenceId: number, date?: string, userId?: number | null) => ipcRenderer.invoke('courrier:duJour', agenceId, date, userId),
         details: (uuid: string) => ipcRenderer.invoke('courrier:details', uuid),
         finDeCaisse: (agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) => ipcRenderer.invoke('courrier:finDeCaisse', agenceId, date, voyageId, userId),
+    },
+    lots: {
+        lister: (params: unknown) => ipcRenderer.invoke('lots:lister', params),
+        eligibles: (params: unknown) => ipcRenderer.invoke('lots:eligibles', params),
+        creer: (params: unknown) => ipcRenderer.invoke('lots:creer', params),
+        details: (uuid: string, userId: number) => ipcRenderer.invoke('lots:details', uuid, userId),
+        changerStatut: (uuid: string, statut: string, userId: number) => ipcRenderer.invoke('lots:changerStatut', uuid, statut, userId),
+        retirerElements: (params: unknown) => ipcRenderer.invoke('lots:retirerElements', params),
     },
     courrierInternational: {
         preparerNumero: (agenceId: number) => ipcRenderer.invoke('courrierInternational:preparerNumero', agenceId),

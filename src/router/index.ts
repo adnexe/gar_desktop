@@ -33,6 +33,7 @@ const router = createRouter({
         { path: '/agents', name: 'agents', component: () => import('@/Views/Agents.vue') },
         { path: '/historique', name: 'historique', component: () => import('@/Views/Historique.vue') },
         { path: '/parametres', name: 'parametres', component: () => import('@/Views/Parametres.vue') },
+        { path: '/profil', name: 'profil', component: () => import('@/Views/Profil.vue') },
     ],
 });
 

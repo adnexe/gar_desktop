@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { RefreshCw } from '@lucide/vue';
 import { Button } from '@/Components/ui/button';
@@ -10,6 +10,8 @@ import { useConfigStore } from '@/Stores/config';
 
 const reference = ref('');
 const codePoste = ref('');
+const adminUrl = ref('');
+const chargementAdresse = ref(true);
 const enCours = ref(false);
 const erreur = ref('');
 const messageLicence = ref('');
@@ -17,8 +19,18 @@ const licenceBloquee = ref(false);
 const config = useConfigStore();
 const router = useRouter();
 
+onMounted(async () => {
+    try {
+        adminUrl.value = await window.api.config.adresseAdmin();
+    } catch (e) {
+        erreur.value = messageErreurConfiguration(e);
+    } finally {
+        chargementAdresse.value = false;
+    }
+});
+
 async function valider() {
-    if (!reference.value.trim() || !codePoste.value.trim()) return;
+    if (enCours.value || chargementAdresse.value || !adminUrl.value.trim() || !reference.value.trim() || !codePoste.value.trim()) return;
 
     enCours.value = true;
     erreur.value = '';
@@ -26,6 +38,7 @@ async function valider() {
     licenceBloquee.value = false;
 
     try {
+        adminUrl.value = await window.api.config.enregistrerAdresseAdmin(adminUrl.value);
         const referenceAgence = reference.value.trim().toUpperCase();
         const code = normaliserCodePoste(codePoste.value);
         const licence = await config.reclamerLicence(referenceAgence, 'poste-caisse', code);
@@ -86,13 +99,18 @@ function messageErreurConfiguration(e: unknown): string {
             </div>
 
             <div class="space-y-1.5">
+                <Label for="admin_url">Adresse admin</Label>
+                <Input id="admin_url" v-model="adminUrl" type="url" required placeholder="https://admin.exemple.com" :disabled="enCours || chargementAdresse" autocomplete="url" />
+            </div>
+
+            <div class="space-y-1.5">
                 <Label for="reference">Référence agence</Label>
-                <Input id="reference" v-model="reference" placeholder="AG-XXXXXX" autofocus />
+                <Input id="reference" v-model="reference" placeholder="AG-XXXXXX" :disabled="enCours" autofocus />
             </div>
 
             <div class="space-y-1.5">
                 <Label for="code_poste">Numéro de poste</Label>
-                <Input id="code_poste" v-model="codePoste" placeholder="Ex : 001" maxlength="10" />
+                <Input id="code_poste" v-model="codePoste" placeholder="Ex : 001" maxlength="10" :disabled="enCours" />
             </div>
 
             <p v-if="erreur" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{{ erreur }}</p>
@@ -108,7 +126,8 @@ function messageErreurConfiguration(e: unknown): string {
                 {{ messageLicence }}
             </p>
 
-            <Button type="submit" class="w-full" :disabled="enCours || !reference.trim() || !codePoste.trim()">
+            <Button type="submit" class="w-full" :disabled="enCours || chargementAdresse || !adminUrl.trim() || !reference.trim() || !codePoste.trim()">
+                <RefreshCw v-if="enCours" class="size-4 animate-spin" />
                 {{ enCours ? 'Vérification…' : 'Configurer cet appareil' }}
             </Button>
 

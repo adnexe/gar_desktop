@@ -10,6 +10,85 @@ import { UserRepository } from '../repositories/UserRepository';
 import { SyncQueueRepository } from '../repositories/SyncQueueRepository';
 import { syncEngine } from '../sync/SyncEngine';
 
+/**
+ * Traduit une ligne de la file en libellé lisible par le chef de gare.
+ * Mêmes colonnes de montant que le tableau de bord : montant + timbre pour un
+ * ticket (la commission courtier est prise sur la part de la gare, elle ne
+ * change pas ce que le client a payé), montant pour un bagage, montant_total
+ * pour un courrier.
+ */
+const SOURCES_ENVOI: Record<string, { libelle: string; requete: string | null }> = {
+    tickets: {
+        libelle: 'Ticket',
+        requete: `SELECT numero_ticket AS numero, (montant + timbre) AS montant FROM tickets WHERE uuid = ?`,
+    },
+    bagages: {
+        libelle: 'Bagage',
+        requete: `SELECT numero_bagage AS numero, montant FROM bagages WHERE uuid = ?`,
+    },
+    courriers: {
+        libelle: 'Courrier',
+        requete: `SELECT numero_courrier AS numero, montant_total AS montant FROM courriers WHERE uuid = ?`,
+    },
+    courriers_internationaux: {
+        libelle: 'Courrier international',
+        requete: `SELECT numero_courrier AS numero, montant_total AS montant FROM courriers_internationaux WHERE uuid = ?`,
+    },
+    lots_bordereaux: {
+        libelle: 'Bordereau',
+        requete: `SELECT reference AS numero, NULL AS montant FROM lots_bordereaux WHERE uuid = ?`,
+    },
+    clients: { libelle: 'Client', requete: null },
+    voyages: { libelle: 'Voyage', requete: null },
+    users: { libelle: 'Compte', requete: null },
+};
+
+export type EnvoiRefuse = {
+    id: number;
+    entite: string;
+    libelle: string;
+    numero: string | null;
+    montant: number | null;
+    enregistreLe: string;
+    tentatives: number;
+    message: string;
+};
+
+function listerEnvoisRefuses(): EnvoiRefuse[] {
+    const lignes = fileSync.enErreur();
+    if (lignes.length === 0) return [];
+
+    const db = getDb();
+
+    return lignes.map((ligne) => {
+        const source = SOURCES_ENVOI[ligne.entite];
+        let numero: string | null = null;
+        let montant: number | null = null;
+
+        if (source?.requete) {
+            // La ligne locale peut avoir disparu — c'est même l'une des causes
+            // du refus : on garde l'entrée dans la liste, sans montant.
+            const detail = db.prepare(source.requete).get(ligne.entite_uuid) as
+                | { numero: string | null; montant: number }
+                | undefined;
+
+            numero = detail?.numero ?? null;
+            montant = detail ? detail.montant : null;
+        }
+
+        return {
+            id: ligne.id,
+            entite: ligne.entite,
+            libelle: source?.libelle ?? ligne.entite,
+            numero,
+            montant,
+            enregistreLe: ligne.created_at,
+            tentatives: ligne.tentatives,
+            message: ligne.derniere_erreur ?? 'Refus du serveur sans détail.',
+        };
+    });
+}
+
 const service = new BootstrapService();
 const users = new UserRepository();
 const fileSync = new SyncQueueRepository();
@@ -72,6 +151,27 @@ export const ConfigController = {
             ok: true as const,
             enAttente: fileSync.compterEnAttente(),
             erreur: fileSync.premiereErreurEnAttente(),
+            // Un envoi définitivement refusé quitte la file : sans ce compteur,
+            // « enAttente: 0 » laisserait croire que tout est remonté alors que
+            // de l'argent encaissé manque côté admin.
+            refuses: fileSync.compterEnErreur(),
+        };
+    },
+    envoisRefuses: () => ({
+        total: fileSync.compterEnErreur(),
+        operations: listerEnvoisRefuses(),
+    }),
+    // Relance les envois refusés puis rejoue un cycle complet : on rend l'état
+    // réel de la file, pas seulement le nombre de lignes remises en attente.
+    relancerEnvoisRefuses: async (id?: number | null) => {
+        const relances = fileSync.reprogrammer(typeof id === 'number' ? id : undefined);
+        await syncEngine.runCycle();
+
+        return {
+            ok: true as const,
+            relances,
+            restants: fileSync.compterEnErreur(),
+            enAttente: fileSync.compterEnAttente(),
         };
     },
     reseauLocal: () => localNetworkService.configuration(),
@@ -91,7 +191,11 @@ export const ConfigController = {
         const db = getDb();
         migrer(db);
 
-        const tablesOperations = ['colis', 'bagages', 'courriers', 'tickets', 'clients', 'voyages', 'sync_queue'];
+        const tablesOperations = [
+            'lot_courriers_internationaux', 'lot_bagages', 'lot_courriers', 'lots_bordereaux',
+            'colis_internationaux', 'courriers_internationaux',
+            'colis', 'bagages', 'courriers', 'tickets', 'clients', 'voyages', 'sync_queue',
+        ];
         const suppressions: Record<string, number> = {};
 
         db.pragma('foreign_keys = OFF');
@@ -108,13 +212,15 @@ export const ConfigController = {
                     `DELETE FROM config
                       WHERE cle LIKE 'ticket_sequence_%'
                          OR cle LIKE 'bagage_sequence_%'
-                         OR cle LIKE 'courrier_sequence_%'`,
+                         OR cle LIKE 'courrier_sequence_%'
+                         OR cle LIKE 'courrier_international_sequence_%'`,
                 ).run();
 
                 if (tableExiste(db, 'sqlite_sequence')) {
                     db.prepare(
                         `DELETE FROM sqlite_sequence
-                          WHERE name IN ('voyages', 'clients', 'tickets', 'bagages', 'courriers', 'colis', 'sync_queue')`,
+                          WHERE name IN ('voyages', 'clients', 'tickets', 'bagages', 'courriers', 'colis',
+                                         'courriers_internationaux', 'colis_internationaux', 'lots_bordereaux', 'sync_queue')`,
                     ).run();
                 }
             })();
@@ -147,6 +253,8 @@ export const ConfigController = {
         // désactivées pendant la transaction, mais l'ordre reste plus clair
         // à la lecture).
         const toutesLesTables = [
+            'lot_courriers_internationaux', 'lot_bagages', 'lot_courriers', 'lots_bordereaux',
+            'colis_internationaux', 'courriers_internationaux',
             'colis', 'bagages', 'courriers', 'tickets', 'clients', 'voyages',
             'tarifs', 'itineraire_trajet', 'itineraires', 'trajets',
             'agents', 'users', 'vehicules', 'chauffeurs', 'agences', 'villes',

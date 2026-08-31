@@ -7,6 +7,7 @@ import { ConfigRepository } from '../repositories/ConfigRepository';
 import { migrer } from '../database/migrate';
 import { getDb } from '../database/connection';
 import { logger } from '../logger';
+import { avecVerrouComptes } from './CompteSyncLock';
 
 // Statuts renvoyés par le serveur qui doivent bloquer le poste (par
 // opposition à une simple panne réseau, qui ne bloque jamais).
@@ -146,6 +147,7 @@ export class BootstrapService {
      */
     private reinitialiserPoste(): void {
         const db = getDb();
+        const adminUrl = this.config.obtenir('admin_url');
         const tables = db
             .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('migrations', 'sqlite_sequence')")
             .all() as { name: string }[];
@@ -156,6 +158,7 @@ export class BootstrapService {
                 for (const table of tables) {
                     db.prepare(`DELETE FROM "${table.name}"`).run();
                 }
+                if (adminUrl) this.config.definir('admin_url', adminUrl);
             });
             vider();
         } finally {
@@ -173,6 +176,10 @@ export class BootstrapService {
     }
 
     async configurer(reference: string, appareil: string, codePoste?: string | null) {
+        return avecVerrouComptes(() => this.configurerCatalogue(reference, appareil, codePoste));
+    }
+
+    private async configurerCatalogue(reference: string, appareil: string, codePoste?: string | null) {
         migrer(getDb());
 
         const licence = await this.reclamerLicence(reference, appareil, codePoste);
@@ -206,6 +213,10 @@ export class BootstrapService {
      * continue de fonctionner avec les données locales).
      */
     async actualiser(timeoutMs?: number) {
+        return avecVerrouComptes(() => this.actualiserCatalogue(timeoutMs));
+    }
+
+    private async actualiserCatalogue(timeoutMs?: number) {
         migrer(getDb());
 
         const reference = this.config.obtenir('agence_reference');

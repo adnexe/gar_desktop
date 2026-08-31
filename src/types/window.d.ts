@@ -8,6 +8,8 @@ declare global {
         api: {
             config: {
                 estConfiguree: () => Promise<boolean>;
+                adresseAdmin: () => Promise<string>;
+                enregistrerAdresseAdmin: (url: string) => Promise<string>;
                 agenceActuelle: () => Promise<{ id: number; uuid: string; reference: string; telephone: string | null; nom: string; ville_id: number; ville_nom: string } | null>;
                 compagnieActuelle: () => Promise<{
                     nom: string | null;
@@ -54,10 +56,34 @@ declare global {
                 }>;
                 configurer: (reference: string, appareil: string, codePoste?: string | null) => Promise<unknown>;
                 actualiser: () => Promise<{ ok: boolean; agence?: unknown; erreur?: string; baseUrl?: string }>;
+                recupererDepuisAdmin: (params: { section: 'ticket' | 'bagage' | 'courrier' | 'courrier_international'; date: string; userId: number; password: string }) => Promise<{
+                    ajoutes: Record<string, number>; existants: Record<string, number>; liensAjoutes: number; ventesSelectionnees: number;
+                }>;
+                ticketsRecuperes: (params: { date: string; userId: number; voyageId?: number | null }) => Promise<{ disponible: boolean; modeClient: boolean; ventes: unknown[]; rapport: unknown; voyages: unknown[] }>;
                 synchroniserMaintenant: () => Promise<{
                     ok: boolean;
                     enAttente: number;
                     erreur: { entite: string; tentatives: number; derniere_erreur: string | null } | null;
+                    refuses: number;
+                }>;
+                envoisRefuses: () => Promise<{
+                    total: number;
+                    operations: Array<{
+                        id: number;
+                        entite: string;
+                        libelle: string;
+                        numero: string | null;
+                        montant: number | null;
+                        enregistreLe: string;
+                        tentatives: number;
+                        message: string;
+                    }>;
+                }>;
+                relancerEnvoisRefuses: (id?: number | null) => Promise<{
+                    ok: boolean;
+                    relances: number;
+                    restants: number;
+                    enAttente: number;
                 }>;
                 reseauLocal: () => Promise<{
                     mode: 'autonome' | 'serveur' | 'client';
@@ -120,6 +146,12 @@ declare global {
                 }>;
             };
             auth: {
+                profil: () => Promise<{
+                    uuid: string; nom: string | null; email: string | null; telephone: string | null;
+                    role: string; agent_nom: string | null; type_agent: string | null; agence_nom: string | null;
+                }>;
+                modifierMotDePasse: (params: { currentPassword: string; password: string; confirmation: string }) => Promise<{ ok: true }>;
+                presenceSession: (active: boolean) => Promise<void>;
                 connecter: (identifiant: string, motDePasse: string) => Promise<{
                     userId: number;
                     uuid: string;
@@ -229,6 +261,14 @@ declare global {
                 duJour: (agenceId: number, date?: string, userId?: number | null) => Promise<unknown[]>;
                 details: (uuid: string) => Promise<unknown>;
                 finDeCaisse: (agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) => Promise<unknown>;
+            };
+            lots: {
+                lister: (params: unknown) => Promise<{ ok: boolean; data?: unknown[]; erreur?: string }>;
+                eligibles: (params: unknown) => Promise<{ ok: boolean; data?: unknown[]; erreur?: string }>;
+                creer: (params: unknown) => Promise<{ ok: boolean; data?: unknown; erreur?: string }>;
+                details: (uuid: string, userId: number) => Promise<{ ok: boolean; data?: unknown; erreur?: string }>;
+                changerStatut: (uuid: string, statut: string, userId: number) => Promise<{ ok: boolean; data?: unknown; erreur?: string }>;
+                retirerElements: (params: unknown) => Promise<{ ok: boolean; data?: unknown; erreur?: string }>;
             };
             courrierInternational: {
                 preparerNumero: (agenceId: number) => Promise<string | null>;

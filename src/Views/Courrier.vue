@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { BriefcaseBusiness, ClipboardList, Mail, Package, Plus, Printer, Send } from '@lucide/vue';
+import { BriefcaseBusiness, ClipboardList, FileText, Mail, Package, Plus, Printer, Send } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import CourrierForm from '@/Components/courrier/CourrierForm.vue';
 import CourrierRecu from '@/Components/courrier/CourrierRecu.vue';
 import FinDeCaisseSimpleRecu from '@/Components/FinDeCaisseSimpleRecu.vue';
+import GestionLotsDialog from '@/Components/lots/GestionLotsDialog.vue';
+import RecupererVentesButton from '@/Components/RecupererVentesButton.vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Spinner } from '@/Components/ui/spinner';
@@ -24,6 +26,7 @@ import {
 } from '@/Components/ui/select';
 import { useCompteurAnime } from '@/composables/useCompteurAnime';
 import { choisirSalutation } from '@/composables/useSalutation';
+import { useDateCaisseFiltre } from '@/composables/useDateCaisseFiltre';
 import { useConfigStore } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
 import { useSessionStore } from '@/Stores/session';
@@ -47,8 +50,7 @@ type RapportFinDeCaisseCourrier = {
 // voient tout (même règle que la vente de tickets).
 const userIdFiltre = computed(() => ['super_admin', 'admin', 'chef_gare'].includes(session.role) ? null : session.userId);
 
-const aujourdhui = () => new Date().toISOString().slice(0, 10);
-const dateFiltre = ref(aujourdhui());
+const { dateFiltre, aujourdhui, actualiserJourDeCaisse } = useDateCaisseFiltre();
 
 const courriers = ref<CourrierDuJour[]>([]);
 const recherche = ref('');
@@ -84,6 +86,7 @@ function ouvrir() {
 }
 
 function onEnregistre(courrier: CourrierDuJour) {
+    actualiserJourDeCaisse();
     if (dateFiltre.value === aujourdhui()) {
         courriers.value.unshift(courrier);
     }
@@ -192,6 +195,7 @@ const typeColisLabel: Record<string, string> = {
 };
 const detailsOuvert = ref(false);
 const courrierDetails = ref<DetailsCourrier | null>(null);
+const lotsOuvert = ref(false);
 const erreurReimpression = ref('');
 const partieReimpression = ref<'tout' | 'recu' | 'etiquette'>('tout');
 
@@ -265,6 +269,11 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                      boutons passent à la ligne au lieu de déborder du cadre. -->
                 <div class="flex w-full flex-wrap items-center gap-2 lg:w-auto">
                     <Input v-model="dateFiltre" type="date" class="h-10 w-44 text-base" />
+                    <RecupererVentesButton section="courrier" :date="dateFiltre" @recupere="charger" />
+                    <Button variant="outline" :disabled="!session.agenceId || !session.userId" @click="lotsOuvert = true">
+                        <FileText />
+                        Bordereaux
+                    </Button>
                     <Button variant="outline" :disabled="!session.agenceId" @click="ouvrirFinDeCaisse">
                         <ClipboardList />
                         Fin de caisse
@@ -472,6 +481,14 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        <GestionLotsDialog
+            v-model:open="lotsOuvert"
+            type="courrier"
+            :date="dateFiltre"
+            :agence-id="session.agenceId"
+            :user-id="session.userId"
+        />
 
         <div class="zone-impression hidden print:block">
             <FinDeCaisseSimpleRecu

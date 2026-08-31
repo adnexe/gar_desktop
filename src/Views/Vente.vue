@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { BriefcaseBusiness, ClipboardList, Plus, Printer, Receipt, Stamp, Ticket } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
+import RecupererVentesButton from '@/Components/RecupererVentesButton.vue';
 import VenteForm from '@/Components/vente/VenteForm.vue';
 import FinDeCaisseRecu, { type RapportFinDeCaisse } from '@/Components/vente/FinDeCaisseRecu.vue';
 import { Badge } from '@/Components/ui/badge';
@@ -27,6 +28,7 @@ import { choisirSalutation } from '@/composables/useSalutation';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import type { VenteDuJour } from '@/types/vente';
+import { useDateCaisseFiltre } from '@/composables/useDateCaisseFiltre';
 
 interface Ville { id: number; uuid: string; nom: string }
 
@@ -42,8 +44,7 @@ function ouvrirVente() {
     dialogOuvert.value = true;
 }
 
-const aujourdhui = () => new Date().toISOString().slice(0, 10);
-const dateFiltre = ref(aujourdhui());
+const { dateFiltre, aujourdhui, actualiserJourDeCaisse } = useDateCaisseFiltre();
 
 const ventesDuJour = ref<VenteDuJour[]>([]);
 const recherche = ref('');
@@ -60,6 +61,17 @@ const ventesAffichees = computed(() => {
 });
 const totalDuJour = computed(() => ventesDuJour.value.reduce((total, vente) => total + vente.total, 0));
 const timbreDuJour = computed(() => ventesDuJour.value.reduce((total, vente) => total + vente.timbre, 0));
+const sourceTickets = ref('serveur');
+const recuperationLocaleDisponible = ref(false);
+async function lireRecuperationLocale(voyageId?: number | null) {
+    if (session.role !== 'super_admin' || !session.userId) return null;
+    return window.api.config.ticketsRecuperes({ date: dateFiltre.value, userId: session.userId, voyageId });
+}
+async function apresRecuperation() {
+    const local = await lireRecuperationLocale();
+    sourceTickets.value = local?.modeClient && local.disponible ? 'local' : 'serveur';
+    await chargerVentes();
+}
 
 async function chargerVentes() {
     if (!session.agenceId) {
@@ -67,16 +79,25 @@ async function chargerVentes() {
         return;
     }
 
+    const local = await lireRecuperationLocale();
+    recuperationLocaleDisponible.value = Boolean(local?.modeClient && local.disponible);
+    if (sourceTickets.value === 'local' && recuperationLocaleDisponible.value) {
+        ventesDuJour.value = local!.ventes as VenteDuJour[];
+        return;
+    }
     ventesDuJour.value = (await window.api.vente.ventesDuJour(session.agenceId, dateFiltre.value, userIdFinDeCaisse.value)) as VenteDuJour[];
 }
 
 function onVendu(vente: VenteDuJour) {
+    sourceTickets.value = 'serveur';
+    actualiserJourDeCaisse();
     if (dateFiltre.value === aujourdhui()) {
         ventesDuJour.value.unshift(vente);
     }
 }
 
 watch(dateFiltre, chargerVentes);
+watch(sourceTickets, chargerVentes);
 
 onMounted(async () => {
     villes.value = await window.api.referentiel.villes();
@@ -102,6 +123,12 @@ const voyageFinDeCaisseLibelle = computed(() => {
 
 async function chargerRapportFinDeCaisse() {
     if (!session.agenceId) return;
+    if (sourceTickets.value === 'local' && recuperationLocaleDisponible.value) {
+        const local = await lireRecuperationLocale(voyageFinDeCaisseId.value || null);
+        rapportFinDeCaisse.value = local?.rapport as RapportFinDeCaisse;
+        if (rapportFinDeCaisse.value) animerTotal(rapportFinDeCaisse.value.montant_total);
+        return;
+    }
     rapportFinDeCaisse.value = (await window.api.vente.finDeCaisse(
         session.agenceId,
         dateFiltre.value,
@@ -119,7 +146,9 @@ async function ouvrirFinDeCaisse() {
     // Le dialog s'ouvre avant le chargement : l'animation du total ne se
     // voit que si elle tourne pendant que le dialog est déjà affiché.
     finDeCaisseOuvert.value = true;
-    voyagesFinDeCaisse.value = (await window.api.vente.voyagesFinDeCaisse(session.agenceId, dateFiltre.value)) as VoyageFinDeCaisse[];
+    voyagesFinDeCaisse.value = sourceTickets.value === 'local' && recuperationLocaleDisponible.value
+        ? ((await lireRecuperationLocale())?.voyages ?? []) as VoyageFinDeCaisse[]
+        : (await window.api.vente.voyagesFinDeCaisse(session.agenceId, dateFiltre.value)) as VoyageFinDeCaisse[];
     await chargerRapportFinDeCaisse();
 }
 
@@ -155,6 +184,7 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                      boutons passent à la ligne au lieu de déborder du cadre. -->
                 <div class="flex w-full flex-wrap items-center gap-2 lg:w-auto">
                     <Input v-model="dateFiltre" type="date" class="w-44" />
+                    <RecupererVentesButton section="ticket" :date="dateFiltre" @recupere="apresRecuperation" />
                     <Button variant="outline" @click="ouvrirFinDeCaisse">
                         <ClipboardList />
                         Fin de caisse
@@ -164,6 +194,17 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
                         Vendre un ticket
                     </Button>
                 </div>
+            </div>
+
+            <div v-if="recuperationLocaleDisponible" class="flex flex-wrap items-center gap-3">
+                <Select v-model="sourceTickets">
+                    <SelectTrigger class="w-full sm:w-72" aria-label="Ventes affichées"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="serveur">Ventes de la caisse serveur</SelectItem>
+                        <SelectItem value="local">Ventes récupérées sur ce poste</SelectItem>
+                    </SelectContent>
+                </Select>
+                <span v-if="sourceTickets === 'local'" class="text-sm text-amber-700 dark:text-amber-300">Copie locale : les ventes non encore sauvegardées dans admin peuvent manquer.</span>
             </div>
 
             <section class="grid grid-cols-1 gap-4 md:grid-cols-3">

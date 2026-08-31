@@ -1,4 +1,5 @@
 import { getDb } from '../database/connection';
+import { dateCaisseDuJour, formatDateHeure } from '../database/dates';
 import { ClientRepository } from '../repositories/ClientRepository';
 import {
     CourrierInternationalRepository,
@@ -25,7 +26,6 @@ export interface DemandeCourrierInternational {
     destinataire: { nom: string; prenoms?: string | null; telephone: string };
     colis: LigneColisInternational[];
     numeroCourrier?: string | null;
-    createdAt?: string | null;
 }
 
 export class CourrierInternationalService {
@@ -61,7 +61,7 @@ export class CourrierInternationalService {
         const valeurColis = demande.colis.reduce((total, ligne) => total + Number(ligne.quantite) * Number(ligne.prix), 0);
         const montantTotal = Number(demande.fraisExpedition);
 
-        return this.courriers.creer({
+        const courrier = this.courriers.creer({
             agenceDepartId: demande.agenceId,
             paysDestinationId: demande.paysDestinationId,
             villeDestinationId: demande.villeDestinationId,
@@ -82,8 +82,9 @@ export class CourrierInternationalService {
             observation: demande.observation ?? null,
             colis: demande.colis,
             numeroCourrier: demande.numeroCourrier,
-            createdAt: demande.createdAt,
         });
+
+        return { ...courrier, created_at: formatDateHeure(courrier.created_at) };
     }
 
     confirmerImpression(uuid: string): boolean {
@@ -104,7 +105,7 @@ export class CourrierInternationalService {
 
     rapportFinDeCaisse(agenceId: number, date?: string, userId?: number | null) {
         const rapport = this.courriers.rapportDuJour(agenceId, date, userId);
-        return { date: date ?? new Date().toISOString().slice(0, 10), ...rapport };
+        return { date: date ?? dateCaisseDuJour(), ...rapport };
     }
 
     private verifierDroitCourrierInternational(demande: DemandeCourrierInternational): void {

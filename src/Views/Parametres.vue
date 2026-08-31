@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { CalendarDays, LoaderCircle, Monitor, Power, Printer, RefreshCw, Server, SlidersHorizontal, Trash2, Wifi } from '@lucide/vue';
+import { CalendarDays, Globe, LoaderCircle, Monitor, Power, Printer, RefreshCw, Save, Server, SlidersHorizontal, TriangleAlert, Trash2, Wifi } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
@@ -54,6 +54,87 @@ const sauvegardeCalibration = ref(false);
 const nettoyageDonnees = ref(false);
 const resetEnCours = ref(false);
 const synchroEnCours = ref(false);
+const adminUrl = ref('');
+const adresseAdminEnregistree = ref('');
+const chargementAdresseAdmin = ref(true);
+const sauvegardeAdresseAdmin = ref(false);
+const erreurAdresseAdmin = ref('');
+const messageAdresseAdmin = ref('');
+
+async function chargerAdresseAdmin() {
+    try {
+        adminUrl.value = adresseAdminEnregistree.value = await window.api.config.adresseAdmin();
+    } catch (e) {
+        erreurAdresseAdmin.value = messageErreur(e, 'Impossible de lire l’adresse admin.');
+    } finally {
+        chargementAdresseAdmin.value = false;
+    }
+}
+
+async function enregistrerAdresseAdmin() {
+    if (!estSuperAdmin.value || sauvegardeAdresseAdmin.value || !adminUrl.value.trim()) return;
+    sauvegardeAdresseAdmin.value = true;
+    erreurAdresseAdmin.value = '';
+    messageAdresseAdmin.value = '';
+    try {
+        const url = await window.api.config.enregistrerAdresseAdmin(adminUrl.value);
+        adminUrl.value = adresseAdminEnregistree.value = url;
+        messageAdresseAdmin.value = 'Adresse admin enregistrée sur ce poste.';
+    } catch (e) {
+        erreurAdresseAdmin.value = messageErreur(e, 'Adresse non modifiée. Vérifiez le lien et Internet.');
+    } finally {
+        sauvegardeAdresseAdmin.value = false;
+    }
+}
+
+// --- Envois refusés par admin -------------------------------------------
+// Une opération que le serveur refuse pour de bon quitte la file de synchro :
+// le compteur « en attente » retombe à zéro alors que l'encaissement, lui, est
+// bien dans la caisse. Sans cette liste, l'écart ne se voit qu'au pointage.
+type EnvoiRefuse = {
+    id: number;
+    entite: string;
+    libelle: string;
+    numero: string | null;
+    montant: number | null;
+    enregistreLe: string;
+    tentatives: number;
+    message: string;
+};
+
+const envoisRefuses = ref<EnvoiRefuse[]>([]);
+const relanceEnCours = ref(false);
+const montantRefuse = computed(() => envoisRefuses.value.reduce((somme, envoi) => somme + (envoi.montant ?? 0), 0));
+const formatMontantRefuse = (montant: number) => new Intl.NumberFormat('fr-FR').format(Math.round(montant)) + ' FCFA';
+
+async function chargerEnvoisRefuses() {
+    try {
+        const resultat = await window.api.config.envoisRefuses();
+        envoisRefuses.value = resultat.operations;
+    } catch {
+        // Lecture locale : un échec ici ne doit pas casser l'écran Paramètres.
+        envoisRefuses.value = [];
+    }
+}
+
+async function relancerEnvois(id?: number) {
+    relanceEnCours.value = true;
+    erreur.value = '';
+    message.value = '';
+
+    try {
+        const resultat = await window.api.config.relancerEnvoisRefuses(id ?? null);
+        await chargerEnvoisRefuses();
+
+        message.value = resultat.restants > 0
+            ? `${resultat.restants} envoi(s) toujours refusé(s) par admin.`
+            : 'Tout est remonté à admin.';
+    } catch (e) {
+        erreur.value = messageErreur(e, 'Impossible de relancer les envois refusés.');
+    } finally {
+        relanceEnCours.value = false;
+    }
+}
 const message = ref('');
 const erreur = ref('');
 const messageImpression = ref('');
@@ -207,7 +288,7 @@ onMounted(() => {
 });
 
 async function initialiser() {
-    await Promise.all([chargerReseau(), chargerImprimantes(), chargerCalibrationImpression(), config.charger()]);
+    await Promise.all([chargerReseau(), chargerImprimantes(), chargerCalibrationImpression(), chargerEnvoisRefuses(), config.charger(), chargerAdresseAdmin()]);
 }
 
 async function chargerCalibrationImpression() {
@@ -496,6 +577,7 @@ async function synchroniserMaintenant() {
 
     try {
         const resultat = await window.api.config.synchroniserMaintenant();
+        await chargerEnvoisRefuses();
         if (resultat.enAttente === 0) {
             message.value = 'Synchronisation à jour : tout a été envoyé à admin.';
         } else if (resultat.erreur) {
@@ -553,6 +635,26 @@ async function resetComplet() {
 <template>
     <AppSidebarLayout titre="Paramètres">
         <div class="mx-auto max-w-5xl space-y-5">
+            <section class="border-b pb-5">
+                <div class="mb-4 flex items-center gap-3">
+                    <Globe class="size-5 shrink-0 text-sky-600" />
+                    <h2 class="text-base font-semibold">Connexion à admin</h2>
+                </div>
+                <form v-if="estSuperAdmin" class="flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="enregistrerAdresseAdmin">
+                    <div class="min-w-0 flex-1 space-y-1.5">
+                        <Label for="param_admin_url">Adresse admin</Label>
+                        <Input id="param_admin_url" v-model="adminUrl" type="url" required autocomplete="url" placeholder="https://admin.exemple.com" :disabled="chargementAdresseAdmin || sauvegardeAdresseAdmin" />
+                    </div>
+                    <Button type="submit" variant="outline" class="shrink-0" :disabled="chargementAdresseAdmin || sauvegardeAdresseAdmin || !adminUrl.trim() || adminUrl.trim() === adresseAdminEnregistree">
+                        <LoaderCircle v-if="sauvegardeAdresseAdmin" class="size-4 animate-spin" />
+                        <Save v-else class="size-4" />
+                        {{ sauvegardeAdresseAdmin ? 'Vérification...' : 'Enregistrer' }}
+                    </Button>
+                </form>
+                <p v-else class="break-all text-sm text-muted-foreground">{{ chargementAdresseAdmin ? 'Chargement...' : adresseAdminEnregistree }}</p>
+                <p v-if="erreurAdresseAdmin" role="alert" class="mt-3 text-sm text-destructive">{{ erreurAdresseAdmin }}</p>
+                <p v-if="messageAdresseAdmin" role="status" class="mt-3 text-sm text-emerald-700 dark:text-emerald-400">{{ messageAdresseAdmin }}</p>
+            </section>
             <section class="rounded-lg border bg-card p-5 shadow-sm">
                 <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
@@ -1010,6 +1112,69 @@ async function resetComplet() {
                         <RefreshCw :class="['size-4', synchroEnCours ? 'icone-tourne' : '']" />
                         {{ synchroEnCours ? 'Synchronisation...' : 'Synchroniser vers admin' }}
                     </Button>
+                </div>
+
+                <!-- Envois qu'admin a refusés pour de bon. Ils ont quitté la
+                     file de synchro : sans ce bloc, l'encaissement resterait en
+                     caisse sans jamais arriver en compta, et personne ne le
+                     saurait avant le pointage. -->
+                <div v-if="envoisRefuses.length" class="mt-4 border-t border-destructive/20 pt-4">
+                    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div class="flex min-w-0 items-start gap-3">
+                            <div class="rounded-md bg-destructive/10 p-2">
+                                <TriangleAlert class="size-5 text-destructive" />
+                            </div>
+                            <div class="min-w-0">
+                                <h2 class="text-base font-semibold text-destructive">
+                                    {{ envoisRefuses.length }} envoi(s) refusé(s) par admin
+                                </h2>
+                                <p class="mt-1 text-sm text-muted-foreground">
+                                    <template v-if="montantRefuse > 0">
+                                        {{ formatMontantRefuse(montantRefuse) }} encaissés au guichet qu'admin ne voit pas.
+                                    </template>
+                                    Corrigez la cause côté admin, puis relancez.
+                                </p>
+                            </div>
+                        </div>
+
+                        <Button type="button" variant="destructive" :disabled="relanceEnCours" @click="relancerEnvois()">
+                            <RefreshCw :class="['size-4', relanceEnCours ? 'icone-tourne' : '']" />
+                            {{ relanceEnCours ? 'Relance...' : 'Tout relancer' }}
+                        </Button>
+                    </div>
+
+                    <ul class="mt-3 space-y-2">
+                        <li
+                            v-for="envoi in envoisRefuses"
+                            :key="envoi.id"
+                            class="rounded-md border bg-muted/30 p-3"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold">
+                                        {{ envoi.libelle }}<span v-if="envoi.numero"> {{ envoi.numero }}</span>
+                                    </p>
+                                    <p class="text-xs text-muted-foreground">
+                                        {{ envoi.tentatives }} tentative(s)
+                                    </p>
+                                </div>
+                                <p v-if="envoi.montant !== null" class="shrink-0 text-sm font-semibold">
+                                    {{ formatMontantRefuse(envoi.montant) }}
+                                </p>
+                            </div>
+                            <p class="mt-1 text-xs text-destructive">{{ envoi.message }}</p>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                class="mt-2"
+                                :disabled="relanceEnCours"
+                                @click="relancerEnvois(envoi.id)"
+                            >
+                                Relancer
+                            </Button>
+                        </li>
+                    </ul>
                 </div>
 
                 <div class="mt-4 flex flex-col gap-4 border-t border-destructive/20 pt-4 md:flex-row md:items-center md:justify-between">

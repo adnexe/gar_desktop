@@ -5,6 +5,7 @@ import { queueManager } from '../sync/QueueManager';
 import { ConfigRepository } from './ConfigRepository';
 import type { ClientServeur } from './ClientRepository';
 import type { VoyageServeur } from './VoyageRepository';
+import { maintenantCaisseIso } from '../database/dates';
 
 export interface NouveauTicket {
     voyageId: number;
@@ -19,7 +20,6 @@ export interface NouveauTicket {
     commission: number;
     tarification: string;
     numeroTicket?: string | null;
-    createdAt?: string | null;
 }
 
 export interface TicketRow {
@@ -128,7 +128,7 @@ export class TicketRepository {
                 this.codeAgenceTicket(),
                 donnees.numeroTicket,
             );
-            const maintenant = donnees.createdAt || new Date().toISOString();
+            const maintenant = maintenantCaisseIso();
 
             const info = db
                 .prepare(
@@ -173,7 +173,7 @@ export class TicketRepository {
 
     confirmerImpression(uuid: string): boolean {
         const db = getDb();
-        const maintenant = new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
 
         return db.transaction(() => {
             const dejaValide = db
@@ -205,7 +205,7 @@ export class TicketRepository {
     }
 
     annulerImpression(uuid: string, motif: string): boolean {
-        const maintenant = new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
         const motifCourt = motif.trim().slice(0, 500) || 'Impression non confirmee';
 
         const info = getDb()

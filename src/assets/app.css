@@ -569,3 +569,186 @@
         margin: 0;
     }
 }
+
+/* Bordereaux administratifs A4. Cette zone n'est activée que par les boutons
+   dédiés ; elle reste indépendante des reçus thermiques et de leur calibration. */
+.zone-impression-a4 {
+    display: none;
+}
+
+@media print {
+    body.impression-a4-active * {
+        visibility: hidden !important;
+    }
+
+    body.impression-a4-active .zone-impression,
+    body.impression-a4-active .zone-impression * {
+        display: none !important;
+    }
+
+    body.impression-a4-active .zone-impression-a4,
+    body.impression-a4-active .zone-impression-a4 * {
+        visibility: visible !important;
+    }
+
+    body.impression-a4-active .zone-impression-a4 {
+        display: block !important;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        color: #111;
+        background: #fff;
+        font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .bordereau-a4 {
+        width: 100%;
+        font-size: 9.5pt;
+        line-height: 1.25;
+    }
+
+    .bordereau-entete {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12mm;
+        margin-bottom: 6mm;
+    }
+
+    .bordereau-entete h1 {
+        margin: 1mm 0;
+        font-size: 14pt;
+        font-weight: 700;
+    }
+
+    .bordereau-entete p {
+        margin: 0;
+    }
+
+    .bordereau-identite {
+        display: flex;
+        align-items: flex-start;
+        min-width: 0;
+        gap: 4mm;
+    }
+
+    .bordereau-logo {
+        width: 20mm;
+        height: 20mm;
+        flex: 0 0 20mm;
+        object-fit: contain;
+    }
+
+    .bordereau-compagnie {
+        font-size: 18pt;
+        font-weight: 800;
+        line-height: 1.1;
+        text-transform: uppercase;
+    }
+
+    .bordereau-reference {
+        min-width: 48mm;
+        border: 1px solid #222;
+        padding: 3mm 4mm;
+    }
+
+    .bordereau-reference span,
+    .bordereau-meta span {
+        display: block;
+        color: #555;
+        font-size: 8pt;
+        text-transform: uppercase;
+    }
+
+    .bordereau-reference strong {
+        display: block;
+        margin-top: 1mm;
+        font-size: 11pt;
+    }
+
+    .bordereau-meta {
+        display: grid;
+        grid-template-columns: 1fr 1.5fr 0.7fr;
+        gap: 4mm;
+        margin-bottom: 5mm;
+        padding: 3mm 0;
+        border-top: 1px solid #777;
+        border-bottom: 1px solid #777;
+    }
+
+    .bordereau-meta strong {
+        display: block;
+        margin-top: 1mm;
+    }
+
+    .bordereau-meta small {
+        display: block;
+        margin-top: 1mm;
+        color: #555;
+        font-size: 8.5pt;
+    }
+
+    .bordereau-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .bordereau-table thead {
+        display: table-header-group;
+    }
+
+    .bordereau-table th,
+    .bordereau-table td {
+        overflow-wrap: anywhere;
+        border: 1px solid #aaa;
+        padding: 2.2mm 2mm;
+        vertical-align: top;
+        text-align: left;
+    }
+
+    .bordereau-table th {
+        background: #ececec !important;
+        font-size: 8.5pt;
+        font-weight: 700;
+    }
+
+    .bordereau-table tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .bordereau-table .col-index {
+        width: 7mm;
+    }
+
+    .bordereau-table .col-reference {
+        width: 26mm;
+    }
+
+    .bordereau-table .col-montant {
+        width: 24mm;
+    }
+
+    .bordereau-table .reference-cell {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 8.5pt;
+    }
+
+    .bordereau-table .montant-cell {
+        white-space: nowrap;
+        text-align: right;
+        font-weight: 700;
+    }
+
+    .bordereau-pied {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12mm;
+        margin-top: 5mm;
+        padding-top: 3mm;
+        border-top: 1px solid #222;
+        font-size: 11pt;
+    }
+
+}

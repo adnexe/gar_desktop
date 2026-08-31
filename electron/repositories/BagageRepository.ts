@@ -3,6 +3,7 @@ import { nouvelUuid } from '../database/ids';
 import { genererNumeroBagage, prevoirNumeroBagage } from '../database/numero';
 import { queueManager } from '../sync/QueueManager';
 import { ConfigRepository } from './ConfigRepository';
+import { maintenantCaisseIso } from '../database/dates';
 
 export interface NouveauBagage {
     agenceId: number;
@@ -19,7 +20,6 @@ export interface NouveauBagage {
     valeur: number | null;
     montant: number;
     numeroBagage?: string | null;
-    createdAt?: string | null;
 }
 
 export interface BagageDuJour {
@@ -172,7 +172,7 @@ export class BagageRepository {
         return { ...ligne, destinations, agents };
     }
 
-    creer(donnees: NouveauBagage): { id: number; uuid: string; numero_bagage: string } {
+    creer(donnees: NouveauBagage): { id: number; uuid: string; numero_bagage: string; created_at: string } {
         const db = getDb();
         const uuid = nouvelUuid();
         const numeroBagage = genererNumeroBagage(
@@ -181,7 +181,7 @@ export class BagageRepository {
             this.codeAgenceTicket(donnees.agenceId),
             donnees.numeroBagage,
         );
-        const maintenant = donnees.createdAt || new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
 
         const info = db
             .prepare(
@@ -209,12 +209,12 @@ export class BagageRepository {
                 maintenant,
             );
 
-        return { id: Number(info.lastInsertRowid), uuid, numero_bagage: numeroBagage };
+        return { id: Number(info.lastInsertRowid), uuid, numero_bagage: numeroBagage, created_at: maintenant };
     }
 
     confirmerImpression(uuid: string): boolean {
         const db = getDb();
-        const maintenant = new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
 
         return db.transaction(() => {
             const dejaValide = db
@@ -245,7 +245,7 @@ export class BagageRepository {
     }
 
     annulerImpression(uuid: string, motif: string): boolean {
-        const maintenant = new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
         const motifCourt = motif.trim().slice(0, 500) || 'Impression non confirmee';
 
         const info = getDb()

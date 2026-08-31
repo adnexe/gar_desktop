@@ -54,6 +54,24 @@ type CibleAgent = {
 };
 
 export class UserRepository {
+    profil(userId: number) {
+        return (getDb().prepare(`SELECT u.uuid, u.name AS nom, u.email, u.number AS telephone,
+                u.role, ag.nom AS agent_nom, ag.type_agent, agence.nom AS agence_nom
+            FROM users u
+            LEFT JOIN agents ag ON ag.id = u.agent_id
+            LEFT JOIN agences agence ON agence.id = ag.agence_id
+            WHERE u.id = ?`).get(userId) as {
+                uuid: string; nom: string | null; email: string | null; telephone: string | null;
+                role: string; agent_nom: string | null; type_agent: string | null; agence_nom: string | null;
+            } | undefined) ?? null;
+    }
+
+    modifierMotDePasseConfirme(userId: number, uuid: string, hash: string, updatedAt: string): void {
+        const resultat = getDb().prepare('UPDATE users SET password = ?, updated_at = ? WHERE id = ? AND uuid = ?')
+            .run(hash, updatedAt, userId, uuid);
+        if (resultat.changes !== 1) throw new Error('COMPTE_LOCAL_MODIFIE');
+    }
+
     parIdentifiant(identifiant: string): UtilisateurLocal | null {
         const ligne = getDb()
             .prepare(

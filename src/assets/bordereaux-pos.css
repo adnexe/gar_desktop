@@ -1,0 +1,147 @@
+/* Styles isoles des recus de vente. Disponibles aussi pendant la mesure
+   hors ecran afin que la hauteur POS corresponde au document imprime. */
+.bordereau-a4.bordereau-pos {
+    box-sizing: border-box;
+    width: var(--bordereau-contenu, 76mm);
+    max-width: calc(100% - var(--bordereau-gauche, 2mm));
+    margin: 0 0 0 var(--bordereau-gauche, 2mm);
+    padding: 0;
+    color: #111;
+    background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9pt;
+    line-height: 1.35;
+    letter-spacing: 0;
+}
+
+.bordereau-pos *,
+.bordereau-pos *::before,
+.bordereau-pos *::after {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    letter-spacing: 0;
+}
+
+.bordereau-pos .bordereau-entete,
+.bordereau-pos .bordereau-identite {
+    display: block;
+    margin: 0;
+    text-align: center;
+}
+
+.bordereau-pos .bordereau-logo {
+    display: block;
+    width: 16mm;
+    height: 16mm;
+    margin: 0 auto 2mm;
+    object-fit: contain;
+}
+
+.bordereau-pos .bordereau-compagnie {
+    margin: 0 0 1mm;
+    font-size: 12pt;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.bordereau-pos .bordereau-entete h1 {
+    margin: 1mm 0;
+    font-size: 11pt;
+    line-height: 1.25;
+    font-weight: 700;
+}
+
+.bordereau-pos .bordereau-entete p {
+    margin: 0;
+}
+
+.bordereau-pos .bordereau-reference {
+    min-width: 0;
+    margin: 3mm 0;
+    padding: 2mm;
+    border: 1px solid #333;
+}
+
+.bordereau-pos .bordereau-reference span,
+.bordereau-pos .bordereau-reference strong,
+.bordereau-pos .bordereau-reference small {
+    display: block;
+    margin: 0;
+    color: #111;
+    font-size: 9pt;
+}
+
+.bordereau-pos .bordereau-reference strong {
+    font-size: 10pt;
+}
+
+.bordereau-pos .bordereau-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5mm;
+    margin: 0 0 2mm;
+    padding: 0 0 2mm;
+    border: 0;
+    border-bottom: 1px solid #333;
+}
+
+.bordereau-pos .bordereau-meta span,
+.bordereau-pos .bordereau-meta strong,
+.bordereau-pos .bordereau-meta small {
+    display: block;
+    margin: 0;
+    color: #111;
+    font-size: 9pt;
+    text-transform: none;
+}
+
+.bordereau-pos-element {
+    margin: 0 0 2mm;
+    padding: 1mm 0 2mm;
+    border-bottom: 1px dashed #777;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+}
+
+.bordereau-pos-element h2,
+.bordereau-pos-reference {
+    margin: 0 0 1.5mm;
+    font-size: 10pt;
+    font-weight: 700;
+}
+
+.bordereau-pos-element dl {
+    margin: 0;
+}
+
+.bordereau-pos-element dl > div {
+    display: grid;
+    grid-template-columns: minmax(0, 0.4fr) minmax(0, 0.6fr);
+    gap: 2mm;
+    margin: 0 0 1mm;
+    break-inside: avoid-page;
+}
+
+.bordereau-pos-element dt,
+.bordereau-pos-element dd {
+    margin: 0;
+}
+
+.bordereau-pos-element dd span {
+    display: block;
+}
+
+.bordereau-pos .bordereau-pied {
+    display: flex;
+    flex-direction: column;
+    gap: 1mm;
+    margin: 2mm 0 0;
+    padding: 2mm 0 0;
+    border-top: 1px solid #333;
+    font-size: 10pt;
+    break-inside: avoid-page;
+}

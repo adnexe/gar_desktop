@@ -3,6 +3,7 @@ import { nouvelUuid } from '../database/ids';
 import { genererNumeroCourrier, prevoirNumeroCourrier } from '../database/numero';
 import { queueManager } from '../sync/QueueManager';
 import { ConfigRepository } from './ConfigRepository';
+import { maintenantCaisseIso } from '../database/dates';
 
 export interface LigneColis {
     nom: string;
@@ -24,7 +25,6 @@ export interface NouveauCourrier {
     prixExpedition: number;
     colis: LigneColis[];
     numeroCourrier?: string | null;
-    createdAt?: string | null;
 }
 
 export interface CourrierDuJour {
@@ -194,7 +194,7 @@ export class CourrierRepository {
         return { ...reste, colis } as never;
     }
 
-    creer(donnees: NouveauCourrier): { id: number; uuid: string; numeroCourrier: string; montantColis: number; montantTotal: number } {
+    creer(donnees: NouveauCourrier): { id: number; uuid: string; numeroCourrier: string; montantColis: number; montantTotal: number; created_at: string } {
         const db = getDb();
         const uuid = nouvelUuid();
         const numeroCourrier = genererNumeroCourrier(
@@ -203,7 +203,7 @@ export class CourrierRepository {
             this.codeAgenceTicket(donnees.agenceDepartId),
             donnees.numeroCourrier,
         );
-        const maintenant = donnees.createdAt || new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
 
         const montantColis = donnees.colis.reduce((total, ligne) => total + ligne.quantite * ligne.prix, 0);
         // Le client ne paie QUE les frais d'expédition. La valeur des colis
@@ -256,13 +256,13 @@ export class CourrierRepository {
                 );
             }
 
-            return { id: courrierId, uuid, numeroCourrier, montantColis, montantTotal };
+            return { id: courrierId, uuid, numeroCourrier, montantColis, montantTotal, created_at: maintenant };
         })();
     }
 
     confirmerImpression(uuid: string): boolean {
         const db = getDb();
-        const maintenant = new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
 
         return db.transaction(() => {
             const dejaValide = db
@@ -293,7 +293,7 @@ export class CourrierRepository {
     }
 
     annulerImpression(uuid: string, motif: string): boolean {
-        const maintenant = new Date().toISOString();
+        const maintenant = maintenantCaisseIso();
         const motifCourt = motif.trim().slice(0, 500) || 'Impression non confirmee';
 
         const info = getDb()

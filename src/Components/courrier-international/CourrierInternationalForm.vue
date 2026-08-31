@@ -181,16 +181,6 @@ function montantFraisLigne(ligne: LigneColis) {
     return Math.round(ligne.quantite * ligne.prix * (pourcentageFrais.value || 0) / 100);
 }
 
-function dateHeureRecu() {
-    return new Date().toLocaleString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
-
 function nomComplet(personne: { nom: string; prenoms: string }) {
     return [personne.prenoms, personne.nom].filter(Boolean).join(' ').trim();
 }
@@ -304,7 +294,7 @@ async function envoyer() {
             })),
         })) as {
             ok: boolean;
-            courrier?: { uuid: string; numeroCourrier: string; valeurColis: number; montantTotal: number };
+            courrier?: { uuid: string; numeroCourrier: string; valeurColis: number; montantTotal: number; created_at: string };
             erreur?: string;
         };
 
@@ -339,7 +329,7 @@ async function envoyer() {
             agence_depart: agenceActuelle.nom,
             agence_depart_telephone: agenceActuelle.telephone,
             agent: session.nom || null,
-            created_at: dateHeureRecu(),
+            created_at: reponse.courrier.created_at,
             compagnie: config.compagnie,
         };
         recu.value = dernierRecu;
@@ -382,7 +372,7 @@ async function envoyer() {
         emit('enregistre', {
             uuid: reponse.courrier.uuid,
             numero_courrier: reponse.courrier.numeroCourrier,
-            heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            heure: reponse.courrier.created_at.split(' ')[1],
             destination: dernierRecu.destination,
             pays_destination: paysActuel.nom,
             ville_destination: villeNomActuelle,

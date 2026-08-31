@@ -1,11 +1,14 @@
-import { app, BrowserWindow, Menu } from 'electron';
+import { app, BrowserWindow, Menu, powerMonitor } from 'electron';
 import { copyFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { getDb } from './database/connection';
+import { migrer } from './database/migrate';
 import { enregistrerIpc } from './ipc';
 import { logger } from './logger';
 import { localNetworkService } from './services/LocalNetworkService';
 import { updateService } from './services/UpdateService';
 import { syncEngine } from './sync/SyncEngine';
+import { posteSuiviService } from './services/PosteSuiviService';
 
 const estDev = !app.isPackaged;
 let fermetureEnCours = false;
@@ -57,11 +60,16 @@ function creerFenetre(): void {
             // exige de désactiver le sandbox pour charger un preload ESM.
             // contextIsolation reste actif, donc l'isolation renderer/main l'est aussi.
             sandbox: false,
+            backgroundThrottling: false,
         },
     });
 
     fenetre.once('ready-to-show', () => {
         fenetre.show();
+    });
+    fenetre.webContents.on('render-process-gone', () => posteSuiviService.deconnecter());
+    fenetre.webContents.on('did-start-navigation', (details) => {
+        if (details.isMainFrame && !details.isSameDocument) posteSuiviService.deconnecter();
     });
 
     // Les erreurs JS du renderer (Vue, réseau...) sont invisibles dans le
@@ -85,6 +93,9 @@ app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
 
     migrerDonneesAncienNom();
+    // Une mise à jour peut ajouter des tables utilisées dès le premier écran.
+    // Le schéma doit donc être prêt avant les IPC, le réseau et la synchro.
+    migrer(getDb());
 
     // En dev sur macOS, le Dock affiche l'icône Electron par défaut ;
     // packagée, l'app utilise build/icon.icns.
@@ -93,6 +104,9 @@ app.whenReady().then(() => {
     }
 
     enregistrerIpc();
+    posteSuiviService.demarrer();
+    powerMonitor.on('suspend', () => posteSuiviService.suspendre());
+    powerMonitor.on('resume', () => posteSuiviService.reprendre());
     void localNetworkService.demarrerDepuisConfig().catch((erreur) => {
         logger.warn('Serveur local non démarré.', erreur);
     });
@@ -133,6 +147,7 @@ process.on('uncaughtException', (erreur) => {
 
 async function nettoyerAvantFermeture(): Promise<void> {
     syncEngine.arreter();
+    await posteSuiviService.arreter();
 
     try {
         await localNetworkService.arreter();

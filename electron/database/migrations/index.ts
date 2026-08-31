@@ -475,4 +475,158 @@ export const migrations: { nom: string; sql: string }[] = [
             );
         `,
     },
+    {
+        nom: '0018_lots_bordereaux_locaux',
+        sql: `
+            CREATE TABLE IF NOT EXISTS lots_bordereaux (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                type TEXT NOT NULL CHECK(type IN ('courrier', 'bagage')),
+                agence_id INTEGER NOT NULL REFERENCES agences(id),
+                numero_lot INTEGER NOT NULL,
+                reference TEXT NOT NULL UNIQUE,
+                date_operation TEXT NOT NULL,
+                ville_destination_id INTEGER REFERENCES villes(id),
+                destination TEXT NOT NULL,
+                voyage_id INTEGER REFERENCES voyages(id),
+                voyage_uuid TEXT,
+                voyage_libelle TEXT,
+                statut TEXT NOT NULL DEFAULT 'en_preparation'
+                    CHECK(statut IN ('en_preparation', 'expedie', 'arrive', 'livre')),
+                cree_par_user_id INTEGER NOT NULL REFERENCES users(id),
+                expedie_at TEXT,
+                arrive_at TEXT,
+                livre_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(agence_id, type, numero_lot)
+            );
+            CREATE INDEX IF NOT EXISTS idx_lots_bordereaux_agence_type_date
+                ON lots_bordereaux(agence_id, type, date_operation);
+
+            CREATE TABLE IF NOT EXISTS lot_courriers (
+                lot_id INTEGER NOT NULL REFERENCES lots_bordereaux(id) ON DELETE CASCADE,
+                courrier_id INTEGER NOT NULL UNIQUE REFERENCES courriers(id),
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(lot_id, courrier_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS lot_bagages (
+                lot_id INTEGER NOT NULL REFERENCES lots_bordereaux(id) ON DELETE CASCADE,
+                bagage_id INTEGER NOT NULL UNIQUE REFERENCES bagages(id),
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(lot_id, bagage_id)
+            );
+        `,
+    },
+    {
+        nom: '0019_lots_courriers_internationaux',
+        sql: `
+            ALTER TABLE lot_courriers RENAME TO lot_courriers_0018;
+            ALTER TABLE lot_bagages RENAME TO lot_bagages_0018;
+            ALTER TABLE lots_bordereaux RENAME TO lots_bordereaux_0018;
+
+            CREATE TABLE lots_bordereaux (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                type TEXT NOT NULL CHECK(type IN ('courrier', 'bagage', 'courrier_international')),
+                agence_id INTEGER NOT NULL REFERENCES agences(id),
+                numero_lot INTEGER NOT NULL,
+                reference TEXT NOT NULL UNIQUE,
+                date_operation TEXT NOT NULL,
+                ville_destination_id INTEGER REFERENCES villes(id),
+                destination TEXT NOT NULL,
+                voyage_id INTEGER REFERENCES voyages(id),
+                voyage_uuid TEXT,
+                voyage_libelle TEXT,
+                statut TEXT NOT NULL DEFAULT 'en_preparation'
+                    CHECK(statut IN ('en_preparation', 'expedie', 'arrive', 'livre')),
+                cree_par_user_id INTEGER NOT NULL REFERENCES users(id),
+                expedie_at TEXT,
+                arrive_at TEXT,
+                livre_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(agence_id, type, numero_lot)
+            );
+
+            INSERT INTO lots_bordereaux
+                (id, uuid, type, agence_id, numero_lot, reference, date_operation,
+                 ville_destination_id, destination, voyage_id, voyage_uuid, voyage_libelle,
+                 statut, cree_par_user_id, expedie_at, arrive_at, livre_at, created_at, updated_at)
+            SELECT id, uuid, type, agence_id, numero_lot, reference, date_operation,
+                   ville_destination_id, destination, voyage_id, voyage_uuid, voyage_libelle,
+                   statut, cree_par_user_id, expedie_at, arrive_at, livre_at, created_at, updated_at
+            FROM lots_bordereaux_0018;
+
+            CREATE TABLE lot_courriers (
+                lot_id INTEGER NOT NULL REFERENCES lots_bordereaux(id) ON DELETE CASCADE,
+                courrier_id INTEGER NOT NULL UNIQUE REFERENCES courriers(id),
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(lot_id, courrier_id)
+            );
+            INSERT INTO lot_courriers (lot_id, courrier_id, created_at)
+            SELECT lot_id, courrier_id, created_at FROM lot_courriers_0018;
+
+            CREATE TABLE lot_bagages (
+                lot_id INTEGER NOT NULL REFERENCES lots_bordereaux(id) ON DELETE CASCADE,
+                bagage_id INTEGER NOT NULL UNIQUE REFERENCES bagages(id),
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(lot_id, bagage_id)
+            );
+            INSERT INTO lot_bagages (lot_id, bagage_id, created_at)
+            SELECT lot_id, bagage_id, created_at FROM lot_bagages_0018;
+
+            CREATE TABLE lot_courriers_internationaux (
+                lot_id INTEGER NOT NULL REFERENCES lots_bordereaux(id) ON DELETE CASCADE,
+                courrier_international_id INTEGER NOT NULL UNIQUE REFERENCES courriers_internationaux(id),
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(lot_id, courrier_international_id)
+            );
+
+            DROP TABLE lot_courriers_0018;
+            DROP TABLE lot_bagages_0018;
+            DROP TABLE lots_bordereaux_0018;
+
+            CREATE INDEX idx_lots_bordereaux_agence_type_date
+                ON lots_bordereaux(agence_id, type, date_operation);
+        `,
+    },
+    {
+        nom: '0020_synchroniser_lots_bordereaux',
+        sql: `
+            INSERT INTO sync_queue (entite, entite_uuid, operation, payload)
+            SELECT 'lots_bordereaux', l.uuid, 'create', '{}'
+            FROM lots_bordereaux l
+            WHERE NOT EXISTS (
+                SELECT 1 FROM sync_queue q
+                WHERE q.entite = 'lots_bordereaux' AND q.entite_uuid = l.uuid
+            );
+        `,
+    },
+    {
+        nom: '0021_suivi_postes',
+        sql: `
+            CREATE TABLE suivi_poste_periodes (
+                uuid TEXT PRIMARY KEY,
+                installation_uuid TEXT NOT NULL,
+                agence_id INTEGER NOT NULL,
+                payload TEXT NOT NULL,
+                revision INTEGER NOT NULL,
+                revision_synchro INTEGER NOT NULL DEFAULT 0,
+                fermee INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX idx_suivi_poste_envoi ON suivi_poste_periodes(installation_uuid, agence_id, revision_synchro);
+        `,
+    },
+    {
+        nom: '0022_trace_recuperation_admin',
+        sql: `
+            ALTER TABLE tickets ADD COLUMN recupere_admin_at TEXT;
+            ALTER TABLE bagages ADD COLUMN recupere_admin_at TEXT;
+            ALTER TABLE courriers ADD COLUMN recupere_admin_at TEXT;
+            ALTER TABLE courriers_internationaux ADD COLUMN recupere_admin_at TEXT;
+            ALTER TABLE lots_bordereaux ADD COLUMN recupere_admin_at TEXT;
+        `,
+    },
 ];

@@ -4,7 +4,7 @@ import { TarifRepository } from '../repositories/TarifRepository';
 import { TicketRepository } from '../repositories/TicketRepository';
 import { TrajetRepository } from '../repositories/TrajetRepository';
 import { VoyageRepository } from '../repositories/VoyageRepository';
-import { formatDate, formatDateHeure } from '../database/dates';
+import { dateCaisseDuJour, formatDate, formatDateHeure } from '../database/dates';
 import { getDb } from '../database/connection';
 
 export interface RechercheVoyages {
@@ -26,7 +26,6 @@ export interface DemandeVente {
     commission: number;
     client: InfosClient;
     numeroTicket?: string | null;
-    createdAt?: string | null;
 }
 
 export class VenteService {
@@ -114,7 +113,6 @@ export class VenteService {
             commission: demande.commission,
             tarification: demande.tarification,
             numeroTicket: demande.numeroTicket,
-            createdAt: demande.createdAt,
         });
 
         const d = this.tickets.avecDetails(ticket.id) as {
@@ -235,7 +233,7 @@ export class VenteService {
         const lignes = this.tickets.rapportParVoyage(agenceId, date, userId, voyageId);
 
         return {
-            date: date ?? new Date().toISOString().slice(0, 10),
+            date: date ?? dateCaisseDuJour(),
             voyages: lignes,
             nombre_tickets_total: lignes.reduce((s, l) => s + l.nombre_tickets, 0),
             montant_total: lignes.reduce((s, l) => s + l.montant_total, 0),

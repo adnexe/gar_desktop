@@ -2,6 +2,7 @@ import { BagageRepository } from '../repositories/BagageRepository';
 import { ClientRepository } from '../repositories/ClientRepository';
 import { TicketRepository } from '../repositories/TicketRepository';
 import { getDb } from '../database/connection';
+import { dateCaisseDuJour, formatDateHeure } from '../database/dates';
 
 export interface DemandeBagage {
     agenceId: number;
@@ -18,7 +19,6 @@ export interface DemandeBagage {
     valeur: number | null;
     montant: number;
     numeroBagage?: string | null;
-    createdAt?: string | null;
 }
 
 export class BagageService {
@@ -94,10 +94,9 @@ export class BagageService {
             valeur: demande.valeur,
             montant: demande.montant,
             numeroBagage: demande.numeroBagage,
-            createdAt: demande.createdAt,
         });
 
-        return bagage;
+        return { ...bagage, created_at: formatDateHeure(bagage.created_at) };
     }
 
     private verifierDroitBagage(demande: DemandeBagage): void {
@@ -196,6 +195,6 @@ export class BagageService {
 
     rapportFinDeCaisse(agenceId: number, date?: string, voyageId?: number | null, userId?: number | null) {
         const rapport = this.bagages.rapportDuJour(agenceId, date, voyageId, userId);
-        return { date: date ?? new Date().toISOString().slice(0, 10), ...rapport };
+        return { date: date ?? dateCaisseDuJour(), ...rapport };
     }
 }

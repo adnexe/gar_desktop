@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { BriefcaseBusiness, ClipboardList, Globe2, Package, Plus, Printer, Send } from '@lucide/vue';
+import { Boxes, BriefcaseBusiness, ClipboardList, Globe2, Package, Plus, Printer, Send } from '@lucide/vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import CourrierInternationalForm from '@/Components/courrier-international/CourrierInternationalForm.vue';
 import CourrierRecu from '@/Components/courrier/CourrierRecu.vue';
 import FinDeCaisseSimpleRecu from '@/Components/FinDeCaisseSimpleRecu.vue';
+import GestionLotsDialog from '@/Components/lots/GestionLotsDialog.vue';
+import RecupererVentesButton from '@/Components/RecupererVentesButton.vue';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Spinner } from '@/Components/ui/spinner';
@@ -17,6 +19,7 @@ import {
 } from '@/Components/ui/dialog';
 import { choisirSalutation } from '@/composables/useSalutation';
 import { useCompteurAnime } from '@/composables/useCompteurAnime';
+import { useDateCaisseFiltre } from '@/composables/useDateCaisseFiltre';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
@@ -57,11 +60,11 @@ const config = useConfigStore();
 const session = useSessionStore();
 const userIdFiltre = computed(() => ['super_admin', 'admin', 'chef_gare'].includes(session.role) ? null : session.userId);
 
-const aujourdhui = () => new Date().toISOString().slice(0, 10);
-const dateFiltre = ref(aujourdhui());
+const { dateFiltre, aujourdhui, actualiserJourDeCaisse } = useDateCaisseFiltre();
 const courriers = ref<CourrierInternationalDuJour[]>([]);
 const recherche = ref('');
 const dialogOuvert = ref(false);
+const lotsOuvert = ref(false);
 const form = ref<InstanceType<typeof CourrierInternationalForm> | null>(null);
 
 const courriersAffiches = computed(() => {
@@ -93,6 +96,7 @@ function ouvrir() {
 }
 
 function onEnregistre(courrier: CourrierInternationalDuJour) {
+    actualiserJourDeCaisse();
     if (dateFiltre.value === aujourdhui()) {
         courriers.value.unshift(courrier);
     }
@@ -229,6 +233,11 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <Input v-model="dateFiltre" type="date" class="h-10 w-44" />
+                    <RecupererVentesButton section="courrier_international" :date="dateFiltre" @recupere="charger" />
+                    <Button variant="outline" @click="lotsOuvert = true">
+                        <Boxes />
+                        Bordereaux
+                    </Button>
                     <Button variant="outline" @click="ouvrirFinDeCaisse">
                         <ClipboardList />
                         Fin de caisse
@@ -320,6 +329,14 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 <CourrierInternationalForm ref="form" @enregistre="onEnregistre" @fermer="dialogOuvert = false" />
             </DialogContent>
         </Dialog>
+
+        <GestionLotsDialog
+            v-model:open="lotsOuvert"
+            type="courrier_international"
+            :date="dateFiltre"
+            :agence-id="session.agenceId"
+            :user-id="session.userId"
+        />
 
         <Dialog v-model:open="finDeCaisseOuvert">
             <DialogContent class="max-w-3xl">

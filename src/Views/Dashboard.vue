@@ -17,6 +17,7 @@ const config = useConfigStore();
 const resume = ref({ tickets: 0, totalTickets: 0, bagages: 0, totalBagages: 0, courriers: 0, totalCourriers: 0, courriersInternationaux: 0, totalCourriersInternationaux: 0 });
 
 const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + ' FCFA';
+
 const totalOperations = computed(() => resume.value.tickets + resume.value.bagages + resume.value.courriers + resume.value.courriersInternationaux);
 const totalEncaisse = computed(() => resume.value.totalTickets + resume.value.totalBagages + resume.value.totalCourriers + resume.value.totalCourriersInternationaux);
 const roles: Record<string, string> = {
