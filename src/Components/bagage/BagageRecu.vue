@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BarcodeCode128 from '@/Components/BarcodeCode128.vue';
+import QrCodeSuivi from '@/Components/QrCodeSuivi.vue';
 
 type CompagnieRecu = {
     nom: string | null;
@@ -13,6 +14,7 @@ type CompagnieRecu = {
 };
 
 type RecuBagage = {
+    uuid: string;
     numero_bagage: string;
     numero_ticket: string | null;
     numero_place: number | null;
@@ -28,6 +30,7 @@ type RecuBagage = {
     agence_telephone?: string | null;
     agent: string | null;
     created_at: string;
+    suivi_url?: string | null;
     compagnie?: CompagnieRecu | null;
 };
 
@@ -101,6 +104,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             <p class="description-bagage">{{ recu.description || 'Bagage' }}</p>
         </div>
 
+        <QrCodeSuivi :valeur="recu.suivi_url" />
+
         <hr v-if="recu.compagnie?.pied_ticket" />
         <p v-if="recu.compagnie?.pied_ticket" class="pied">{{ recu.compagnie.pied_ticket }}</p>
     </div>
@@ -117,6 +122,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         </div>
 
         <BarcodeCode128 :valeur="recu.numero_bagage" libelle="Code-barres bagage" />
+        <QrCodeSuivi :valeur="recu.suivi_url" compact />
 
         <div class="bloc">
             <div class="ligne importante">

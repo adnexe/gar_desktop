@@ -16,6 +16,7 @@ import {
 import CourrierRecu from '@/Components/courrier/CourrierRecu.vue';
 import { useConfigStore, type CompagnieLocale } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
+import { construireLienSuiviPublic } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierDuJour } from '@/types/courrier';
 
@@ -70,6 +71,7 @@ const expeditionManuelle = ref(false);
 const enregistrement = ref(false);
 const erreur = ref('');
 const recu = ref<{
+    uuid: string;
     numero_courrier: string;
     destination: string;
     agence_arrivee: string | null;
@@ -89,6 +91,7 @@ const recu = ref<{
     agence_depart_telephone: string | null;
     agent: string | null;
     created_at: string;
+    suivi_url: string | null;
     compagnie: CompagnieLocale | null;
 } | null>(null);
 let intervalleVoyages: ReturnType<typeof setInterval> | null = null;
@@ -356,6 +359,7 @@ async function envoyer() {
         const voyageLabel = voyageSelectionne.value ? libelleVoyage(voyageSelectionne.value) : null;
 
         const dernierRecu = {
+            uuid: reponse.courrier.uuid,
             numero_courrier: reponse.courrier.numeroCourrier,
             destination,
             agence_arrivee: agenceDestination?.nom ?? null,
@@ -380,6 +384,7 @@ async function envoyer() {
             agence_depart_telephone: agenceActuelle.telephone,
             agent: session.nom || null,
             created_at: reponse.courrier.created_at,
+            suivi_url: construireLienSuiviPublic(config.adminUrl, 'courrier', reponse.courrier.numeroCourrier, reponse.courrier.uuid),
             compagnie: config.compagnie,
         };
         recu.value = dernierRecu;

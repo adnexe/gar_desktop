@@ -39,15 +39,38 @@ export async function imprimerBordereau(format: FormatBordereau = 'a4'): Promise
     try {
         document.head.appendChild(reglesPage);
         const pos = dimensionsBordereauPos();
-        if (format === 'pos') {
-            reglesPage.textContent = `.zone-impression-a4 { --bordereau-papier: ${pos.papier}mm; --bordereau-contenu: ${pos.contenu}mm; --bordereau-gauche: ${pos.gauche}mm; }`;
-        }
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         const hauteur = format === 'pos' ? mesurerHauteurPos(zone, pos.papier) : 297;
-        reglesPage.textContent += format === 'a4'
-            ? '@page { size: A4 portrait; margin: 10mm; }'
-            : `@page { size: ${pos.papier}mm ${hauteur}mm; margin: 2mm 0; }
-                @media print { body.impression-a4-active .zone-impression-a4 { width: ${pos.papier}mm; max-width: 100%; } }`;
+        reglesPage.textContent = format === 'a4'
+            ? `@page { size: 210mm 297mm; margin: 10mm; }
+                @media print {
+                    body.impression-a4-active .zone-impression-a4 {
+                        inset: 0 auto auto 0;
+                        width: 190mm !important;
+                        min-width: 190mm !important;
+                        max-width: 190mm !important;
+                        margin: 0 !important;
+                    }
+                    body.impression-a4-active .bordereau-a4:not(.bordereau-pos) {
+                        width: 190mm !important;
+                        min-width: 190mm !important;
+                        max-width: 190mm !important;
+                    }
+                }`
+            : `.zone-impression-a4 {
+                    --bordereau-papier: ${pos.papier}mm;
+                    --bordereau-contenu: ${pos.contenu}mm;
+                    --bordereau-gauche: ${pos.gauche}mm;
+                }
+                @page { size: ${pos.papier}mm ${hauteur}mm; margin: 2mm 0; }
+                @media print {
+                    body.impression-a4-active .zone-impression-a4 {
+                        inset: 0 auto auto 0;
+                        width: ${pos.papier}mm !important;
+                        min-width: ${pos.papier}mm !important;
+                        max-width: ${pos.papier}mm !important;
+                    }
+                }`;
         document.body.classList.add('impression-a4-active');
         // Les deux formats gardent le dialogue classique, jamais le service
         // silencieux des ventes ni SumatraPDF.

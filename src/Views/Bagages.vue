@@ -29,6 +29,7 @@ import { choisirSalutation } from '@/composables/useSalutation';
 import { useDateCaisseFiltre } from '@/composables/useDateCaisseFiltre';
 import { useConfigStore } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
+import { construireLienSuiviPublic } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { BagageDuJour } from '@/types/bagage';
 import { creerProtectionChargement, insererEnTeteSansDoublon } from '@/lib/listeTransactions';
@@ -207,6 +208,7 @@ const recuReimpression = computed(() => {
     const b = bagageDetails.value;
     if (!b) return null;
     return {
+        uuid: b.uuid,
         numero_bagage: b.numero_bagage,
         numero_ticket: b.numero_ticket,
         numero_place: b.numero_place,
@@ -222,6 +224,7 @@ const recuReimpression = computed(() => {
         agence_telephone: b.agence_telephone,
         agent: b.agent,
         created_at: formatDateHeure(b.created_at),
+        suivi_url: construireLienSuiviPublic(config.adminUrl, 'bagage', b.numero_bagage, b.uuid),
         compagnie: config.compagnie,
     };
 });

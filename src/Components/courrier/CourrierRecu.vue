@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BarcodeCode128 from '@/Components/BarcodeCode128.vue';
+import QrCodeSuivi from '@/Components/QrCodeSuivi.vue';
 
 type CompagnieRecu = {
     nom: string | null;
@@ -33,6 +34,8 @@ defineProps<{
         agence_depart_telephone: string | null;
         agent: string | null;
         created_at: string;
+        uuid: string;
+        suivi_url?: string | null;
         compagnie?: CompagnieRecu | null;
     };
     // Impression en deux passages séparés (reçu puis étiquette) : l'imprimante
@@ -115,6 +118,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             <p v-for="(c, i) in recu.colis" :key="i">{{ c.quantite }} × {{ c.nom }} ({{ c.type }}) — {{ formatMontant(c.montant) }}</p>
         </div>
 
+        <QrCodeSuivi :valeur="recu.suivi_url" />
+
         <p class="note">Les colis et objets doivent être déclarés avant l'envoi. Passé ce délai, les frais d'expédition sont imputables.</p>
         <hr v-if="recu.compagnie?.pied_ticket" />
         <p v-if="recu.compagnie?.pied_ticket" class="pied">{{ recu.compagnie.pied_ticket }}</p>
@@ -131,6 +136,7 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         </div>
 
         <BarcodeCode128 :valeur="recu.numero_courrier" libelle="Code-barres courrier" />
+        <QrCodeSuivi :valeur="recu.suivi_url" compact />
 
         <div class="destination-etiquette">
             {{ recu.destination }}

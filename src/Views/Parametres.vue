@@ -79,6 +79,7 @@ async function enregistrerAdresseAdmin() {
     try {
         const url = await window.api.config.enregistrerAdresseAdmin(adminUrl.value);
         adminUrl.value = adresseAdminEnregistree.value = url;
+        config.definirAdminUrl(url);
         messageAdresseAdmin.value = 'Adresse admin enregistrée sur ce poste.';
     } catch (e) {
         erreurAdresseAdmin.value = messageErreur(e, 'Adresse non modifiée. Vérifiez le lien et Internet.');

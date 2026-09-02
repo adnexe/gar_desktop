@@ -21,6 +21,7 @@ import { choisirSalutation } from '@/composables/useSalutation';
 import { useCompteurAnime } from '@/composables/useCompteurAnime';
 import { useDateCaisseFiltre } from '@/composables/useDateCaisseFiltre';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
+import { construireLienSuiviPublic } from '@/lib/suiviPublic';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierInternationalDuJour } from '@/types/courrier-international';
@@ -182,6 +183,7 @@ const recuReimpression = computed(() => {
     const c = courrierDetails.value;
     if (!c) return null;
     return {
+        uuid: c.uuid,
         numero_courrier: c.numero_courrier,
         destination: c.destination,
         agence_arrivee: c.agence_arrivee,
@@ -201,6 +203,7 @@ const recuReimpression = computed(() => {
         agence_depart_telephone: c.agence_depart_telephone,
         agent: c.agent,
         created_at: formatDateHeure(c.created_at),
+        suivi_url: construireLienSuiviPublic(config.adminUrl, 'courrier-international', c.numero_courrier, c.uuid),
         compagnie: config.compagnie,
     };
 });

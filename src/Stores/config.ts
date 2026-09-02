@@ -50,6 +50,7 @@ export const useConfigStore = defineStore('config', () => {
     const agence = ref<AgenceLocale | null>(null);
     const compagnie = ref<CompagnieLocale | null>(null);
     const licence = ref<LicenceLocale | null>(null);
+    const adminUrl = ref('');
 
     // Réglage de l'entreprise (pas de l'agent) : masque/bloque les écrans
     // liés à un module que l'entreprise n'utilise pas du tout. Tant que rien
@@ -64,6 +65,7 @@ export const useConfigStore = defineStore('config', () => {
     });
 
     async function charger() {
+        adminUrl.value = await window.api.config.adresseAdmin();
         configuree.value = await window.api.config.estConfiguree();
         licence.value = await window.api.config.licenceActuelle();
         if (configuree.value) {
@@ -101,6 +103,7 @@ export const useConfigStore = defineStore('config', () => {
     }
 
     async function configurer(reference: string, appareil: string, codePoste?: string | null) {
+        adminUrl.value = await window.api.config.adresseAdmin();
         agence.value = (await window.api.config.configurer(reference, appareil, codePoste ?? null)) as AgenceLocale;
         compagnie.value = await window.api.config.compagnieActuelle();
         licence.value = await window.api.config.licenceActuelle();
@@ -114,5 +117,9 @@ export const useConfigStore = defineStore('config', () => {
         return `${maintenant.getFullYear()}-${pad(maintenant.getMonth() + 1)}-${pad(maintenant.getDate())}`;
     }
 
-    return { configuree, agence, compagnie, licence, licenceValide, moduleActif, charger, chargerLicence, rafraichirEtat, verifierLicence, reclamerLicence, configurer };
+    function definirAdminUrl(url: string) {
+        adminUrl.value = url.trim().replace(/\/+$/, '');
+    }
+
+    return { configuree, agence, compagnie, licence, adminUrl, licenceValide, moduleActif, charger, chargerLicence, rafraichirEtat, verifierLicence, reclamerLicence, configurer, definirAdminUrl };
 });

@@ -53,7 +53,10 @@ vm.runInNewContext(ts.transpileModule(readFileSync('src/lib/impressionA4.ts', 'u
     window: { print: () => { assert.ok(classes.has('impression-a4-active')); printed.push(styles[0].textContent); if (failPrint) throw new Error('Printer dialog failed'); } },
 });
 await exports.imprimerBordereau('a4');
-assert.ok(printed.pop().includes('size: A4 portrait; margin: 10mm'));
+const styleA4 = printed.pop();
+assert.ok(styleA4.includes('size: 210mm 297mm; margin: 10mm'));
+assert.match(styleA4, /width: 190mm !important/);
+assert.match(styleA4, /\.bordereau-a4:not\(\.bordereau-pos\)/);
 assert.equal(styles.length, 0);
 await exports.imprimerBordereau('pos');
 assert.match(printed.pop(), /size: 80mm 218mm/);
@@ -79,7 +82,7 @@ assert.equal(styles.length, 0);
 assert.equal(classes.size, 0);
 failPrint = false;
 await exports.imprimerBordereauA4();
-assert.match(printed.pop(), /size: A4 portrait/);
+assert.match(printed.pop(), /size: 210mm 297mm/);
 hasZone = false;
 await assert.rejects(exports.imprimerBordereau('a4'), /Aucun bordereau/);
 assert.ok(!readFileSync('src/lib/impressionA4.ts', 'utf8').includes('window.api.impression'));

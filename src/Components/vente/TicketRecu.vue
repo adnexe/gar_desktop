@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import QrCodeSuivi from '@/Components/QrCodeSuivi.vue';
+
 export type CompagnieRecu = {
     nom: string | null;
     slogan: string | null;
@@ -29,6 +31,7 @@ export type Recu = {
     vehicule: string;
     client: string | null;
     vendeur: string;
+    suivi_url?: string | null;
     compagnie?: CompagnieRecu | null;
 };
 
@@ -140,6 +143,8 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
             </div>
         </div>
 
+        <QrCodeSuivi :valeur="recu.suivi_url" />
+
         <p class="ligne-pointillee" />
         <p class="text-center pied">{{ recu.compagnie?.pied_ticket || 'Merci et bon voyage !' }}</p>
     </div>
@@ -181,6 +186,8 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
             <p class="talon-label">Agence / Agent</p>
             <p class="talon-valeur">{{ recu.agence }} · {{ recu.vendeur }}</p>
         </div>
+
+        <QrCodeSuivi :valeur="recu.suivi_url" compact />
     </div>
     </template>
 </template>

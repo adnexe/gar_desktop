@@ -24,6 +24,7 @@ import {
 import BagageRecu from '@/Components/bagage/BagageRecu.vue';
 import { useConfigStore, type CompagnieLocale } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
+import { construireLienSuiviPublic } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { BagageDuJour } from '@/types/bagage';
 
@@ -93,6 +94,7 @@ const description = ref('');
 const erreur = ref('');
 const enCours = ref(false);
 const recu = ref<{
+    uuid: string;
     numero_bagage: string;
     numero_ticket: string | null;
     numero_place: number | null;
@@ -105,8 +107,10 @@ const recu = ref<{
     montant: number;
     description: string | null;
     agence: string | null;
+    agence_telephone: string | null;
     agent: string | null;
     created_at: string;
+    suivi_url: string | null;
     compagnie: CompagnieLocale | null;
 } | null>(null);
 const modeImpression = ref<'tout' | 'recu' | 'talon'>('tout');
@@ -291,6 +295,7 @@ async function enregistrer() {
         const reference = ticket.value ? `Ticket ${ticket.value.numero_ticket}` : 'Sans ticket';
         const destination = villes.value.find((v) => v.id === villeArriveeId.value)?.nom ?? null;
         const dernierRecu = {
+            uuid: reponse.bagage.uuid,
             numero_bagage: reponse.bagage.numero_bagage,
             numero_ticket: ticket.value?.numero_ticket ?? null,
             numero_place: ticket.value?.numero_place ?? null,
@@ -306,6 +311,7 @@ async function enregistrer() {
             agence_telephone: agenceActuelle.telephone,
             agent: session.nom || null,
             created_at: reponse.bagage.created_at,
+            suivi_url: construireLienSuiviPublic(config.adminUrl, 'bagage', reponse.bagage.numero_bagage, reponse.bagage.uuid),
             compagnie: config.compagnie,
         };
         recu.value = dernierRecu;
