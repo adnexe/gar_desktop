@@ -21,6 +21,7 @@ export type Recu = {
     total: number;
     created_at: string;
     agence: string;
+    agence_telephone?: string | null;
     ville_depart: string;
     ville_arrivee: string;
     date_depart: string;
@@ -58,10 +59,9 @@ const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR').format
             />
             <p class="nom-agence">{{ recu.compagnie?.nom || recu.agence }}</p>
             <p v-if="recu.compagnie?.slogan" class="slogan">{{ recu.compagnie.slogan }}</p>
-            <p v-if="recu.compagnie?.telephone || recu.compagnie?.whatsapp" class="contact">
-                <span v-if="recu.compagnie?.telephone">Tél : {{ recu.compagnie.telephone }}</span>
-                <span v-if="recu.compagnie?.telephone && recu.compagnie?.whatsapp"> · </span>
-                <span v-if="recu.compagnie?.whatsapp">WhatsApp : {{ recu.compagnie.whatsapp }}</span>
+            <p v-if="recu.agence_telephone || recu.compagnie?.telephone" class="contact">
+                {{ recu.agence_telephone ? 'Tél agence' : 'Tél compagnie' }} :
+                {{ recu.agence_telephone || recu.compagnie?.telephone }}
             </p>
             <p v-if="recu.compagnie?.site_web" class="contact">{{ recu.compagnie.site_web }}</p>
             <p class="ligne-pointillee" />

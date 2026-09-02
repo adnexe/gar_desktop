@@ -24,6 +24,7 @@ import { hauteurZoneImpressionMm } from '@/lib/impression';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierInternationalDuJour } from '@/types/courrier-international';
+import { creerProtectionChargement, insererEnTeteSansDoublon } from '@/lib/listeTransactions';
 
 type RapportDestination = { destination: string; nombre_courriers: number; nombre_colis: number; montant_total: number; valeur_colis: number };
 type RapportFinDeCaisse = {
@@ -62,6 +63,7 @@ const userIdFiltre = computed(() => ['super_admin', 'admin', 'chef_gare'].includ
 
 const { dateFiltre, aujourdhui, actualiserJourDeCaisse } = useDateCaisseFiltre();
 const courriers = ref<CourrierInternationalDuJour[]>([]);
+const protectionChargementCourriers = creerProtectionChargement();
 const recherche = ref('');
 const dialogOuvert = ref(false);
 const lotsOuvert = ref(false);
@@ -83,11 +85,13 @@ const totalDuJour = computed(() => courriers.value.reduce((s, c) => s + c.montan
 const valeurDuJour = computed(() => courriers.value.reduce((s, c) => s + c.valeur_colis, 0));
 
 async function charger() {
+    const revision = protectionChargementCourriers.commencer();
     if (!session.agenceId) {
-        courriers.value = [];
+        if (protectionChargementCourriers.estCourant(revision)) courriers.value = [];
         return;
     }
-    courriers.value = (await window.api.courrierInternational.duJour(session.agenceId, dateFiltre.value, userIdFiltre.value)) as CourrierInternationalDuJour[];
+    const donnees = (await window.api.courrierInternational.duJour(session.agenceId, dateFiltre.value, userIdFiltre.value)) as CourrierInternationalDuJour[];
+    if (protectionChargementCourriers.estCourant(revision)) courriers.value = donnees;
 }
 
 function ouvrir() {
@@ -98,7 +102,8 @@ function ouvrir() {
 function onEnregistre(courrier: CourrierInternationalDuJour) {
     actualiserJourDeCaisse();
     if (dateFiltre.value === aujourdhui()) {
-        courriers.value.unshift(courrier);
+        protectionChargementCourriers.invalider();
+        courriers.value = insererEnTeteSansDoublon(courriers.value, courrier);
     }
 }
 

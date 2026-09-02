@@ -84,6 +84,7 @@ export class BagageRepository {
         valeur: number | null;
         montant: number;
         agence: string | null;
+        agence_telephone: string | null;
         agent: string | null;
         created_at: string;
     } | null {
@@ -98,7 +99,7 @@ export class BagageRepository {
                                  NULLIF(TRIM(COALESCE(cl.prenoms, '') || ' ' || COALESCE(cl.nom, '')), '')) AS client,
                         COALESCE(cb.telephone, cl.telephone) AS client_telephone,
                         b.description, b.valeur, b.montant,
-                        ag.nom AS agence, u.name AS agent, b.created_at
+                        ag.nom AS agence, ag.telephone AS agence_telephone, u.name AS agent, b.created_at
                  FROM bagages b
                  LEFT JOIN tickets t ON t.id = b.ticket_id
                  LEFT JOIN clients cl ON cl.id = t.client_id

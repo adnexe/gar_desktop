@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
-import { Boxes, CheckCircle2, ClipboardList, FileText, ListChecks, MapPin, PackageCheck, PackageMinus, Plus, Printer, Tag, Truck } from '@lucide/vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { Boxes, CheckCircle2, ClipboardList, FileText, ListChecks, MapPin, PackageCheck, PackageMinus, Plus, Printer, ScanBarcode, Tag, Truck } from '@lucide/vue';
 import BordereauA4 from '@/Components/BordereauA4.vue';
 import EtiquetteLot from '@/Components/lots/EtiquetteLot.vue';
 import EtatLotsA4 from '@/Components/lots/EtatLotsA4.vue';
@@ -8,6 +8,7 @@ import FormatBordereauDialog from '@/Components/lots/FormatBordereauDialog.vue';
 import { Badge } from '@/Components/ui/badge';
 import { Button } from '@/Components/ui/button';
 import { Checkbox } from '@/Components/ui/checkbox';
+import { Input } from '@/Components/ui/input';
 import {
     Dialog,
     DialogContent,
@@ -27,6 +28,7 @@ import { Spinner } from '@/Components/ui/spinner';
 import { useConfigStore } from '@/Stores/config';
 import { dimensionsBordereauPos, imprimerBordereau, type FormatBordereau } from '@/lib/impressionA4';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
+import { resoudreSelectionScanner } from '@/lib/selectionLotScanner';
 import type { DetailsLot, ElementLotEligible, LotResume, StatutLot, TypeLot } from '@/types/lot';
 
 const props = defineProps<{
@@ -63,6 +65,13 @@ const formatImpression = ref<FormatBordereau>('a4');
 const choixFormatOuvert = ref(false);
 const largeurPos = ref(80);
 const demandeImpression = ref<{ lot: LotResume | DetailsLot } | { etat: true } | null>(null);
+const codeScanne = ref('');
+const scanEnCours = ref(false);
+const champScanner = ref<{ $el?: HTMLInputElement } | null>(null);
+const retourScan = ref<{ type: 'succes' | 'attention' | 'erreur'; message: string } | null>(null);
+let derniereToucheScanner = 0;
+let nombreTouchesRapides = 0;
+let temporisateurScanner: ReturnType<typeof setTimeout> | null = null;
 
 const titreModule = computed(() => props.type === 'courrier'
     ? 'livraison'
@@ -162,6 +171,83 @@ function selectionnerTout() {
         selection.value = selection.value.filter((uuid) => !groupe.has(uuid));
     } else {
         selection.value = [...new Set([...selection.value, ...elementsDuGroupe.value.map((element) => element.uuid)])];
+    }
+}
+
+function focusScanner() {
+    void nextTick(() => champScanner.value?.$el?.focus());
+}
+
+function annulerTemporisateurScanner() {
+    if (temporisateurScanner) clearTimeout(temporisateurScanner);
+    temporisateurScanner = null;
+}
+
+function suivreVitesseScanner(event: KeyboardEvent) {
+    if (event.key.length !== 1) return;
+    const maintenant = performance.now();
+    nombreTouchesRapides = maintenant - derniereToucheScanner <= 70 ? nombreTouchesRapides + 1 : 1;
+    derniereToucheScanner = maintenant;
+    annulerTemporisateurScanner();
+
+    // Certains lecteurs n'envoient pas Entrée. Une rafale rapide et suffisamment
+    // longue est alors validée après un très court silence.
+    if (nombreTouchesRapides >= 6) {
+        temporisateurScanner = setTimeout(() => void traiterScan(), 140);
+    }
+}
+
+async function traiterScan() {
+    if (scanEnCours.value) return;
+    annulerTemporisateurScanner();
+    scanEnCours.value = true;
+
+    try {
+        const resultat = resoudreSelectionScanner(
+            codeScanne.value,
+            eligibles.value,
+            selection.value,
+            groupeChoisi.value,
+        );
+
+        if (resultat.statut === 'vide') return;
+        codeScanne.value = '';
+
+        if (resultat.statut === 'introuvable') {
+            retourScan.value = {
+                type: 'erreur',
+                message: `${resultat.numero} est introuvable ou déjà affecté à un lot.`,
+            };
+            return;
+        }
+        if (resultat.statut === 'deja_selectionne') {
+            retourScan.value = {
+                type: 'attention',
+                message: `${resultat.element.numero} est déjà sélectionné.`,
+            };
+            return;
+        }
+        if (resultat.statut === 'autre_groupe') {
+            retourScan.value = {
+                type: 'erreur',
+                message: `${resultat.element.numero} appartient à une autre destination ou à un autre voyage.`,
+            };
+            return;
+        }
+
+        if (groupeChoisi.value !== resultat.element.groupe) {
+            groupeChoisi.value = resultat.element.groupe;
+            await nextTick();
+        }
+        selectionner(resultat.element.uuid, true);
+        retourScan.value = {
+            type: 'succes',
+            message: `${resultat.element.numero} ajouté au lot.`,
+        };
+    } finally {
+        scanEnCours.value = false;
+        nombreTouchesRapides = 0;
+        focusScanner();
     }
 }
 
@@ -348,7 +434,10 @@ async function avancerStatut(lot: LotResume | DetailsLot) {
 
 watch(() => props.open, (ouvert) => {
     if (ouvert) void charger();
-    else choixFormatOuvert.value = false;
+    else {
+        choixFormatOuvert.value = false;
+        annulerTemporisateurScanner();
+    }
 });
 watch(choixFormatOuvert, (ouvert) => { if (!ouvert) demandeImpression.value = null; });
 watch(() => props.date, () => {
@@ -356,7 +445,15 @@ watch(() => props.date, () => {
 });
 watch(groupeChoisi, () => {
     selection.value = [];
+    retourScan.value = null;
 });
+watch(mode, (valeur) => {
+    codeScanne.value = '';
+    retourScan.value = null;
+    annulerTemporisateurScanner();
+    if (valeur === 'nouveau') focusScanner();
+});
+onBeforeUnmount(annulerTemporisateurScanner);
 </script>
 
 <template>
@@ -440,6 +537,48 @@ watch(groupeChoisi, () => {
 
                 <template v-else>
                     <div class="space-y-5">
+                        <div class="rounded-lg border border-sky-200 bg-sky-50/60 p-4 dark:border-sky-900 dark:bg-sky-950/20">
+                            <div class="mb-3 flex items-center gap-2">
+                                <ScanBarcode class="size-5 text-sky-700 dark:text-sky-300" />
+                                <label for="lot-code-barres" class="font-semibold">Lecture du code-barres</label>
+                            </div>
+                            <div class="flex flex-col gap-2 sm:flex-row">
+                                <Input
+                                    id="lot-code-barres"
+                                    ref="champScanner"
+                                    v-model="codeScanne"
+                                    class="h-11 font-mono"
+                                    autocomplete="off"
+                                    placeholder="N° du talon"
+                                    :disabled="chargement || creation"
+                                    @keydown="suivreVitesseScanner"
+                                    @keydown.enter.prevent="traiterScan"
+                                />
+                                <Button
+                                    type="button"
+                                    class="h-11 shrink-0"
+                                    :disabled="!codeScanne.trim() || scanEnCours || chargement || creation"
+                                    @click="traiterScan"
+                                >
+                                    <ScanBarcode /> Ajouter
+                                </Button>
+                            </div>
+                            <p
+                                v-if="retourScan"
+                                role="status"
+                                class="mt-3 flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium"
+                                :class="{
+                                    'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200': retourScan.type === 'succes',
+                                    'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200': retourScan.type === 'attention',
+                                    'border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200': retourScan.type === 'erreur',
+                                }"
+                            >
+                                <CheckCircle2 v-if="retourScan.type === 'succes'" class="size-4 shrink-0" />
+                                <ScanBarcode v-else class="size-4 shrink-0" />
+                                {{ retourScan.message }}
+                            </p>
+                        </div>
+
                         <div>
                             <label class="mb-2 block text-sm font-medium">{{ libelleGroupe }}</label>
                             <Select v-model="groupeChoisi" :disabled="groupes.length === 0">

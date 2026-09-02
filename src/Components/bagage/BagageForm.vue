@@ -303,6 +303,7 @@ async function enregistrer() {
             montant: montantActuel,
             description: description.value || null,
             agence: agenceActuelle.nom,
+            agence_telephone: agenceActuelle.telephone,
             agent: session.nom || null,
             created_at: reponse.bagage.created_at,
             compagnie: config.compagnie,
@@ -364,6 +365,8 @@ async function enregistrer() {
             description: dernierRecu.description,
             valeur: dernierRecu.valeur,
             montant: dernierRecu.montant,
+            client: dernierRecu.client,
+            client_telephone: dernierRecu.client_telephone,
         });
 
         resetSaisie();

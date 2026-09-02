@@ -132,6 +132,7 @@ export class VenteService {
             voyage_heure: string;
             vehicule_immatriculation: string;
             agence_nom: string;
+            agence_telephone: string | null;
             vendeur_nom: string | null;
             vendeur_number: string;
             client_nom: string | null;
@@ -148,6 +149,7 @@ export class VenteService {
             total: d.total,
             created_at: formatDateHeure(d.created_at),
             agence: d.agence_nom,
+            agence_telephone: d.agence_telephone,
             ville_depart: d.ville_depart_nom,
             ville_arrivee: d.ville_arrivee_nom,
             date_depart: formatDate(d.voyage_date),

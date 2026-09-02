@@ -29,6 +29,7 @@ import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import type { VenteDuJour } from '@/types/vente';
 import { useDateCaisseFiltre } from '@/composables/useDateCaisseFiltre';
+import { creerProtectionChargement, insererEnTeteSansDoublon } from '@/lib/listeTransactions';
 
 interface Ville { id: number; uuid: string; nom: string }
 
@@ -47,6 +48,7 @@ function ouvrirVente() {
 const { dateFiltre, aujourdhui, actualiserJourDeCaisse } = useDateCaisseFiltre();
 
 const ventesDuJour = ref<VenteDuJour[]>([]);
+const protectionChargementVentes = creerProtectionChargement();
 const recherche = ref('');
 const userIdFinDeCaisse = computed(() => ['super_admin', 'admin', 'chef_gare'].includes(session.role) ? null : session.userId);
 // Filtre local : numéro de ticket, nom/prénoms ou téléphone du client.
@@ -74,25 +76,29 @@ async function apresRecuperation() {
 }
 
 async function chargerVentes() {
+    const revision = protectionChargementVentes.commencer();
     if (!session.agenceId) {
-        ventesDuJour.value = [];
+        if (protectionChargementVentes.estCourant(revision)) ventesDuJour.value = [];
         return;
     }
 
     const local = await lireRecuperationLocale();
+    if (!protectionChargementVentes.estCourant(revision)) return;
     recuperationLocaleDisponible.value = Boolean(local?.modeClient && local.disponible);
     if (sourceTickets.value === 'local' && recuperationLocaleDisponible.value) {
         ventesDuJour.value = local!.ventes as VenteDuJour[];
         return;
     }
-    ventesDuJour.value = (await window.api.vente.ventesDuJour(session.agenceId, dateFiltre.value, userIdFinDeCaisse.value)) as VenteDuJour[];
+    const ventes = (await window.api.vente.ventesDuJour(session.agenceId, dateFiltre.value, userIdFinDeCaisse.value)) as VenteDuJour[];
+    if (protectionChargementVentes.estCourant(revision)) ventesDuJour.value = ventes;
 }
 
 function onVendu(vente: VenteDuJour) {
     sourceTickets.value = 'serveur';
     actualiserJourDeCaisse();
     if (dateFiltre.value === aujourdhui()) {
-        ventesDuJour.value.unshift(vente);
+        protectionChargementVentes.invalider();
+        ventesDuJour.value = insererEnTeteSansDoublon(ventesDuJour.value, vente);
     }
 }
 

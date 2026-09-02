@@ -31,6 +31,7 @@ import { useConfigStore } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierDuJour } from '@/types/courrier';
+import { creerProtectionChargement, insererEnTeteSansDoublon } from '@/lib/listeTransactions';
 
 const config = useConfigStore();
 const session = useSessionStore();
@@ -53,6 +54,7 @@ const userIdFiltre = computed(() => ['super_admin', 'admin', 'chef_gare'].includ
 const { dateFiltre, aujourdhui, actualiserJourDeCaisse } = useDateCaisseFiltre();
 
 const courriers = ref<CourrierDuJour[]>([]);
+const protectionChargementCourriers = creerProtectionChargement();
 const recherche = ref('');
 // Filtre local : n° courrier, destinataire ou expéditeur (nom/prénoms/téléphone).
 const courriersAffiches = computed(() => {
@@ -73,11 +75,13 @@ const dialogOuvert = ref(false);
 const courrierForm = ref<InstanceType<typeof CourrierForm> | null>(null);
 
 async function charger() {
+    const revision = protectionChargementCourriers.commencer();
     if (!session.agenceId) {
-        courriers.value = [];
+        if (protectionChargementCourriers.estCourant(revision)) courriers.value = [];
         return;
     }
-    courriers.value = (await window.api.courrier.duJour(session.agenceId, dateFiltre.value, userIdFiltre.value)) as CourrierDuJour[];
+    const donnees = (await window.api.courrier.duJour(session.agenceId, dateFiltre.value, userIdFiltre.value)) as CourrierDuJour[];
+    if (protectionChargementCourriers.estCourant(revision)) courriers.value = donnees;
 }
 
 function ouvrir() {
@@ -88,7 +92,8 @@ function ouvrir() {
 function onEnregistre(courrier: CourrierDuJour) {
     actualiserJourDeCaisse();
     if (dateFiltre.value === aujourdhui()) {
-        courriers.value.unshift(courrier);
+        protectionChargementCourriers.invalider();
+        courriers.value = insererEnTeteSansDoublon(courriers.value, courrier);
     }
 }
 

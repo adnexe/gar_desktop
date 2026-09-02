@@ -31,6 +31,7 @@ import { useConfigStore } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
 import { useSessionStore } from '@/Stores/session';
 import type { BagageDuJour } from '@/types/bagage';
+import { creerProtectionChargement, insererEnTeteSansDoublon } from '@/lib/listeTransactions';
 
 const config = useConfigStore();
 const session = useSessionStore();
@@ -54,6 +55,7 @@ const userIdFiltre = computed(() => ['super_admin', 'admin', 'chef_gare'].includ
 const { dateFiltre, aujourdhui, actualiserJourDeCaisse } = useDateCaisseFiltre();
 
 const bagages = ref<BagageDuJour[]>([]);
+const protectionChargementBagages = creerProtectionChargement();
 const recherche = ref('');
 // Filtre local : n° bagage, n° ticket, nom/prénoms ou téléphone du client.
 const bagagesAffiches = computed(() => {
@@ -73,11 +75,13 @@ const dialogOuvert = ref(false);
 const bagageForm = ref<InstanceType<typeof BagageForm> | null>(null);
 
 async function charger() {
+    const revision = protectionChargementBagages.commencer();
     if (!session.agenceId) {
-        bagages.value = [];
+        if (protectionChargementBagages.estCourant(revision)) bagages.value = [];
         return;
     }
-    bagages.value = (await window.api.bagage.duJour(session.agenceId, dateFiltre.value, userIdFiltre.value)) as BagageDuJour[];
+    const donnees = (await window.api.bagage.duJour(session.agenceId, dateFiltre.value, userIdFiltre.value)) as BagageDuJour[];
+    if (protectionChargementBagages.estCourant(revision)) bagages.value = donnees;
 }
 
 function ouvrir() {
@@ -88,7 +92,8 @@ function ouvrir() {
 function onEnregistre(bagage: BagageDuJour) {
     actualiserJourDeCaisse();
     if (dateFiltre.value === aujourdhui()) {
-        bagages.value.unshift(bagage);
+        protectionChargementBagages.invalider();
+        bagages.value = insererEnTeteSansDoublon(bagages.value, bagage);
     }
 }
 
@@ -181,6 +186,7 @@ interface DetailsBagage {
     valeur: number | null;
     montant: number;
     agence: string | null;
+    agence_telephone: string | null;
     agent: string | null;
     created_at: string;
 }
@@ -213,6 +219,7 @@ const recuReimpression = computed(() => {
         montant: b.montant,
         description: b.description,
         agence: b.agence,
+        agence_telephone: b.agence_telephone,
         agent: b.agent,
         created_at: formatDateHeure(b.created_at),
         compagnie: config.compagnie,

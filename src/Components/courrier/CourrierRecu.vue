@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BarcodeCode128 from '@/Components/BarcodeCode128.vue';
+
 type CompagnieRecu = {
     nom: string | null;
     slogan: string | null;
@@ -51,10 +53,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 class="logo"
             />
             <p class="compagnie">{{ recu.compagnie?.nom || recu.agence_depart }}</p>
-            <p v-if="recu.compagnie?.telephone || recu.compagnie?.whatsapp" class="contact">
-                <span v-if="recu.compagnie?.telephone">Tél : {{ recu.compagnie.telephone }}</span>
-                <span v-if="recu.compagnie?.telephone && recu.compagnie?.whatsapp"> · </span>
-                <span v-if="recu.compagnie?.whatsapp">WhatsApp : {{ recu.compagnie.whatsapp }}</span>
+            <p v-if="recu.agence_depart_telephone || recu.compagnie?.telephone" class="contact">
+                {{ recu.agence_depart_telephone ? 'Tél agence' : 'Tél compagnie' }} :
+                {{ recu.agence_depart_telephone || recu.compagnie?.telephone }}
             </p>
         </div>
 
@@ -128,6 +129,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
         <div class="numero-etiquette">
             <strong>{{ recu.numero_courrier }}</strong>
         </div>
+
+        <BarcodeCode128 :valeur="recu.numero_courrier" libelle="Code-barres courrier" />
 
         <div class="destination-etiquette">
             {{ recu.destination }}

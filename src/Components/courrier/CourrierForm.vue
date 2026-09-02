@@ -432,7 +432,11 @@ async function envoyer() {
             heure: reponse.courrier.created_at.split(' ')[1],
             destination,
             destinataire: dernierRecu.destinataire_nom,
+            destinataire_telephone: dernierRecu.destinataire_telephone,
+            expediteur: dernierRecu.expediteur_nom,
+            expediteur_telephone: dernierRecu.expediteur_telephone,
             montant_total: reponse.courrier.montantTotal,
+            montant_colis: reponse.courrier.montantColis,
         });
 
         resetSaisie();

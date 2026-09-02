@@ -11,13 +11,34 @@ Les lots sont créés et imprimés sur le poste desktop, puis envoyés à l'admi
 la file de synchronisation existante. L'UUID du lot et les UUID de ses éléments
 sont conservés de bout en bout.
 
+## Codes-barres des talons
+
+Les talons bagage et les étiquettes courrier national/international affichent
+un code-barres Code 128 construit avec le numéro unique de l'enregistrement.
+Le numéro reste écrit sous les barres pour permettre une saisie manuelle si le
+scanner est indisponible. Le code est rendu en SVG noir sur blanc avant la
+mesure de hauteur du PDF : il apparaît lors de la première impression comme
+lors d'une réimpression du talon. Aucun montant ni UUID technique n'est encodé.
+
+### Sélection par lecteur lors de la création d'un lot
+
+Le champ **Lecture du code-barres** du dialogue **Nouveau lot** accepte les
+lecteurs USB/Bluetooth configurés comme clavier HID. Le numéro du talon est
+recherché dans les éléments éligibles déjà chargés : le premier scan choisit
+automatiquement la destination et le voyage, puis coche l'élément. Les scans
+suivants doivent appartenir au même groupe. Un élément introuvable, déjà
+sélectionné ou déjà affecté à un lot est refusé sans modifier la sélection.
+La validation par la touche Entrée est prise en charge, avec une détection de
+secours pour les lecteurs qui transmettent rapidement le code sans Entrée.
+
 ## Parcours utilisateur
 
 1. Ouvrir `Courrier`, `Courrier international` ou `Bagages`, puis cliquer sur
    `Bordereaux`.
 2. Ouvrir `Nouveau lot`.
-3. Choisir un groupe `destination + voyage`.
-4. Sélectionner les opérations à regrouper.
+3. Choisir un groupe `destination + voyage`, ou scanner le premier talon pour
+   le choisir automatiquement.
+4. Sélectionner manuellement les opérations ou scanner leurs talons.
 5. Confirmer la création du lot.
 6. Consulter ou imprimer le bordereau depuis `Lots enregistrés`.
 7. Utiliser `Étiquette` pour imprimer l'identification thermique à coller sur

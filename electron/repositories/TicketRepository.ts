@@ -237,7 +237,7 @@ export class TicketRepository {
                         CASE WHEN tr.ville_depart_id = agv.id THEN va.nom ELSE vd.nom END AS ville_arrivee_nom,
                         v.date_depart AS voyage_date, v.heure_depart AS voyage_heure, v.numero_depart,
                         veh.immatriculation AS vehicule_immatriculation,
-                        a.nom AS agence_nom,
+                        a.nom AS agence_nom, a.telephone AS agence_telephone,
                         u.name AS vendeur_nom, u.number AS vendeur_number,
                         (c.prenoms || ' ' || c.nom) AS client_nom
                  FROM tickets t

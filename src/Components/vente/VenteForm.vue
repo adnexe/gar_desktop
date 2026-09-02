@@ -462,6 +462,7 @@ async function vendre() {
             commission: commissionValeur.value,
             total: reponse.ticket.total,
             client: reponse.ticket.client,
+            client_telephone: client.telephone.trim() || null,
         });
 
         // Le formulaire reste tel quel ; la prochaine place libre est déjà

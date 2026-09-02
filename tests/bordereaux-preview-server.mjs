@@ -8,7 +8,7 @@ const entry = `
 import {createApp,h,ref} from 'vue';
 import {createPinia} from 'pinia';
 import GestionLotsDialog from '/src/Components/lots/GestionLotsDialog.vue';
-import {agence,compagnie,lots} from '/tests/bordereaux-fixtures.mjs';
+import {agence,bagages,compagnie,courriers,lots} from '/tests/bordereaux-fixtures.mjs';
 import baseCss from '/src/assets/app.css?inline';
 import posCss from '/src/assets/bordereaux-pos.css?inline';
 import '/src/assets/app.css';
@@ -17,7 +17,20 @@ const papier=Number(new URLSearchParams(location.search).get('papier'))||80;
 document.documentElement.style.setProperty('--impression-largeur-papier',papier+'mm');
 document.documentElement.style.setProperty('--impression-largeur-contenu',(papier-4)+'mm');
 const result=data=>({ok:true,data});
-window.api={config:{estConfiguree:async()=>true,agenceActuelle:async()=>agence,compagnieActuelle:async()=>compagnie,licenceActuelle:async()=>null},lots:{lister:async()=>result(lots.map(l=>({...l,type}))),eligibles:async()=>result([]),details:async(uuid)=>result({...lots.find(l=>l.uuid===uuid),type})}};
+const source=type==='bagage'?bagages:courriers;
+const eligibles=source.map((element,index)=>({
+ uuid:element.uuid,
+ numero:type==='bagage'?element.numero_bagage:element.numero_courrier,
+ destination:index===2?'Daloa':'Bouake',
+ voyage_uuid:index===2?'voyage-2':'voyage-1',
+ voyage:index===2?'Abidjan - Daloa, 09:30':'Abidjan - Bouake, 08:30',
+ groupe:index===2?'daloa-voyage-2':'bouake-voyage-1',
+ principal:type==='bagage'?element.client:element.destinataire_nom,
+ telephone:type==='bagage'?element.client_telephone:element.destinataire_telephone,
+ contenu:type==='bagage'?element.description:element.colis.map(c=>c.nom).join(', '),
+ montant:type==='bagage'?element.montant:element.montant_total,
+}));
+window.api={config:{estConfiguree:async()=>true,agenceActuelle:async()=>agence,compagnieActuelle:async()=>compagnie,licenceActuelle:async()=>null},lots:{lister:async()=>result(lots.map(l=>({...l,type}))),eligibles:async()=>result(eligibles),details:async(uuid)=>result({...lots.find(l=>l.uuid===uuid),type}),creer:async()=>result({...lots[0],type})}};
 let impressions=0;
 window.print=()=>{
  const zone=document.querySelector('.zone-impression-a4');

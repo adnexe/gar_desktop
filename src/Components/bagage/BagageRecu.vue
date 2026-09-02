@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BarcodeCode128 from '@/Components/BarcodeCode128.vue';
+
 type CompagnieRecu = {
     nom: string | null;
     slogan: string | null;
@@ -23,6 +25,7 @@ type RecuBagage = {
     montant: number;
     description: string | null;
     agence: string | null;
+    agence_telephone?: string | null;
     agent: string | null;
     created_at: string;
     compagnie?: CompagnieRecu | null;
@@ -48,10 +51,9 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
                 class="logo"
             />
             <p class="compagnie">{{ recu.compagnie?.nom || recu.agence }}</p>
-            <p v-if="recu.compagnie?.telephone || recu.compagnie?.whatsapp" class="contact">
-                <span v-if="recu.compagnie?.telephone">Tél : {{ recu.compagnie.telephone }}</span>
-                <span v-if="recu.compagnie?.telephone && recu.compagnie?.whatsapp"> · </span>
-                <span v-if="recu.compagnie?.whatsapp">WhatsApp : {{ recu.compagnie.whatsapp }}</span>
+            <p v-if="recu.agence_telephone || recu.compagnie?.telephone" class="contact">
+                {{ recu.agence_telephone ? 'Tél agence' : 'Tél compagnie' }} :
+                {{ recu.agence_telephone || recu.compagnie?.telephone }}
             </p>
         </div>
 
@@ -113,6 +115,8 @@ const formatMontant = (m: number) => new Intl.NumberFormat('fr-FR').format(m) + 
             <span>N° BAGAGE</span>
             <strong>{{ recu.numero_bagage }}</strong>
         </div>
+
+        <BarcodeCode128 :valeur="recu.numero_bagage" libelle="Code-barres bagage" />
 
         <div class="bloc">
             <div class="ligne importante">
