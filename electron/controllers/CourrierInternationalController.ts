@@ -1,4 +1,5 @@
 import { CourrierInternationalService, type DemandeCourrierInternational } from '../services/CourrierInternationalService';
+import { messageErreurNumerotation } from './NumeroOperationError';
 
 const service = new CourrierInternationalService();
 
@@ -8,6 +9,8 @@ export const CourrierInternationalController = {
         try {
             return { ok: true as const, courrier: service.enregistrer(demande) };
         } catch (erreur) {
+            const erreurNumerotation = messageErreurNumerotation(erreur);
+            if (erreurNumerotation) return { ok: false as const, erreur: erreurNumerotation };
             if (erreur instanceof Error && erreur.message === 'EXPEDITEUR_DESTINATAIRE_REQUIS') {
                 return { ok: false as const, erreur: 'Expéditeur et destinataire sont obligatoires.' };
             }

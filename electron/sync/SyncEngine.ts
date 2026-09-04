@@ -251,6 +251,8 @@ export class SyncEngine {
                 return this.courrierInternationalPayload(ligne.entite_uuid);
             case 'lots_bordereaux':
                 return this.lotBordereauPayload(ligne.entite_uuid);
+            case 'convois':
+                return this.convoiPayload(ligne.entite_uuid);
             case 'users':
                 return JSON.parse(ligne.payload) as Record<string, unknown>;
             default:
@@ -438,6 +440,19 @@ export class SyncEngine {
             ...ligne,
             element_uuids: elements.map((element) => element.uuid),
         };
+    }
+
+    private convoiPayload(uuid: string): Record<string, unknown> | null {
+        return (getDb().prepare(
+            `SELECT c.uuid, c.reference, c.agence_id, c.ville_destination_id,
+                    c.precision_destination, c.nombre_places, c.montant_fixe,
+                    c.date_depart, c.heure_depart, c.date_retour, c.heure_retour,
+                    c.statut, c.cree_par_user_id, COALESCE(c.cree_par_nom, u.name) AS cree_par_nom,
+                    c.created_at, c.updated_at
+             FROM convois c
+             LEFT JOIN users u ON u.id = c.cree_par_user_id
+             WHERE c.uuid = ?`,
+        ).get(uuid) as Record<string, unknown> | undefined) ?? null;
     }
 
     private classerErreur(erreur: unknown): DecisionErreur {

@@ -6,6 +6,7 @@ import { CompagnieRepository } from '../repositories/CompagnieRepository';
 import { ConfigRepository } from '../repositories/ConfigRepository';
 import { migrer } from '../database/migrate';
 import { getDb } from '../database/connection';
+import { appliquerCompteursOperationsServeur } from '../database/numero';
 import { logger } from '../logger';
 import { avecVerrouComptes } from './CompteSyncLock';
 
@@ -189,11 +190,12 @@ export class BootstrapService {
 
         let donnees;
         try {
-            donnees = await appelBootstrap(reference, appareil);
+            donnees = await appelBootstrap(reference, appareil, this.config.obtenir('licence_code_poste'));
         } catch (erreur) {
             throw new Error(messageErreurBootstrap(erreur));
         }
 
+        this.initialiserCompteurs(donnees);
         this.catalogue.seed(donnees);
         this.config.definir('agence_reference', donnees.agence.reference);
         this.config.definir('api_token', donnees.token);
@@ -226,11 +228,12 @@ export class BootstrapService {
 
         let donnees;
         try {
-            donnees = await appelBootstrap(reference, 'poste-caisse', timeoutMs);
+            donnees = await appelBootstrap(reference, 'poste-caisse', this.config.obtenir('licence_code_poste'), timeoutMs);
         } catch (erreur) {
             throw new Error(messageErreurBootstrap(erreur));
         }
 
+        this.initialiserCompteurs(donnees);
         this.catalogue.seed(donnees);
         this.config.definir('api_token', donnees.token);
         this.config.definir('derniere_actualisation', new Date().toISOString());
@@ -238,6 +241,20 @@ export class BootstrapService {
         logger.info(`Catalogue actualisé depuis le serveur (agence ${donnees.agence.reference}).`);
 
         return this.agences.actuelle();
+    }
+
+    private initialiserCompteurs(donnees: Awaited<ReturnType<typeof appelBootstrap>>): void {
+        if (!donnees.compteurs_operations) {
+            throw new Error("Le serveur admin doit être mis à jour avant de configurer ce poste.");
+        }
+
+        const compteurs = appliquerCompteursOperationsServeur(
+            getDb(),
+            donnees.compteurs_operations,
+            this.config.obtenir('licence_code_poste'),
+            donnees.agence.code_ticket,
+        );
+        logger.info('Compteurs des opérations initialisés depuis le serveur.', compteurs);
     }
 
     private enregistrerLicence(licence: LicenceDesktop): void {

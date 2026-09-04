@@ -1,4 +1,5 @@
 import { LotService } from '../services/LotService';
+import { messageErreurNumerotation } from './NumeroOperationError';
 import type {
     CreerLotDonnees,
     RetirerElementsLotDonnees,
@@ -9,6 +10,8 @@ import type {
 const service = new LotService();
 
 function messageErreur(erreur: unknown): string {
+    const erreurNumerotation = messageErreurNumerotation(erreur);
+    if (erreurNumerotation) return erreurNumerotation;
     const code = erreur instanceof Error ? erreur.message : '';
     const messages: Record<string, string> = {
         COMPTE_NON_AUTORISE_LOT: "Ce compte n'est pas autorisé à gérer ces lots.",

@@ -25,8 +25,7 @@ import {
     SelectValue,
 } from '@/Components/ui/select';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
-import { construireLienSuiviPublic } from '@/lib/suiviPublic';
-import { useConfigStore } from '@/Stores/config';
+import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { VenteDuJour } from '@/types/vente';
 
@@ -59,7 +58,6 @@ const emit = defineEmits<{
 }>();
 
 const session = useSessionStore();
-const config = useConfigStore();
 
 const villeArriveeId = ref<number | null>(null);
 const rechercheVille = ref('');
@@ -404,9 +402,10 @@ async function vendre() {
         }
 
         confirmationOuverte.value = false;
+        const suiviUrl = await construireLienSuiviDepuisPoste('ticket', reponse.ticket.numero, reponse.ticket.uuid);
         recus.value = [{
             ...reponse.ticket,
-            suivi_url: construireLienSuiviPublic(config.adminUrl, 'ticket', reponse.ticket.numero, reponse.ticket.uuid),
+            suivi_url: suiviUrl,
         }];
 
         let impression: ResultatImpression;

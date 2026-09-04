@@ -49,6 +49,7 @@
         "typecheck": "vue-tsc --noEmit",
         "test:lot-ipc": "node tests/lot-ipc-serialization.mjs",
         "test:date-caisse": "node --experimental-strip-types tests/date-caisse-timezone.mjs",
+        "test:numero-compteurs": "node --experimental-strip-types tests/numero-compteurs.mjs",
         "test:liste-transactions": "node --experimental-strip-types tests/liste-transactions.mjs",
         "test:recu-telephone-agence": "node tests/recu-telephone-agence.mjs",
         "test:qr-suivi": "node --experimental-strip-types tests/qr-suivi.mjs",

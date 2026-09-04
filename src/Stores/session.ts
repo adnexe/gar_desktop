@@ -7,6 +7,7 @@ export interface DonneesSession {
     nom: string;
     role: string;
     agentId: number | null;
+    agentRole: string | null;
     agenceId: number | null;
     typeAgent: string[];
 }
@@ -17,6 +18,7 @@ export const useSessionStore = defineStore('session', () => {
     const nom = ref('');
     const role = ref('');
     const agentId = ref<number | null>(null);
+    const agentRole = ref<string | null>(null);
     const agenceId = ref<number | null>(null);
     const typeAgent = ref<string[]>([]);
 
@@ -31,6 +33,7 @@ export const useSessionStore = defineStore('session', () => {
         nom.value = session.nom;
         role.value = session.role;
         agentId.value = session.agentId;
+        agentRole.value = session.agentRole;
         agenceId.value = session.agenceId;
         typeAgent.value = session.typeAgent;
     }
@@ -41,9 +44,10 @@ export const useSessionStore = defineStore('session', () => {
         nom.value = '';
         role.value = '';
         agentId.value = null;
+        agentRole.value = null;
         agenceId.value = null;
         typeAgent.value = [];
     }
 
-    return { userId, uuid, nom, role, agentId, agenceId, typeAgent, estConnecte, estAdminLevel, peutModule, definir, deconnecter };
+    return { userId, uuid, nom, role, agentId, agentRole, agenceId, typeAgent, estConnecte, estAdminLevel, peutModule, definir, deconnecter };
 });

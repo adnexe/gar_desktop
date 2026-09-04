@@ -1,21 +1,36 @@
 import type Database from 'better-sqlite3';
 
-// Numéro humain (ticket/bagage/courrier) : uniquement des chiffres, facile à
-// lire/dicter au guichet — contrairement à l'uuid. 9 chiffres (jusqu'à
-// ~900 millions de valeurs) : assez large pour ne jamais tourner en boucle,
-// on vérifie quand même l'unicité en base avant de l'attribuer.
-export function genererNumeroUnique(db: Database.Database, table: string, colonne: string): string {
-    const dejaPris = db.prepare(`SELECT 1 FROM ${table} WHERE ${colonne} = ? LIMIT 1`);
+export type CategorieCompteurOperation =
+    | 'ticket'
+    | 'bagage'
+    | 'courrier'
+    | 'courrier_international'
+    | 'lot_courrier'
+    | 'lot_bagage'
+    | 'lot_courrier_international'
+    | 'convoi';
 
-    for (let tentative = 0; tentative < 50; tentative++) {
-        const numero = String(Math.floor(100_000_000 + Math.random() * 900_000_000));
-        if (!dejaPris.get(numero)) {
-            return numero;
-        }
-    }
+export type CompteursOperationsServeur = {
+    prefixe: string | null;
+} & Record<CategorieCompteurOperation, number>;
 
-    throw new Error('Impossible de générer un numéro unique après 50 tentatives.');
-}
+type DefinitionCompteur = {
+    table: string;
+    colonne: string;
+    sequence: string;
+    prefixe: (base: string) => string;
+};
+
+const DEFINITIONS_COMPTEURS: Record<CategorieCompteurOperation, DefinitionCompteur> = {
+    ticket: { table: 'tickets', colonne: 'numero_ticket', sequence: 'ticket_sequence', prefixe: (base) => base },
+    bagage: { table: 'bagages', colonne: 'numero_bagage', sequence: 'bagage_sequence', prefixe: (base) => base },
+    courrier: { table: 'courriers', colonne: 'numero_courrier', sequence: 'courrier_sequence', prefixe: (base) => base },
+    courrier_international: { table: 'courriers_internationaux', colonne: 'numero_courrier', sequence: 'courrier_international_sequence', prefixe: (base) => base },
+    lot_courrier: { table: 'lots_bordereaux', colonne: 'reference', sequence: 'lot_courrier_sequence', prefixe: (base) => `BE-${base}` },
+    lot_bagage: { table: 'lots_bordereaux', colonne: 'reference', sequence: 'lot_bagage_sequence', prefixe: (base) => `BB-${base}` },
+    lot_courrier_international: { table: 'lots_bordereaux', colonne: 'reference', sequence: 'lot_courrier_international_sequence', prefixe: (base) => `BI-${base}` },
+    convoi: { table: 'convois', colonne: 'reference', sequence: 'convoi_sequence', prefixe: (base) => `CNV-${base}` },
+};
 
 function normaliserCodePoste(codePoste?: string | null): string | null {
     const code = (codePoste ?? '').trim();
@@ -51,11 +66,15 @@ function lireCompteurOperation(db: Database.Database, table: string, colonne: st
 }
 
 function enregistrerCompteurOperation(db: Database.Database, sequence: string, prefixe: string, compteur: number): void {
+    const cle = `${sequence}_${prefixe}`;
+    const ligne = db.prepare('SELECT valeur FROM config WHERE cle = ?').get(cle) as { valeur: string } | undefined;
+    const precedent = Number.parseInt(ligne?.valeur ?? '0', 10);
+    const monotone = Math.max(Number.isFinite(precedent) ? precedent : 0, compteur);
     db.prepare('INSERT INTO config (cle, valeur) VALUES (?, ?) ON CONFLICT(cle) DO UPDATE SET valeur = excluded.valeur')
-        .run(`${sequence}_${prefixe}`, String(compteur));
+        .run(cle, String(monotone));
 }
 
-function prefixeOperation(codePoste?: string | null, codeAgence?: string | null): string | null {
+export function prefixeOperation(codePoste?: string | null, codeAgence?: string | null): string | null {
     const poste = normaliserCodePoste(codePoste);
     if (!poste) {
         return null;
@@ -63,6 +82,66 @@ function prefixeOperation(codePoste?: string | null, codeAgence?: string | null)
 
     const agence = normaliserCodeAgence(codeAgence);
     return agence ? `${agence}${poste}` : poste;
+}
+
+function exigerPrefixeOperation(codePoste?: string | null, codeAgence?: string | null): string {
+    const prefixe = prefixeOperation(codePoste, codeAgence);
+    if (!prefixe || prefixe.length !== 6) {
+        throw new Error('NUMEROTATION_POSTE_NON_CONFIGUREE');
+    }
+
+    return prefixe;
+}
+
+function genererAvecPrefixe(
+    db: Database.Database,
+    table: string,
+    colonne: string,
+    sequence: string,
+    prefixe: string,
+): string {
+    const dejaPris = db.prepare(`SELECT 1 FROM ${table} WHERE ${colonne} = ? LIMIT 1`);
+    let compteur = lireCompteurOperation(db, table, colonne, sequence, prefixe);
+
+    for (let tentative = 0; tentative < 1000; tentative++) {
+        compteur++;
+        if (compteur > 999_999) throw new Error(`Compteur épuisé pour le préfixe ${prefixe}.`);
+
+        const numero = `${prefixe}${String(compteur).padStart(6, '0')}`;
+        if (!dejaPris.get(numero)) {
+            enregistrerCompteurOperation(db, sequence, prefixe, compteur);
+            return numero;
+        }
+    }
+
+    throw new Error(`Impossible de générer un numéro unique pour ${sequence} après 1000 tentatives.`);
+}
+
+/**
+ * Pose un plancher monotone reçu de l'admin. Un compteur local plus avancé
+ * n'est jamais diminué, ce qui protège aussi les opérations encore hors ligne.
+ */
+export function appliquerCompteursOperationsServeur(
+    db: Database.Database,
+    compteurs: CompteursOperationsServeur,
+    codePoste?: string | null,
+    codeAgence?: string | null,
+): Record<CategorieCompteurOperation, number> {
+    const base = exigerPrefixeOperation(codePoste, codeAgence);
+    if (compteurs.prefixe !== base) throw new Error('COMPTEURS_PREFIXE_INCOHERENT');
+
+    const resultat = {} as Record<CategorieCompteurOperation, number>;
+    for (const categorie of Object.keys(DEFINITIONS_COMPTEURS) as CategorieCompteurOperation[]) {
+        const definition = DEFINITIONS_COMPTEURS[categorie];
+        const prefixe = definition.prefixe(base);
+        const local = lireCompteurOperation(db, definition.table, definition.colonne, definition.sequence, prefixe);
+        const serveur = Math.max(0, Math.min(999_999, Math.trunc(Number(compteurs[categorie] ?? 0))));
+        const retenu = Math.max(local, Number.isFinite(serveur) ? serveur : 0);
+        enregistrerCompteurOperation(db, definition.sequence, prefixe, retenu);
+        resultat[categorie] = retenu;
+    }
+
+    return resultat;
 }
 
 function prevoirNumeroPrefixe(
@@ -104,18 +183,14 @@ function utiliserNumeroPrepare(
         return null;
     }
 
-    enregistrerCompteurOperation(db, sequence, prefixe, Number.parseInt(numero.slice(prefixe.length), 10));
-    return numero;
-}
-
-function utiliserNumeroPrepareExterne(db: Database.Database, table: string, colonne: string, numeroPrepare?: string | null): string | null {
-    const numero = (numeroPrepare ?? '').trim().toUpperCase();
-    if (!/^(?:[A-Z0-9]{3}\d{9}|\d{9})$/.test(numero)) {
+    const compteurPrepare = Number.parseInt(numero.slice(prefixe.length), 10);
+    const compteurActuel = lireCompteurOperation(db, table, colonne, sequence, prefixe);
+    if (compteurPrepare !== compteurActuel + 1) {
         return null;
     }
 
-    const dejaPris = db.prepare(`SELECT 1 FROM ${table} WHERE ${colonne} = ? LIMIT 1`).get(numero);
-    return dejaPris ? null : numero;
+    enregistrerCompteurOperation(db, sequence, prefixe, compteurPrepare);
+    return numero;
 }
 
 function genererNumeroPrefixe(
@@ -153,26 +228,30 @@ function genererNumeroPrefixe(
 // caractères identifient l'agence, les 3 suivants le poste, et les 6 derniers
 // sont un compteur local : YOP001000001, YOP001000002...
 export function prevoirNumeroTicket(db: Database.Database, codePoste?: string | null, codeAgence?: string | null): string | null {
+    exigerPrefixeOperation(codePoste, codeAgence);
     return prevoirNumeroPrefixe(db, 'tickets', 'numero_ticket', 'ticket_sequence', codePoste, codeAgence);
 }
 
 export function prevoirNumeroBagage(db: Database.Database, codePoste?: string | null, codeAgence?: string | null): string | null {
+    exigerPrefixeOperation(codePoste, codeAgence);
     return prevoirNumeroPrefixe(db, 'bagages', 'numero_bagage', 'bagage_sequence', codePoste, codeAgence);
 }
 
 export function prevoirNumeroCourrier(db: Database.Database, codePoste?: string | null, codeAgence?: string | null): string | null {
+    exigerPrefixeOperation(codePoste, codeAgence);
     return prevoirNumeroPrefixe(db, 'courriers', 'numero_courrier', 'courrier_sequence', codePoste, codeAgence);
 }
 
 export function prevoirNumeroCourrierInternational(db: Database.Database, codePoste?: string | null, codeAgence?: string | null): string | null {
+    exigerPrefixeOperation(codePoste, codeAgence);
     return prevoirNumeroPrefixe(db, 'courriers_internationaux', 'numero_courrier', 'courrier_international_sequence', codePoste, codeAgence);
 }
 
 export function genererNumeroTicket(db: Database.Database, codePoste?: string | null, codeAgence?: string | null, numeroPrepare?: string | null): string {
+    exigerPrefixeOperation(codePoste, codeAgence);
     return utiliserNumeroPrepare(db, 'tickets', 'numero_ticket', 'ticket_sequence', codePoste, codeAgence, numeroPrepare)
-        ?? utiliserNumeroPrepareExterne(db, 'tickets', 'numero_ticket', numeroPrepare)
         ?? genererNumeroPrefixe(db, 'tickets', 'numero_ticket', 'ticket_sequence', codePoste, codeAgence)
-        ?? genererNumeroUnique(db, 'tickets', 'numero_ticket');
+        ?? (() => { throw new Error('NUMEROTATION_POSTE_NON_CONFIGUREE'); })();
 }
 
 export function marquerNumeroTicketUtilise(db: Database.Database, codePoste?: string | null, codeAgence?: string | null, numero?: string | null): boolean {
@@ -180,19 +259,48 @@ export function marquerNumeroTicketUtilise(db: Database.Database, codePoste?: st
 }
 
 export function genererNumeroBagage(db: Database.Database, codePoste?: string | null, codeAgence?: string | null, numeroPrepare?: string | null): string {
+    exigerPrefixeOperation(codePoste, codeAgence);
     return utiliserNumeroPrepare(db, 'bagages', 'numero_bagage', 'bagage_sequence', codePoste, codeAgence, numeroPrepare)
         ?? genererNumeroPrefixe(db, 'bagages', 'numero_bagage', 'bagage_sequence', codePoste, codeAgence)
-        ?? genererNumeroUnique(db, 'bagages', 'numero_bagage');
+        ?? (() => { throw new Error('NUMEROTATION_POSTE_NON_CONFIGUREE'); })();
 }
 
 export function genererNumeroCourrier(db: Database.Database, codePoste?: string | null, codeAgence?: string | null, numeroPrepare?: string | null): string {
+    exigerPrefixeOperation(codePoste, codeAgence);
     return utiliserNumeroPrepare(db, 'courriers', 'numero_courrier', 'courrier_sequence', codePoste, codeAgence, numeroPrepare)
         ?? genererNumeroPrefixe(db, 'courriers', 'numero_courrier', 'courrier_sequence', codePoste, codeAgence)
-        ?? genererNumeroUnique(db, 'courriers', 'numero_courrier');
+        ?? (() => { throw new Error('NUMEROTATION_POSTE_NON_CONFIGUREE'); })();
 }
 
 export function genererNumeroCourrierInternational(db: Database.Database, codePoste?: string | null, codeAgence?: string | null, numeroPrepare?: string | null): string {
+    exigerPrefixeOperation(codePoste, codeAgence);
     return utiliserNumeroPrepare(db, 'courriers_internationaux', 'numero_courrier', 'courrier_international_sequence', codePoste, codeAgence, numeroPrepare)
         ?? genererNumeroPrefixe(db, 'courriers_internationaux', 'numero_courrier', 'courrier_international_sequence', codePoste, codeAgence)
-        ?? genererNumeroUnique(db, 'courriers_internationaux', 'numero_courrier');
+        ?? (() => { throw new Error('NUMEROTATION_POSTE_NON_CONFIGUREE'); })();
+}
+
+export function genererNumeroLot(
+    db: Database.Database,
+    type: 'courrier' | 'bagage' | 'courrier_international',
+    codePoste?: string | null,
+    codeAgence?: string | null,
+): { numeroLot: number; reference: string } {
+    const categorie: CategorieCompteurOperation = type === 'courrier'
+        ? 'lot_courrier'
+        : type === 'bagage' ? 'lot_bagage' : 'lot_courrier_international';
+    const definition = DEFINITIONS_COMPTEURS[categorie];
+    const prefixe = definition.prefixe(exigerPrefixeOperation(codePoste, codeAgence));
+    const reference = genererAvecPrefixe(db, definition.table, definition.colonne, definition.sequence, prefixe);
+
+    return { numeroLot: Number.parseInt(reference.slice(prefixe.length), 10), reference };
+}
+
+export function genererReferenceConvoi(
+    db: Database.Database,
+    codePoste?: string | null,
+    codeAgence?: string | null,
+): string {
+    const definition = DEFINITIONS_COMPTEURS.convoi;
+    const prefixe = definition.prefixe(exigerPrefixeOperation(codePoste, codeAgence));
+    return genererAvecPrefixe(db, definition.table, definition.colonne, definition.sequence, prefixe);
 }

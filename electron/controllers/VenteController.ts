@@ -1,4 +1,5 @@
 import { VenteService, type DemandeVente, type RechercheVoyages } from '../services/VenteService';
+import { messageErreurNumerotation } from './NumeroOperationError';
 
 const service = new VenteService();
 
@@ -13,6 +14,8 @@ export const VenteController = {
         try {
             return { ok: true as const, ticket: service.vendre(demande) };
         } catch (erreur) {
+            const erreurNumerotation = messageErreurNumerotation(erreur);
+            if (erreurNumerotation) return { ok: false as const, erreur: erreurNumerotation };
             if (erreur instanceof Error && erreur.message === 'PLACE_DEJA_VENDUE') {
                 return { ok: false as const, erreur: 'Cette place vient d\'être vendue, choisissez-en une autre.' };
             }

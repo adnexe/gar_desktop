@@ -629,4 +629,30 @@ export const migrations: { nom: string; sql: string }[] = [
             ALTER TABLE lots_bordereaux ADD COLUMN recupere_admin_at TEXT;
         `,
     },
+    {
+        nom: '0023_convois',
+        sql: `
+            CREATE TABLE convois (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL UNIQUE,
+                reference TEXT NOT NULL UNIQUE,
+                agence_id INTEGER NOT NULL REFERENCES agences(id),
+                ville_destination_id INTEGER NOT NULL REFERENCES villes(id),
+                precision_destination TEXT NOT NULL,
+                nombre_places INTEGER NOT NULL CHECK(nombre_places BETWEEN 1 AND 200),
+                montant_fixe REAL NOT NULL CHECK(montant_fixe >= 0),
+                date_depart TEXT NOT NULL,
+                heure_depart TEXT NOT NULL,
+                date_retour TEXT NOT NULL,
+                heure_retour TEXT,
+                statut TEXT NOT NULL DEFAULT 'programme'
+                    CHECK(statut IN ('programme', 'parti', 'termine', 'annule')),
+                cree_par_user_id INTEGER REFERENCES users(id),
+                cree_par_nom TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX idx_convois_agence_depart ON convois(agence_id, date_depart);
+        `,
+    },
 ];

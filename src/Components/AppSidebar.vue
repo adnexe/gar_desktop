@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router';
-import { Bus, Car, Globe2, History, LayoutGrid, Luggage, Mail, Settings, Tags, Ticket, UserCog, Users } from '@lucide/vue';
+import { Bus, BusFront, Car, Globe2, History, LayoutGrid, Luggage, Mail, Settings, Tags, Ticket, UserCog, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/Components/AppLogo.vue';
 import NavMain from '@/Components/NavMain.vue';
@@ -41,6 +41,7 @@ const exploitationNavItems = computed<NavItem[]>(() => {
     if (config.moduleActif('ticket')) {
         items.push(
             { title: 'Voyages', routeName: 'voyages', icon: Bus },
+            { title: 'Convois', routeName: 'convois', icon: BusFront },
             { title: 'Tarifs', routeName: 'tarifs', icon: Tags },
             { title: 'Véhicules', routeName: 'vehicules', icon: Car },
             { title: 'Chauffeurs', routeName: 'chauffeurs', icon: Users },

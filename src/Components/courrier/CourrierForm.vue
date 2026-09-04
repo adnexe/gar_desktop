@@ -16,7 +16,7 @@ import {
 import CourrierRecu from '@/Components/courrier/CourrierRecu.vue';
 import { useConfigStore, type CompagnieLocale } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
-import { construireLienSuiviPublic } from '@/lib/suiviPublic';
+import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierDuJour } from '@/types/courrier';
 
@@ -358,6 +358,7 @@ async function envoyer() {
         const agenceDestination = agencesDestination.value.find((a) => a.id === agenceArriveeIdActuelle) ?? null;
         const voyageLabel = voyageSelectionne.value ? libelleVoyage(voyageSelectionne.value) : null;
 
+        const suiviUrl = await construireLienSuiviDepuisPoste('courrier', reponse.courrier.numeroCourrier, reponse.courrier.uuid);
         const dernierRecu = {
             uuid: reponse.courrier.uuid,
             numero_courrier: reponse.courrier.numeroCourrier,
@@ -384,7 +385,7 @@ async function envoyer() {
             agence_depart_telephone: agenceActuelle.telephone,
             agent: session.nom || null,
             created_at: reponse.courrier.created_at,
-            suivi_url: construireLienSuiviPublic(config.adminUrl, 'courrier', reponse.courrier.numeroCourrier, reponse.courrier.uuid),
+            suivi_url: suiviUrl,
             compagnie: config.compagnie,
         };
         recu.value = dernierRecu;

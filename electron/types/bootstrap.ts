@@ -128,6 +128,37 @@ export interface VoyageApi {
     updated_at: string | null;
 }
 
+export interface ConvoiApi {
+    uuid: string;
+    reference: string;
+    agence_id: number;
+    ville_destination_id: number;
+    precision_destination: string;
+    nombre_places: number;
+    montant_fixe: number;
+    date_depart: string;
+    heure_depart: string;
+    date_retour: string;
+    heure_retour: string | null;
+    statut: string;
+    cree_par_user_id: number | null;
+    cree_par_nom: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+export interface CompteursOperationsApi {
+    prefixe: string | null;
+    ticket: number;
+    bagage: number;
+    courrier: number;
+    courrier_international: number;
+    lot_courrier: number;
+    lot_bagage: number;
+    lot_courrier_international: number;
+    convoi: number;
+}
+
 export interface AgenceApi {
     id: number;
     uuid: string;
@@ -167,6 +198,8 @@ export interface BootstrapResponse {
     chauffeurs: ChauffeurApi[];
     vehicules: VehiculeApi[];
     voyages?: VoyageApi[];
+    convois?: ConvoiApi[];
+    compteurs_operations?: CompteursOperationsApi;
     agents: AgentApi[];
     admin_users?: UserApi[];
     token: string;

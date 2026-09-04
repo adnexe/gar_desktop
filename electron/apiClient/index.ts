@@ -83,8 +83,8 @@ export async function envoyerPresencePoste(token: string, payload: Record<string
     return data;
 }
 
-export async function bootstrap(reference: string, appareil: string, timeoutMs = 15000): Promise<BootstrapResponse> {
-    const { data } = await postAdmin<BootstrapResponse>('/api/desktop/bootstrap', { reference, appareil }, { timeout: timeoutMs });
+export async function bootstrap(reference: string, appareil: string, codePoste?: string | null, timeoutMs = 15000): Promise<BootstrapResponse> {
+    const { data } = await postAdmin<BootstrapResponse>('/api/desktop/bootstrap', { reference, appareil, code_poste: codePoste ?? null }, { timeout: timeoutMs });
     return data;
 }
 

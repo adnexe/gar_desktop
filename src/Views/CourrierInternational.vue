@@ -21,7 +21,7 @@ import { choisirSalutation } from '@/composables/useSalutation';
 import { useCompteurAnime } from '@/composables/useCompteurAnime';
 import { useDateCaisseFiltre } from '@/composables/useDateCaisseFiltre';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
-import { construireLienSuiviPublic } from '@/lib/suiviPublic';
+import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierInternationalDuJour } from '@/types/courrier-international';
@@ -164,6 +164,7 @@ const detailsOuvert = ref(false);
 const courrierDetails = ref<DetailsCourrierInternational | null>(null);
 const erreurReimpression = ref('');
 const partieReimpression = ref<'tout' | 'recu' | 'etiquette'>('tout');
+const suiviUrlReimpression = ref<string | null>(null);
 const typeLabel: Record<string, string> = {
     document: 'Document',
     colis: 'Colis',
@@ -203,7 +204,7 @@ const recuReimpression = computed(() => {
         agence_depart_telephone: c.agence_depart_telephone,
         agent: c.agent,
         created_at: formatDateHeure(c.created_at),
-        suivi_url: construireLienSuiviPublic(config.adminUrl, 'courrier-international', c.numero_courrier, c.uuid),
+        suivi_url: suiviUrlReimpression.value,
         compagnie: config.compagnie,
     };
 });
@@ -211,6 +212,9 @@ const recuReimpression = computed(() => {
 async function ouvrirDetails(c: CourrierInternationalDuJour) {
     erreurReimpression.value = '';
     courrierDetails.value = (await window.api.courrierInternational.details(c.uuid)) as DetailsCourrierInternational | null;
+    suiviUrlReimpression.value = courrierDetails.value
+        ? await construireLienSuiviDepuisPoste('courrier-international', courrierDetails.value.numero_courrier, courrierDetails.value.uuid)
+        : null;
     detailsOuvert.value = courrierDetails.value !== null;
 }
 

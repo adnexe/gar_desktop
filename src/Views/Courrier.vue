@@ -29,7 +29,7 @@ import { choisirSalutation } from '@/composables/useSalutation';
 import { useDateCaisseFiltre } from '@/composables/useDateCaisseFiltre';
 import { useConfigStore } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
-import { construireLienSuiviPublic } from '@/lib/suiviPublic';
+import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierDuJour } from '@/types/courrier';
 import { creerProtectionChargement, insererEnTeteSansDoublon } from '@/lib/listeTransactions';
@@ -204,6 +204,7 @@ const courrierDetails = ref<DetailsCourrier | null>(null);
 const lotsOuvert = ref(false);
 const erreurReimpression = ref('');
 const partieReimpression = ref<'tout' | 'recu' | 'etiquette'>('tout');
+const suiviUrlReimpression = ref<string | null>(null);
 
 function formatDateHeure(iso: string) {
     const d = new Date(iso);
@@ -236,7 +237,7 @@ const recuReimpression = computed(() => {
         agence_depart_telephone: c.agence_depart_telephone,
         agent: c.agent,
         created_at: formatDateHeure(c.created_at),
-        suivi_url: construireLienSuiviPublic(config.adminUrl, 'courrier', c.numero_courrier, c.uuid),
+        suivi_url: suiviUrlReimpression.value,
         compagnie: config.compagnie,
     };
 });
@@ -244,6 +245,9 @@ const recuReimpression = computed(() => {
 async function ouvrirDetails(c: CourrierDuJour) {
     erreurReimpression.value = '';
     courrierDetails.value = (await window.api.courrier.details(c.uuid)) as DetailsCourrier | null;
+    suiviUrlReimpression.value = courrierDetails.value
+        ? await construireLienSuiviDepuisPoste('courrier', courrierDetails.value.numero_courrier, courrierDetails.value.uuid)
+        : null;
     detailsOuvert.value = courrierDetails.value !== null;
 }
 

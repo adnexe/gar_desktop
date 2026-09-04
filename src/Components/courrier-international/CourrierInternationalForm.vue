@@ -15,7 +15,7 @@ import {
 } from '@/Components/ui/select';
 import CourrierRecu from '@/Components/courrier/CourrierRecu.vue';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
-import { construireLienSuiviPublic } from '@/lib/suiviPublic';
+import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useConfigStore, type CompagnieLocale } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierInternationalDuJour } from '@/types/courrier-international';
@@ -308,6 +308,7 @@ async function envoyer() {
         }
 
         confirmationOuverte.value = false;
+        const suiviUrl = await construireLienSuiviDepuisPoste('courrier-international', reponse.courrier.numeroCourrier, reponse.courrier.uuid);
         const dernierRecu = {
             uuid: reponse.courrier.uuid,
             numero_courrier: reponse.courrier.numeroCourrier,
@@ -334,7 +335,7 @@ async function envoyer() {
             agence_depart_telephone: agenceActuelle.telephone,
             agent: session.nom || null,
             created_at: reponse.courrier.created_at,
-            suivi_url: construireLienSuiviPublic(config.adminUrl, 'courrier-international', reponse.courrier.numeroCourrier, reponse.courrier.uuid),
+            suivi_url: suiviUrl,
             compagnie: config.compagnie,
         };
         recu.value = dernierRecu;

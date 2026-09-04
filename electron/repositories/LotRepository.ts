@@ -1,6 +1,7 @@
 import { getDb } from '../database/connection';
 import { nouvelUuid } from '../database/ids';
 import { queueManager } from '../sync/QueueManager';
+import { genererNumeroLot } from '../database/numero';
 import { ConfigRepository } from './ConfigRepository';
 
 export type TypeLot = 'courrier' | 'bagage' | 'courrier_international';
@@ -96,8 +97,14 @@ export class LotRepository {
             const voyages = new Set(elements.map((element) => element.voyage_uuid ?? (element.voyage_id ? `id-${element.voyage_id}` : 'null')));
             if (destinationIds.size !== 1 || destinations.size !== 1 || voyages.size !== 1) throw new Error('LOT_DESTINATION_VOYAGE_UNIQUE');
 
-            const numeroLot = this.prochainNumeroLot(donnees.agenceId, donnees.type);
-            const reference = this.genererReference(donnees.agenceId, donnees.type, numeroLot);
+            const numerotation = genererNumeroLot(
+                db,
+                donnees.type,
+                this.config.obtenir('licence_code_poste'),
+                this.codeAgenceTicket(donnees.agenceId),
+            );
+            const numeroLot = numerotation.numeroLot;
+            const reference = numerotation.reference;
             const uuid = nouvelUuid();
             const maintenant = new Date().toISOString();
             const premier = elements[0];
@@ -408,19 +415,9 @@ export class LotRepository {
         ).all(lotUuid) as Record<string, unknown>[];
     }
 
-    private prochainNumeroLot(agenceId: number, type: TypeLot): number {
-        const ligne = getDb().prepare(
-            'SELECT COALESCE(MAX(numero_lot), 0) + 1 AS numero FROM lots_bordereaux WHERE agence_id = ? AND type = ?',
-        ).get(agenceId, type) as { numero: number };
-        return ligne.numero;
-    }
-
-    private genererReference(agenceId: number, type: TypeLot, numeroLot: number): string {
+    private codeAgenceTicket(agenceId: number): string | null {
         const agence = getDb().prepare('SELECT code_ticket FROM agences WHERE id = ?').get(agenceId) as { code_ticket: string | null } | undefined;
-        const codeAgence = (agence?.code_ticket ?? 'LOC').replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 3).padEnd(3, 'X');
-        const codePoste = (this.config.obtenir('licence_code_poste') ?? '000').replace(/\D/g, '').slice(-3).padStart(3, '0');
-        const prefixe = type === 'courrier' ? 'BE' : type === 'courrier_international' ? 'BI' : 'BB';
-        return `${prefixe}-${codeAgence}${codePoste}${String(numeroLot).padStart(6, '0')}`;
+        return agence?.code_ticket ?? null;
     }
 
     private definitionType(type: TypeLot): {

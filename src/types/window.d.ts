@@ -158,6 +158,7 @@ declare global {
                     nom: string;
                     role: string;
                     agentId: number | null;
+                    agentRole: string | null;
                     agenceId: number | null;
                     typeAgent: string[];
                 }>;
@@ -285,6 +286,10 @@ declare global {
                 details: (uuid: string) => Promise<unknown>;
                 modifier: (uuid: string, donnees: unknown) => Promise<{ ok: boolean; id?: number; uuid?: string; erreur?: string }>;
                 liste: (agenceId: number, date?: string) => Promise<unknown[]>;
+            };
+            convoi: {
+                liste: (agenceId: number, date: string, userId: number) => Promise<{ ok: boolean; data?: unknown[]; erreur?: string }>;
+                creer: (donnees: unknown) => Promise<{ ok: boolean; data?: unknown; erreur?: string }>;
             };
             historique: {
                 duJour: (agenceId: number, userId?: number | null) => Promise<unknown>;

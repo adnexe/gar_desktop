@@ -24,7 +24,7 @@ import {
 import BagageRecu from '@/Components/bagage/BagageRecu.vue';
 import { useConfigStore, type CompagnieLocale } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
-import { construireLienSuiviPublic } from '@/lib/suiviPublic';
+import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { BagageDuJour } from '@/types/bagage';
 
@@ -294,6 +294,7 @@ async function enregistrer() {
 
         const reference = ticket.value ? `Ticket ${ticket.value.numero_ticket}` : 'Sans ticket';
         const destination = villes.value.find((v) => v.id === villeArriveeId.value)?.nom ?? null;
+        const suiviUrl = await construireLienSuiviDepuisPoste('bagage', reponse.bagage.numero_bagage, reponse.bagage.uuid);
         const dernierRecu = {
             uuid: reponse.bagage.uuid,
             numero_bagage: reponse.bagage.numero_bagage,
@@ -311,7 +312,7 @@ async function enregistrer() {
             agence_telephone: agenceActuelle.telephone,
             agent: session.nom || null,
             created_at: reponse.bagage.created_at,
-            suivi_url: construireLienSuiviPublic(config.adminUrl, 'bagage', reponse.bagage.numero_bagage, reponse.bagage.uuid),
+            suivi_url: suiviUrl,
             compagnie: config.compagnie,
         };
         recu.value = dernierRecu;

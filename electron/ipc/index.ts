@@ -9,6 +9,7 @@ import { unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { posteSuiviService } from '../services/PosteSuiviService';
+import { ConvoiController } from '../controllers/ConvoiController';
 // pdf-to-printer est en CommonJS : import par défaut obligatoire (main en ESM).
 import pdfToPrinter from 'pdf-to-printer';
 
@@ -615,6 +616,9 @@ export function enregistrerIpc(): void {
     gerer('voyage:details', VoyageController.details);
     gerer('voyage:modifier', VoyageController.modifier);
     gerer('voyage:liste', VoyageController.liste);
+
+    gerer('convoi:liste', ConvoiController.liste);
+    gerer('convoi:creer', ConvoiController.creer);
 
     gerer('historique:duJour', HistoriqueController.duJour);
 }

@@ -1,4 +1,5 @@
 import { BagageService, type DemandeBagage } from '../services/BagageService';
+import { messageErreurNumerotation } from './NumeroOperationError';
 
 const service = new BagageService();
 
@@ -9,6 +10,8 @@ export const BagageController = {
         try {
             return { ok: true as const, bagage: service.enregistrer(demande) };
         } catch (erreur) {
+            const erreurNumerotation = messageErreurNumerotation(erreur);
+            if (erreurNumerotation) return { ok: false as const, erreur: erreurNumerotation };
             if (erreur instanceof Error && erreur.message === 'TICKET_INTROUVABLE') {
                 return { ok: false as const, erreur: 'Aucun ticket ne correspond à ce code.' };
             }

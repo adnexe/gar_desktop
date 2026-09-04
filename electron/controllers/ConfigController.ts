@@ -38,6 +38,10 @@ const SOURCES_ENVOI: Record<string, { libelle: string; requete: string | null }>
         libelle: 'Bordereau',
         requete: `SELECT reference AS numero, NULL AS montant FROM lots_bordereaux WHERE uuid = ?`,
     },
+    convois: {
+        libelle: 'Convoi',
+        requete: `SELECT reference AS numero, montant_fixe AS montant FROM convois WHERE uuid = ?`,
+    },
     clients: { libelle: 'Client', requete: null },
     voyages: { libelle: 'Voyage', requete: null },
     users: { libelle: 'Compte', requete: null },
@@ -193,6 +197,7 @@ export const ConfigController = {
 
         const tablesOperations = [
             'lot_courriers_internationaux', 'lot_bagages', 'lot_courriers', 'lots_bordereaux',
+            'convois',
             'colis_internationaux', 'courriers_internationaux',
             'colis', 'bagages', 'courriers', 'tickets', 'clients', 'voyages', 'sync_queue',
         ];
@@ -208,19 +213,15 @@ export const ConfigController = {
                     suppressions[table] = resultat.changes;
                 }
 
-                db.prepare(
-                    `DELETE FROM config
-                      WHERE cle LIKE 'ticket_sequence_%'
-                         OR cle LIKE 'bagage_sequence_%'
-                         OR cle LIKE 'courrier_sequence_%'
-                         OR cle LIKE 'courrier_international_sequence_%'`,
-                ).run();
+                // Les compteurs visibles ne sont jamais remis à zéro, même
+                // lors du nettoyage des données de test. Cela évite de
+                // réutiliser un numéro déjà transmis à l'admin.
 
                 if (tableExiste(db, 'sqlite_sequence')) {
                     db.prepare(
                         `DELETE FROM sqlite_sequence
                           WHERE name IN ('voyages', 'clients', 'tickets', 'bagages', 'courriers', 'colis',
-                                         'courriers_internationaux', 'colis_internationaux', 'lots_bordereaux', 'sync_queue')`,
+                                         'courriers_internationaux', 'colis_internationaux', 'lots_bordereaux', 'convois', 'sync_queue')`,
                     ).run();
                 }
             })();
@@ -254,6 +255,7 @@ export const ConfigController = {
         // à la lecture).
         const toutesLesTables = [
             'lot_courriers_internationaux', 'lot_bagages', 'lot_courriers', 'lots_bordereaux',
+            'convois',
             'colis_internationaux', 'courriers_internationaux',
             'colis', 'bagages', 'courriers', 'tickets', 'clients', 'voyages',
             'tarifs', 'itineraire_trajet', 'itineraires', 'trajets',

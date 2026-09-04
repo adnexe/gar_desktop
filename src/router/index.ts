@@ -13,7 +13,7 @@ const rolesParRoute: Record<string, string[]> = {
 };
 // Écrans liés au module ticket (bus) : réglage de l'entreprise, pas de
 // l'agent — distinct de moduleParRoute qui vérifie l'accès de l'agent.
-const routesModuleTicket = ['voyages', 'tarifs', 'vehicules', 'chauffeurs'];
+const routesModuleTicket = ['voyages', 'convois', 'tarifs', 'vehicules', 'chauffeurs'];
 
 const router = createRouter({
     history: createWebHashHistory(),
@@ -27,6 +27,7 @@ const router = createRouter({
         { path: '/courrier', name: 'courrier', component: () => import('@/Views/Courrier.vue') },
         { path: '/courrier-international', name: 'courrier-international', component: () => import('@/Views/CourrierInternational.vue') },
         { path: '/voyages', name: 'voyages', component: () => import('@/Views/Voyages.vue') },
+        { path: '/convois', name: 'convois', component: () => import('@/Views/Convois.vue') },
         { path: '/tarifs', name: 'tarifs', component: () => import('@/Views/Tarifs.vue') },
         { path: '/vehicules', name: 'vehicules', component: () => import('@/Views/Vehicules.vue') },
         { path: '/chauffeurs', name: 'chauffeurs', component: () => import('@/Views/Chauffeurs.vue') },

@@ -171,6 +171,31 @@ export class CatalogueRepository {
                 for (const v of bootstrap.voyages ?? []) voyageStmt.run(v);
             }
 
+            const convoiStmt = db.prepare(
+                `INSERT INTO convois
+                    (uuid, reference, agence_id, ville_destination_id, precision_destination,
+                     nombre_places, montant_fixe, date_depart, heure_depart, date_retour,
+                     heure_retour, statut, cree_par_user_id, cree_par_nom, created_at, updated_at)
+                 VALUES (@uuid, @reference, @agence_id, @ville_destination_id, @precision_destination,
+                         @nombre_places, @montant_fixe, @date_depart, @heure_depart, @date_retour,
+                         @heure_retour, @statut, @cree_par_user_id, @cree_par_nom, @created_at, @updated_at)
+                 ON CONFLICT(uuid) DO UPDATE SET
+                    reference = excluded.reference,
+                    ville_destination_id = excluded.ville_destination_id,
+                    precision_destination = excluded.precision_destination,
+                    nombre_places = excluded.nombre_places,
+                    montant_fixe = excluded.montant_fixe,
+                    date_depart = excluded.date_depart,
+                    heure_depart = excluded.heure_depart,
+                    date_retour = excluded.date_retour,
+                    heure_retour = excluded.heure_retour,
+                    statut = excluded.statut,
+                    cree_par_user_id = excluded.cree_par_user_id,
+                    cree_par_nom = excluded.cree_par_nom,
+                    updated_at = excluded.updated_at`,
+            );
+            for (const convoi of bootstrap.convois ?? []) convoiStmt.run(convoi);
+
             const agentStmt = db.prepare(
                 `INSERT INTO agents (id, uuid, agence_id, nom, telephone, role, type_agent, actif, created_at, updated_at)
                  VALUES (@id, @uuid, @agence_id, @nom, @telephone, @role, @type_agent, @actif, @created_at, @updated_at)

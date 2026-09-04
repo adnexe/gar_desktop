@@ -12,6 +12,7 @@ export interface Session {
     nom: string;
     role: string;
     agentId: number | null;
+    agentRole: string | null;
     agenceId: number | null;
     typeAgent: string[];
 }
@@ -80,6 +81,7 @@ export class AuthService {
             nom: utilisateur.name ?? utilisateur.agent_nom ?? utilisateur.number ?? utilisateur.email ?? 'Utilisateur',
             role: utilisateur.role,
             agentId: utilisateur.agent_id,
+            agentRole: utilisateur.agent_role,
             agenceId: utilisateur.agence_id ?? this.agenceLocalePourCompteGlobal(utilisateur.role),
             typeAgent: utilisateur.type_agent ? utilisateur.type_agent.split(',') : [],
         };

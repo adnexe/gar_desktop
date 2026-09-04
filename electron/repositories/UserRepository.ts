@@ -11,6 +11,7 @@ export interface UtilisateurLocal {
     agent_id: number | null;
     agence_id: number | null;
     agent_nom: string | null;
+    agent_role: string | null;
     type_agent: string | null;
 }
 
@@ -76,7 +77,7 @@ export class UserRepository {
         const ligne = getDb()
             .prepare(
                 `SELECT u.id, u.uuid, u.name, u.email, u.number, u.password, u.role,
-                        u.agent_id, ag.agence_id, ag.nom AS agent_nom, ag.type_agent
+                        u.agent_id, ag.agence_id, ag.nom AS agent_nom, ag.role AS agent_role, ag.type_agent
                  FROM users u
                  LEFT JOIN agents ag ON ag.id = u.agent_id
                  LEFT JOIN agences agence ON agence.id = ag.agence_id

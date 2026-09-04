@@ -29,7 +29,7 @@ import { choisirSalutation } from '@/composables/useSalutation';
 import { useDateCaisseFiltre } from '@/composables/useDateCaisseFiltre';
 import { useConfigStore } from '@/Stores/config';
 import { hauteurZoneImpressionMm } from '@/lib/impression';
-import { construireLienSuiviPublic } from '@/lib/suiviPublic';
+import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { BagageDuJour } from '@/types/bagage';
 import { creerProtectionChargement, insererEnTeteSansDoublon } from '@/lib/listeTransactions';
@@ -196,6 +196,7 @@ const bagageDetails = ref<DetailsBagage | null>(null);
 const lotsOuvert = ref(false);
 const erreurReimpression = ref('');
 const modeReimpression = ref<'recu' | 'talon'>('recu');
+const suiviUrlReimpression = ref<string | null>(null);
 
 function formatDateHeure(iso: string) {
     const d = new Date(iso);
@@ -224,7 +225,7 @@ const recuReimpression = computed(() => {
         agence_telephone: b.agence_telephone,
         agent: b.agent,
         created_at: formatDateHeure(b.created_at),
-        suivi_url: construireLienSuiviPublic(config.adminUrl, 'bagage', b.numero_bagage, b.uuid),
+        suivi_url: suiviUrlReimpression.value,
         compagnie: config.compagnie,
     };
 });
@@ -232,6 +233,9 @@ const recuReimpression = computed(() => {
 async function ouvrirDetails(b: BagageDuJour) {
     erreurReimpression.value = '';
     bagageDetails.value = (await window.api.bagage.details(b.uuid)) as DetailsBagage | null;
+    suiviUrlReimpression.value = bagageDetails.value
+        ? await construireLienSuiviDepuisPoste('bagage', bagageDetails.value.numero_bagage, bagageDetails.value.uuid)
+        : null;
     detailsOuvert.value = bagageDetails.value !== null;
 }
 

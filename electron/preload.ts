@@ -114,6 +114,10 @@ const api = {
         modifier: (uuid: string, donnees: unknown) => ipcRenderer.invoke('voyage:modifier', uuid, donnees),
         liste: (agenceId: number, date?: string) => ipcRenderer.invoke('voyage:liste', agenceId, date),
     },
+    convoi: {
+        liste: (agenceId: number, date: string, userId: number) => ipcRenderer.invoke('convoi:liste', agenceId, date, userId),
+        creer: (donnees: unknown) => ipcRenderer.invoke('convoi:creer', donnees),
+    },
     historique: {
         duJour: (agenceId: number, userId?: number | null) => ipcRenderer.invoke('historique:duJour', agenceId, userId),
     },

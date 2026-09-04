@@ -14,3 +14,17 @@ export function construireLienSuiviPublic(
 
     return `${base}/suivi/${type}/${encodeURIComponent(numeroNettoye)}?cle=${encodeURIComponent(cle)}`;
 }
+
+export async function construireLienSuiviDepuisPoste(
+    type: TypeSuiviPublic,
+    numero: string,
+    uuid: string,
+): Promise<string | null> {
+    try {
+        return construireLienSuiviPublic(await window.api.config.adresseAdmin(), type, numero, uuid);
+    } catch {
+        // Le suivi public est utile, mais ne doit jamais empêcher une vente ou
+        // l'impression de son justificatif si la configuration est illisible.
+        return null;
+    }
+}

@@ -127,9 +127,6 @@ export function importerRecuperation(db: Database.Database, snapshot: RecoverySn
                         throw new Error('Une place est déjà occupée par un autre ticket local. Aucune donnée modifiée.');
                     }
                 }
-                if (table === 'lots_bordereaux' && db.prepare('SELECT 1 FROM lots_bordereaux WHERE agence_id = ? AND type = ? AND numero_lot = ?').get(row.agence_id, row.type, row.numero_lot)) {
-                    throw new Error('Ce numéro de lot appartient déjà à un autre lot local. Aucune donnée modifiée.');
-                }
                 if (columns.has('recupere_admin_at')) row.recupere_admin_at = maintenant;
                 const id = inserer(table, row);
                 ids[table].set(Number(remote.id), id);
