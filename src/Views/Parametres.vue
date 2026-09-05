@@ -579,13 +579,27 @@ async function synchroniserMaintenant() {
     try {
         const resultat = await window.api.config.synchroniserMaintenant();
         await chargerEnvoisRefuses();
+
+        // « enAttente: 0 » ne veut PAS dire « tout est remonté » : un envoi
+        // refusé quitte la file sans être jamais arrivé chez admin. Annoncer
+        // « à jour » dans ce cas ferait croire qu'un encaissement est en
+        // comptabilité alors qu'il n'y est pas.
         if (resultat.enAttente === 0) {
-            message.value = 'Synchronisation à jour : tout a été envoyé à admin.';
-        } else if (resultat.erreur) {
-            message.value = `${resultat.enAttente} élément(s) encore en attente.`;
-            erreur.value = `Ça bloque sur un(e) ${resultat.erreur.entite} : ${resultat.erreur.derniere_erreur ?? 'erreur inconnue'} (${resultat.erreur.tentatives} tentative(s)).`;
+            message.value =
+                resultat.refuses > 0
+                    ? `Plus rien en attente, mais ${resultat.refuses} envoi(s) refusé(s) par admin : ces opérations ne sont PAS remontées.`
+                    : 'Synchronisation à jour : tout a été envoyé à admin.';
         } else {
-            message.value = `${resultat.enAttente} élément(s) encore en attente, ça devrait continuer tout seul.`;
+            message.value = resultat.erreur
+                ? `${resultat.enAttente} élément(s) encore en attente.`
+                : `${resultat.enAttente} élément(s) encore en attente, ça devrait continuer tout seul.`;
+        }
+
+        // Un blocage de file passe avant : c'est lui qui retient tout le reste.
+        if (resultat.erreur) {
+            erreur.value = `Ça bloque sur un(e) ${resultat.erreur.entite} : ${resultat.erreur.derniere_erreur ?? 'erreur inconnue'} (${resultat.erreur.tentatives} tentative(s)).`;
+        } else if (resultat.refuses > 0) {
+            erreur.value = `${resultat.refuses} envoi(s) refusé(s) par admin : corrigez-les dans « Envois refusés » ci-dessous, sinon ces montants manqueront en comptabilité.`;
         }
     } catch (e) {
         erreur.value = messageErreur(e, 'Impossible de lancer la synchronisation.');
