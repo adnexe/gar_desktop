@@ -13,7 +13,7 @@ const rolesParRoute: Record<string, string[]> = {
 };
 // Écrans liés au module ticket (bus) : réglage de l'entreprise, pas de
 // l'agent — distinct de moduleParRoute qui vérifie l'accès de l'agent.
-const routesModuleTicket = ['voyages', 'convois', 'tarifs', 'vehicules', 'chauffeurs'];
+const routesModuleTicket = ['voyages', 'tarifs', 'vehicules', 'chauffeurs'];
 
 const router = createRouter({
     history: createWebHashHistory(),
@@ -72,6 +72,9 @@ router.beforeEach(async (to) => {
         if (!session.peutModule(module) || !config.moduleActif(module)) {
             return { name: 'dashboard' };
         }
+    }
+    if (to.name === 'convois' && !config.moduleActif('convoi')) {
+        return { name: 'dashboard' };
     }
     if (typeof to.name === 'string' && routesModuleTicket.includes(to.name) && !config.moduleActif('ticket')) {
         return { name: 'dashboard' };

@@ -2,6 +2,7 @@ import { getDb } from '../database/connection';
 import { migrer } from '../database/migrate';
 import { ConvoiRepository, type NouveauConvoi } from '../repositories/ConvoiRepository';
 import { dateCaisseDuJour } from '../database/dates';
+import { CompagnieRepository } from '../repositories/CompagnieRepository';
 
 export class ConvoiService {
     private readonly convois = new ConvoiRepository();
@@ -52,6 +53,9 @@ export class ConvoiService {
         if (!utilisateur) throw new Error('COMPTE_CONVOI_NON_AUTORISE');
 
         if (utilisateur.role === 'super_admin') return;
+        if (!new CompagnieRepository().actuelle().modules_actifs.includes('convoi')) {
+            throw new Error('Le module Convoi est désactivé pour cette compagnie.');
+        }
         if (utilisateur.agent_id === null || utilisateur.agence_id !== agenceId || utilisateur.agent_actif !== 1
             || utilisateur.agent_desactive_localement === 1 || utilisateur.agent_supprime_localement === 1
             || utilisateur.agence_active !== 1) {

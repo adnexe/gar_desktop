@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
+import { useSessionStore } from './session';
 
 export interface AgenceLocale {
     id: number;
@@ -55,7 +56,8 @@ export const useConfigStore = defineStore('config', () => {
     // Réglage de l'entreprise (pas de l'agent) : masque/bloque les écrans
     // liés à un module que l'entreprise n'utilise pas du tout. Tant que rien
     // n'est encore chargé, on ne restreint rien (fail open, comme l'admin).
-    const moduleActif = (module: 'ticket' | 'bagage' | 'courrier' | 'courrier_international') => compagnie.value?.modules_actifs.includes(module) ?? true;
+    const moduleActif = (module: 'ticket' | 'bagage' | 'courrier' | 'courrier_international' | 'ramassage' | 'convoi') =>
+        useSessionStore().role === 'super_admin' || (compagnie.value?.modules_actifs.includes(module) ?? true);
 
     const licenceValide = computed(() => {
         if (!licence.value || !licence.value.actif) return false;

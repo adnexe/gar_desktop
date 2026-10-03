@@ -41,11 +41,14 @@ const exploitationNavItems = computed<NavItem[]>(() => {
     if (config.moduleActif('ticket')) {
         items.push(
             { title: 'Voyages', routeName: 'voyages', icon: Bus },
-            { title: 'Convois', routeName: 'convois', icon: BusFront },
             { title: 'Tarifs', routeName: 'tarifs', icon: Tags },
             { title: 'Véhicules', routeName: 'vehicules', icon: Car },
             { title: 'Chauffeurs', routeName: 'chauffeurs', icon: Users },
         );
+    }
+
+    if (config.moduleActif('convoi')) {
+        items.push({ title: 'Convois', routeName: 'convois', icon: BusFront });
     }
 
     if (['chef_gare', 'super_admin'].includes(session.role)) {

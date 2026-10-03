@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { BusFront, CalendarClock, ClipboardList, MapPin, Plus, Printer, Users } from '@lucide/vue';
-import BordereauConvoiA4 from '@/Components/convoi/BordereauConvoiA4.vue';
-import FinDeCaisseConvoiA4 from '@/Components/convoi/FinDeCaisseConvoiA4.vue';
+import ConvoiRecu from '@/Components/convoi/ConvoiRecu.vue';
 import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { Badge } from '@/Components/ui/badge';
 import { Button } from '@/Components/ui/button';
@@ -13,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/Components/ui/spinner';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
-import { imprimerBordereauA4 } from '@/lib/impressionA4';
+import { hauteurZoneImpressionMm } from '@/lib/impression';
 import type { Convoi } from '@/types/convoi';
 
 type Ville = { id: number; uuid: string; nom: string };
@@ -80,7 +79,7 @@ async function imprimer(convoi: Convoi) {
         convoiFinDeCaisseImpression.value = null;
         convoiImpression.value = { ...convoi };
         await nextTick();
-        await imprimerBordereauA4();
+        await lancerImpressionPos();
     } catch (e) { erreur.value = e instanceof Error ? e.message : "L'impression du bordereau a échoué."; }
     finally { convoiImpression.value = null; impressionUuid.value = null; }
 }
@@ -93,9 +92,16 @@ async function imprimerFinDeCaisse(convoi: Convoi) {
         convoiImpression.value = null;
         convoiFinDeCaisseImpression.value = { ...convoi };
         await nextTick();
-        await imprimerBordereauA4();
+        await lancerImpressionPos();
     } catch (e) { erreur.value = e instanceof Error ? e.message : "L'impression de la fin de caisse a échoué."; }
     finally { convoiFinDeCaisseImpression.value = null; impressionUuid.value = null; }
+}
+
+async function lancerImpressionPos() {
+    const images = Array.from(document.querySelectorAll<HTMLImageElement>('.zone-impression-convoi img'));
+    await Promise.all(images.map((image) => image.decode().catch(() => undefined)));
+    const resultat = await window.api.impression.imprimerRecu(hauteurZoneImpressionMm());
+    if (!resultat.ok) throw new Error(resultat.erreur ?? "L'impression n'a pas pu être lancée.");
 }
 
 watch(dateFiltre, () => void charger());
@@ -143,7 +149,15 @@ onMounted(async () => { await config.charger(); villes.value = await window.api.
             </form>
         </DialogContent>
     </Dialog>
-    <BordereauConvoiA4 v-if="convoiImpression" :convoi="convoiImpression" :agence="config.agence" :compagnie="config.compagnie" />
-    <FinDeCaisseConvoiA4 v-if="convoiFinDeCaisseImpression" :convoi="convoiFinDeCaisseImpression" :agence="config.agence" :compagnie="config.compagnie" />
+    <div class="zone-impression zone-impression-convoi hidden print:block">
+        <ConvoiRecu v-if="convoiImpression" :convoi="convoiImpression" :agence="config.agence" :compagnie="config.compagnie" mode="bordereau" />
+        <ConvoiRecu v-else-if="convoiFinDeCaisseImpression" :convoi="convoiFinDeCaisseImpression" :agence="config.agence" :compagnie="config.compagnie" mode="caisse" />
+    </div>
     </AppSidebarLayout>
 </template>
+
+<style>
+@media print {
+    .zone-impression.zone-impression-convoi { overflow: visible; clip-path: none; }
+}
+</style>
