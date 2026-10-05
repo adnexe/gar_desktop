@@ -284,7 +284,14 @@ async function imprimerViaPdf(sender: WebContents, imprimantes: ImprimanteRuntim
 
         return resultat;
     } finally {
-        if (fichier) {
+        // Diagnostic : avec GAR_CONSERVER_PDF=1, le PDF envoye a l'imprimante
+        // est garde et son chemin journalise. C'est le seul moyen de savoir si
+        // un ticket tronque l'est deja dans le PDF (mesure ou mise en page en
+        // cause) ou seulement sur le papier (imprimante ou pilote en cause) —
+        // les deux pistes n'ont rien a voir et le journal seul ne les separe pas.
+        if (fichier && process.env.GAR_CONSERVER_PDF === '1') {
+            logger.info('PDF d\'impression conserve pour diagnostic', { fichier, hauteur_mm: hauteurMm ?? null });
+        } else if (fichier) {
             const debutSuppression = performance.now();
             await unlink(fichier).catch(() => undefined);
             chrono.suppression_pdf_ms = dureeMs(debutSuppression);

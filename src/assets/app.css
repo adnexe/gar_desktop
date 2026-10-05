@@ -571,9 +571,18 @@
         /* Largeur du papier (80mm), pas du reçu : chaque .ticket-recu est
            plus étroit et centré dedans (voir composants), pour absorber les
            petits décalages de marge propres à chaque modèle d'imprimante
-           (Epson vs Xprinter...) au lieu d'être rogné d'un côté. */
-        clip-path: inset(0);
-        overflow: hidden;
+           (Epson vs Xprinter...) au lieu d'être rogné d'un côté.
+
+           Le rognage est HORIZONTAL uniquement. Avec `inset(0)` et
+           `overflow: hidden`, la zone coupait aussi en hauteur : tout ce qui
+           depassait la page etait supprime en silence au lieu de continuer.
+           Les documents courts ne s'en apercevaient pas, les longs — recu
+           bagage, bordereau de convoi — sortaient tronques. Convois.vue avait
+           deja du neutraliser ce rognage pour lui seul ; la regle vaut pour
+           tous. Le bas est donc ouvert (-100vh), les trois autres cotes
+           gardent leur protection. */
+        clip-path: inset(0 0 -100vh 0);
+        overflow: visible;
         width: var(--impression-largeur-papier);
     }
     .ticket-recu {

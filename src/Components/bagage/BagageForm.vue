@@ -23,7 +23,7 @@ import {
 } from '@/Components/ui/select';
 import BagageRecu from '@/Components/bagage/BagageRecu.vue';
 import { useConfigStore, type CompagnieLocale } from '@/Stores/config';
-import { hauteurZoneImpressionMm } from '@/lib/impression';
+import { attendreRenduImpression, hauteurZoneImpressionMm } from '@/lib/impression';
 import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { BagageDuJour } from '@/types/bagage';
@@ -233,6 +233,9 @@ async function imprimer(partie: 'recu' | 'talon'): Promise<ResultatImpression> {
     modeImpression.value = partie;
     try {
         await nextTick();
+        // Indispensable : sans cette attente, la premiere impression capture
+        // une page pas encore mise en page et sort tronquee.
+        await attendreRenduImpression();
         return await window.api.impression.imprimerRecu(hauteurZoneImpressionMm());
     } finally {
         modeImpression.value = 'tout';

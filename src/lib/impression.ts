@@ -15,6 +15,34 @@ function journaliserCalibrationImpression(contexte: {
     void window.api.diagnostic?.log?.('info', 'Calibration impression renderer', contexte);
 }
 
+/**
+ * Attend que la zone d'impression soit REELLEMENT rendue avant de la mesurer
+ * et de la capturer.
+ *
+ * `nextTick()` ne garantit que la mise a jour du DOM par Vue. Il ne dit rien
+ * de la mise en page du navigateur, ni du decodage des images. Sur la toute
+ * premiere impression d'un recu — sous-arbre fraichement monte, logo pas
+ * encore decode — Chromium capturait une page incomplete : le recu ET le talon
+ * sortaient tronques, puis une reimpression du meme talon, sur un rendu deja
+ * chaud, sortait parfaite. C'etait toute l'enigme.
+ *
+ * Deux attentes, dans cet ordre :
+ * 1. le decodage des images de la zone (le logo de la compagnie) ;
+ * 2. deux images successives — une seule ne suffit pas, la premiere ne fait
+ *    que programmer la mise en page, la seconde garantit qu'elle a eu lieu.
+ *
+ * Les impressions A4 (impressionA4.ts) et les convois faisaient deja l'un ou
+ * l'autre. Le chemin thermique, lui, ne faisait ni l'un ni l'autre.
+ */
+export async function attendreRenduImpression(): Promise<void> {
+    const images = Array.from(document.querySelectorAll<HTMLImageElement>('.zone-impression img'));
+    await Promise.all(images.map((image) => image.decode().catch(() => undefined)));
+
+    await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+}
+
 export function hauteurZoneImpressionMm(): number | undefined {
     // Une page peut porter plusieurs zones (fin de caisse dans la page, reçu
     // du formulaire dans un dialog portalé en fin de body…) : on mesure

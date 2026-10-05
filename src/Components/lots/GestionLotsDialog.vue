@@ -27,7 +27,7 @@ import {
 import { Spinner } from '@/Components/ui/spinner';
 import { useConfigStore } from '@/Stores/config';
 import { dimensionsBordereauPos, imprimerBordereau, type FormatBordereau } from '@/lib/impressionA4';
-import { hauteurZoneImpressionMm } from '@/lib/impression';
+import { attendreRenduImpression, hauteurZoneImpressionMm } from '@/lib/impression';
 import { resoudreSelectionScanner } from '@/lib/selectionLotScanner';
 import type { DetailsLot, ElementLotEligible, LotResume, StatutLot, TypeLot } from '@/types/lot';
 
@@ -403,6 +403,9 @@ async function imprimerEtiquette(lot: LotResume | DetailsLot) {
         lotEtiquette.value = 'courriers' in lot ? lot : await obtenirDetails(lot);
         if (!lotEtiquette.value) throw new Error('Ce lot est introuvable.');
         await nextTick();
+        // Meme raison que les recus : l'etiquette d'un lot vient d'etre montee,
+        // sa mise en page n'est pas encore faite au moment de la capture.
+        await attendreRenduImpression();
         const resultat = await window.api.impression.imprimerRecu(hauteurZoneImpressionMm());
         if (!resultat.ok) throw new Error(resultat.erreur || "L'étiquette n'a pas été imprimée.");
     } catch (e) {

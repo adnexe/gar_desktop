@@ -24,7 +24,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/Components/ui/select';
-import { hauteurZoneImpressionMm } from '@/lib/impression';
+import { attendreRenduImpression, hauteurZoneImpressionMm } from '@/lib/impression';
 import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { VenteDuJour } from '@/types/vente';
@@ -361,6 +361,9 @@ async function imprimer(partie: 'ticket' | 'talon'): Promise<ResultatImpression>
     partieImpression.value = partie;
     try {
         await nextTick();
+        // Indispensable : sans cette attente, la premiere impression capture
+        // une page pas encore mise en page et sort tronquee.
+        await attendreRenduImpression();
         return await window.api.impression.imprimerTicket(hauteurZoneImpressionMm());
     } finally {
         partieImpression.value = 'tout';
