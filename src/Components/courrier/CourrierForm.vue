@@ -19,6 +19,7 @@ import { attendreRenduImpression, hauteurZoneImpressionMm } from '@/lib/impressi
 import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierDuJour } from '@/types/courrier';
+import { nombre, sommeMontants } from '@/lib/montant';
 
 interface Ville { id: number; uuid: string; nom: string }
 interface Agence { id: number; uuid: string; nom: string; ville_id: number; telephone: string | null }
@@ -96,7 +97,7 @@ const recu = ref<{
 } | null>(null);
 let intervalleVoyages: ReturnType<typeof setInterval> | null = null;
 
-const montantColis = computed(() => colisListe.value.reduce((s, c) => s + c.quantite * c.prix, 0));
+const montantColis = computed(() => sommeMontants(colisListe.value, (c) => nombre(c.quantite) * nombre(c.prix)));
 
 // Le client ne paie QUE les frais d'expédition (la valeur des colis est
 // une valeur déclarée, affichée à part mais jamais encaissée).

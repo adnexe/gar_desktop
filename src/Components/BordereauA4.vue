@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import type { AgenceLocale, CompagnieLocale } from '@/Stores/config';
 import type { FormatBordereau } from '@/lib/impressionA4';
+import { sommeMontants } from '@/lib/montant';
 
 export interface LigneBordereauCourrier {
     uuid: string;
@@ -71,8 +72,8 @@ const titre = computed(() => props.type === 'courrier'
 const nomCompagnie = computed(() => props.compagnie?.nom?.trim() || '');
 const logoSrc = computed(() => props.compagnie?.logo_data_uri || props.compagnie?.logo_url || null);
 const total = computed(() => props.type === 'bagage'
-    ? props.bagages.reduce((somme, ligne) => somme + ligne.montant, 0)
-    : props.courriers.reduce((somme, ligne) => somme + ligne.montant_total, 0));
+    ? sommeMontants(props.bagages, (ligne) => ligne.montant)
+    : sommeMontants(props.courriers, (ligne) => ligne.montant_total));
 const nombreColis = computed(() => props.courriers.reduce(
     (somme, ligne) => somme + ligne.colis.reduce((total, colis) => total + colis.quantite, 0),
     0,

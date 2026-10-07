@@ -30,6 +30,7 @@ import { dimensionsBordereauPos, imprimerBordereau, type FormatBordereau } from 
 import { attendreRenduImpression, hauteurZoneImpressionMm } from '@/lib/impression';
 import { resoudreSelectionScanner } from '@/lib/selectionLotScanner';
 import type { DetailsLot, ElementLotEligible, LotResume, StatutLot, TypeLot } from '@/types/lot';
+import { nombre } from '@/lib/montant';
 
 const props = defineProps<{
     open: boolean;
@@ -95,7 +96,7 @@ const toutSelectionne = computed(() => elementsDuGroupe.value.length > 0
     && elementsDuGroupe.value.every((element) => selection.value.includes(element.uuid)));
 const totalSelection = computed(() => elementsDuGroupe.value
     .filter((element) => selection.value.includes(element.uuid))
-    .reduce((somme, element) => somme + element.montant, 0));
+    .reduce((somme, element) => somme + nombre(element.montant), 0));
 
 const statutLibelle: Record<StatutLot, string> = {
     en_preparation: 'En préparation',

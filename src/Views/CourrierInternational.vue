@@ -26,6 +26,7 @@ import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierInternationalDuJour } from '@/types/courrier-international';
 import { creerProtectionChargement, insererEnTeteSansDoublon } from '@/lib/listeTransactions';
+import { sommeMontants } from '@/lib/montant';
 
 type RapportDestination = { destination: string; nombre_courriers: number; nombre_colis: number; montant_total: number; valeur_colis: number };
 type RapportFinDeCaisse = {
@@ -82,8 +83,8 @@ const courriersAffiches = computed(() => {
         (c.expediteur_telephone ?? '').toLowerCase().includes(t),
     );
 });
-const totalDuJour = computed(() => courriers.value.reduce((s, c) => s + c.montant_total, 0));
-const valeurDuJour = computed(() => courriers.value.reduce((s, c) => s + c.valeur_colis, 0));
+const totalDuJour = computed(() => sommeMontants(courriers.value, (c) => c.montant_total));
+const valeurDuJour = computed(() => sommeMontants(courriers.value, (c) => c.valeur_colis));
 
 async function charger() {
     const revision = protectionChargementCourriers.commencer();

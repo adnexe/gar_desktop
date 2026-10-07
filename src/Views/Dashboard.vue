@@ -6,6 +6,7 @@ import AppSidebarLayout from '@/Layouts/app/AppSidebarLayout.vue';
 import { choisirSalutation } from '@/composables/useSalutation';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
+import { nombre, sommeMontants } from '@/lib/montant';
 
 interface TicketDuJour { montant: number; timbre: number; total?: number }
 interface BagageDuJour { montant: number }
@@ -65,13 +66,13 @@ onMounted(async () => {
 
     resume.value = {
         tickets: tickets.length,
-        totalTickets: tickets.reduce((s, t) => s + (t.total ?? t.montant + t.timbre), 0),
+        totalTickets: sommeMontants(tickets, (t) => t.total ?? nombre(t.montant) + nombre(t.timbre)),
         bagages: bagages.length,
-        totalBagages: bagages.reduce((s, b) => s + b.montant, 0),
+        totalBagages: sommeMontants(bagages, (b) => b.montant),
         courriers: courriers.length,
-        totalCourriers: courriers.reduce((s, c) => s + c.montant_total, 0),
+        totalCourriers: sommeMontants(courriers, (c) => c.montant_total),
         courriersInternationaux: courriersInternationaux.length,
-        totalCourriersInternationaux: courriersInternationaux.reduce((s, c) => s + c.montant_total, 0),
+        totalCourriersInternationaux: sommeMontants(courriersInternationaux, (c) => c.montant_total),
     };
 });
 </script>

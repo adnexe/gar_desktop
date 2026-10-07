@@ -33,6 +33,7 @@ import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierDuJour } from '@/types/courrier';
 import { creerProtectionChargement, insererEnTeteSansDoublon } from '@/lib/listeTransactions';
+import { sommeMontants } from '@/lib/montant';
 
 const config = useConfigStore();
 const session = useSessionStore();
@@ -69,8 +70,8 @@ const courriersAffiches = computed(() => {
         (c.expediteur_telephone ?? '').toLowerCase().includes(t),
     );
 });
-const totalDuJour = computed(() => courriers.value.reduce((s, c) => s + c.montant_total, 0));
-const valeurDuJour = computed(() => courriers.value.reduce((s, c) => s + c.montant_colis, 0));
+const totalDuJour = computed(() => sommeMontants(courriers.value, (c) => c.montant_total));
+const valeurDuJour = computed(() => sommeMontants(courriers.value, (c) => c.montant_colis));
 
 const dialogOuvert = ref(false);
 const courrierForm = ref<InstanceType<typeof CourrierForm> | null>(null);

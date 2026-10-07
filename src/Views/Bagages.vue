@@ -33,6 +33,7 @@ import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useSessionStore } from '@/Stores/session';
 import type { BagageDuJour } from '@/types/bagage';
 import { creerProtectionChargement, insererEnTeteSansDoublon } from '@/lib/listeTransactions';
+import { sommeMontants } from '@/lib/montant';
 
 const config = useConfigStore();
 const session = useSessionStore();
@@ -69,8 +70,8 @@ const bagagesAffiches = computed(() => {
         (b.client_telephone ?? '').toLowerCase().includes(t),
     );
 });
-const totalDuJour = computed(() => bagages.value.reduce((s, b) => s + b.montant, 0));
-const valeurDuJour = computed(() => bagages.value.reduce((s, b) => s + (b.valeur ?? 0), 0));
+const totalDuJour = computed(() => sommeMontants(bagages.value, (b) => b.montant));
+const valeurDuJour = computed(() => sommeMontants(bagages.value, (b) => b.valeur));
 
 const dialogOuvert = ref(false);
 const bagageForm = ref<InstanceType<typeof BagageForm> | null>(null);

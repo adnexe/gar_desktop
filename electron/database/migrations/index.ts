@@ -655,4 +655,77 @@ export const migrations: { nom: string; sql: string }[] = [
             CREATE INDEX idx_convois_agence_depart ON convois(agence_id, date_depart);
         `,
     },
+    {
+        nom: '0024_montants_numeriques',
+        // Remet en numérique les montants stockés en TEXTE.
+        //
+        // La colonne est déclarée REAL, mais SQLite n'a qu'une « affinité » :
+        // une valeur qu'il ne sait pas convertir reste du texte. Laravel
+        // sérialise ses colonnes `decimal` en chaînes JSON ("1500.00") et il a
+        // suffi que quelques lignes passent au travers pour que les totaux de
+        // l'écran basculent de l'addition à la CONCATÉNATION — un total du jour
+        // affiché sur cent chiffres.
+        //
+        // Le code qui additionne est désormais immunisé (src/lib/montant.ts) ;
+        // cette migration nettoie l'existant, pour que les requêtes SQL qui
+        // font des SUM() soient justes elles aussi.
+        sql: `
+            UPDATE tickets SET montant = CAST(montant AS REAL)
+             WHERE montant IS NOT NULL AND typeof(montant) NOT IN ('real', 'integer');
+            UPDATE tickets SET timbre = CAST(timbre AS REAL)
+             WHERE timbre IS NOT NULL AND typeof(timbre) NOT IN ('real', 'integer');
+            UPDATE tickets SET commission = CAST(commission AS REAL)
+             WHERE commission IS NOT NULL AND typeof(commission) NOT IN ('real', 'integer');
+            UPDATE bagages SET montant = CAST(montant AS REAL)
+             WHERE montant IS NOT NULL AND typeof(montant) NOT IN ('real', 'integer');
+            UPDATE bagages SET valeur = CAST(valeur AS REAL)
+             WHERE valeur IS NOT NULL AND typeof(valeur) NOT IN ('real', 'integer');
+            UPDATE courriers SET prix_expedition = CAST(prix_expedition AS REAL)
+             WHERE prix_expedition IS NOT NULL AND typeof(prix_expedition) NOT IN ('real', 'integer');
+            UPDATE courriers SET montant_colis = CAST(montant_colis AS REAL)
+             WHERE montant_colis IS NOT NULL AND typeof(montant_colis) NOT IN ('real', 'integer');
+            UPDATE courriers SET montant_total = CAST(montant_total AS REAL)
+             WHERE montant_total IS NOT NULL AND typeof(montant_total) NOT IN ('real', 'integer');
+            UPDATE colis SET prix = CAST(prix AS REAL)
+             WHERE prix IS NOT NULL AND typeof(prix) NOT IN ('real', 'integer');
+            UPDATE colis SET montant = CAST(montant AS REAL)
+             WHERE montant IS NOT NULL AND typeof(montant) NOT IN ('real', 'integer');
+            UPDATE courriers_internationaux SET frais_expedition = CAST(frais_expedition AS REAL)
+             WHERE frais_expedition IS NOT NULL AND typeof(frais_expedition) NOT IN ('real', 'integer');
+            UPDATE courriers_internationaux SET valeur_colis = CAST(valeur_colis AS REAL)
+             WHERE valeur_colis IS NOT NULL AND typeof(valeur_colis) NOT IN ('real', 'integer');
+            UPDATE courriers_internationaux SET montant_total = CAST(montant_total AS REAL)
+             WHERE montant_total IS NOT NULL AND typeof(montant_total) NOT IN ('real', 'integer');
+            UPDATE courriers_internationaux SET pourcentage_frais = CAST(pourcentage_frais AS REAL)
+             WHERE pourcentage_frais IS NOT NULL AND typeof(pourcentage_frais) NOT IN ('real', 'integer');
+            UPDATE colis_internationaux SET prix = CAST(prix AS REAL)
+             WHERE prix IS NOT NULL AND typeof(prix) NOT IN ('real', 'integer');
+            UPDATE colis_internationaux SET montant = CAST(montant AS REAL)
+             WHERE montant IS NOT NULL AND typeof(montant) NOT IN ('real', 'integer');
+            UPDATE colis_internationaux SET poids_kg = CAST(poids_kg AS REAL)
+             WHERE poids_kg IS NOT NULL AND typeof(poids_kg) NOT IN ('real', 'integer');
+            UPDATE colis_internationaux SET frais_unitaire = CAST(frais_unitaire AS REAL)
+             WHERE frais_unitaire IS NOT NULL AND typeof(frais_unitaire) NOT IN ('real', 'integer');
+            UPDATE colis_internationaux SET frais_expedition = CAST(frais_expedition AS REAL)
+             WHERE frais_expedition IS NOT NULL AND typeof(frais_expedition) NOT IN ('real', 'integer');
+            UPDATE tarifs SET montant = CAST(montant AS REAL)
+             WHERE montant IS NOT NULL AND typeof(montant) NOT IN ('real', 'integer');
+            UPDATE convois SET montant_fixe = CAST(montant_fixe AS REAL)
+             WHERE montant_fixe IS NOT NULL AND typeof(montant_fixe) NOT IN ('real', 'integer');
+        `,
+    },
+    {
+        nom: '0025_largeur_contenu_imprimable',
+        // Efface la largeur de contenu laissee a l'ancien defaut (76 mm).
+        //
+        // Elle depassait de 4 mm la zone imprimable d'une tete 80 mm et faisait
+        // sortir tous les recus rognes a droite. La ligne supprimee, le poste
+        // reprend le nouveau defaut (72 mm). Une valeur choisie volontairement,
+        // elle, est conservee : seul l'ancien defaut est vise.
+        sql: `
+            DELETE FROM config
+             WHERE cle = 'impression_largeur_contenu_mm'
+               AND CAST(valeur AS REAL) = 76;
+        `,
+    },
 ];

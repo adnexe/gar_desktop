@@ -8,6 +8,7 @@ import { Label } from '@/Components/ui/label';
 import { useConfigStore } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import { appliquerCalibrationImpression, CALIBRATION_IMPRESSION_DEFAUT, normaliserCalibrationImpression, type CalibrationImpression } from '@/lib/calibrationImpression';
+import { sommeMontants } from '@/lib/montant';
 
 type ModeReseau = 'autonome' | 'serveur' | 'client';
 type StatutConnexion = 'connecte' | 'deconnecte' | 'verification';
@@ -105,7 +106,7 @@ type EnvoiRefuse = {
 
 const envoisRefuses = ref<EnvoiRefuse[]>([]);
 const relanceEnCours = ref(false);
-const montantRefuse = computed(() => envoisRefuses.value.reduce((somme, envoi) => somme + (envoi.montant ?? 0), 0));
+const montantRefuse = computed(() => sommeMontants(envoisRefuses.value, (envoi) => envoi.montant));
 const formatMontantRefuse = (montant: number) => new Intl.NumberFormat('fr-FR').format(Math.round(montant)) + ' FCFA';
 
 async function chargerEnvoisRefuses() {

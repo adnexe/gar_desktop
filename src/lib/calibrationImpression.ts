@@ -6,7 +6,12 @@ export type CalibrationImpression = {
 
 export const CALIBRATION_IMPRESSION_DEFAUT: CalibrationImpression = {
     largeurPapierMm: 80,
-    largeurContenuMm: 76,
+    // 72 mm et non 76 : une tete thermique 80 mm imprime 576 points a 8/mm,
+    // soit 72 mm utiles — le reste du rouleau est une marge mecanique que
+    // l'imprimante ne sait pas atteindre. Un contenu de 76 mm depassait donc
+    // de 4 mm et sortait ROGNE A DROITE : dates, montants et numeros coupes
+    // en plein milieu, sans que rien ne le signale a l'ecran.
+    largeurContenuMm: 72,
     decalageXMm: 0,
 };
 

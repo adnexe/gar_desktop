@@ -19,6 +19,7 @@ import { construireLienSuiviDepuisPoste } from '@/lib/suiviPublic';
 import { useConfigStore, type CompagnieLocale } from '@/Stores/config';
 import { useSessionStore } from '@/Stores/session';
 import type { CourrierInternationalDuJour } from '@/types/courrier-international';
+import { nombre, sommeMontants } from '@/lib/montant';
 
 interface Pays { id: number; uuid: string; nom: string; code: string }
 interface Ville { id: number; uuid: string; nom: string; pays_id: number | null }
@@ -97,8 +98,8 @@ const paysSelectionne = computed(() => pays.value.find((p) => p.id === paysDesti
 const villeSelectionnee = computed(() => villes.value.find((v) => v.id === villeDestinationId.value) ?? null);
 const villeDestinationNom = computed(() => villeSelectionnee.value?.nom ?? villeLibre.value.trim());
 const destinationLabel = computed(() => [villeDestinationNom.value, paysSelectionne.value?.nom].filter(Boolean).join(', '));
-const valeurColis = computed(() => colisListe.value.reduce((s, c) => s + c.quantite * c.prix, 0));
-const poidsTotal = computed(() => colisListe.value.reduce((s, c) => s + c.quantite * Number(c.poidsKg ?? 0), 0));
+const valeurColis = computed(() => sommeMontants(colisListe.value, (c) => nombre(c.quantite) * nombre(c.prix)));
+const poidsTotal = computed(() => sommeMontants(colisListe.value, (c) => nombre(c.quantite) * nombre(c.poidsKg)));
 const fraisExpedition = computed(() => {
     if (modeFacturation.value === 'pourcentage') {
         return Math.round(valeurColis.value * (pourcentageFrais.value || 0) / 100);
